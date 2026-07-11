@@ -34,6 +34,9 @@ yarn-error.*
 .env
 .env*.local
 
+# local Claude Code settings (machine-specific permission overrides)
+.claude/settings.local.json
+
 # typescript
 *.tsbuildinfo
 
