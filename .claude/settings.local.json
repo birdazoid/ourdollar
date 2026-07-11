@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(git --version)",
+      "Bash(npx --version)",
+      "Bash(eas --version)",
+      "Bash(npx create-expo-app@latest . --template default@sdk-52)",
+      "Read(//c/Users/Adrian/OneDrive/Desktop/My Projects/Budgeting App/**)",
+      "Bash(npx create-expo-app@latest budgeting-app-tmp --template default@sdk-52)",
+      "Bash(cd \"C:\\\\Users\\\\Adrian\\\\OneDrive\\\\Desktop\\\\My Projects\\\\Budgeting App\" && ls -la \"Budgeting App Build CC/.claude\" 2>&1; echo \"---tmp---\"; ls -la budgeting-app-tmp 2>&1)",
+      "Bash(rm -rf \"Budgeting App Build CC\")",
+      "Bash(mkdir \"Budgeting App Build CC\")",
+      "Bash(npx create-expo-app@latest budgeting-app-tmp2)",
+      "Bash(npx expo *)",
+      "Bash(npx tsc *)",
+      "Bash(eas whoami *)",
+      "Bash(git branch *)",
+      "Bash(npm uninstall *)",
+      "Bash(npx expo-doctor *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
