@@ -246,7 +246,12 @@ async function seed() {
     'transactions',
     'activity_log',
   ]) {
-    const { data, error } = await a.from(table).select('*').eq('household_id', hid);
+    // households is keyed by `id`; every other table is scoped by `household_id`.
+    const query =
+      table === 'households'
+        ? a.from(table).select('*').eq('id', hid)
+        : a.from(table).select('*').eq('household_id', hid);
+    const { data, error } = await query;
     check(`A reads ${table}`, !error && (data?.length ?? 0) > 0, error?.message ?? `${data?.length} rows`);
   }
 
