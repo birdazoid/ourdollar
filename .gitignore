@@ -34,6 +34,9 @@ yarn-error.*
 .env
 .env*.local
 
+# seed script admin credentials (service_role key — never commit, never bundle)
+.env.seed
+
 # local Claude Code settings (machine-specific permission overrides)
 .claude/settings.local.json
 
