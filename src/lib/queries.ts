@@ -131,3 +131,133 @@ export function useFunMoneyMutations(householdId: string | null) {
 
   return { setEnabled, setPersonAmount };
 }
+
+// ---- Bill mutations ----
+
+export type BillInput = {
+  name: string;
+  amount: number | null;
+  category: string;
+  due_day: number;
+  varies: boolean;
+};
+
+export function useBillMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['bills', householdId] });
+
+  const create = useMutation({
+    mutationFn: async (input: BillInput) => {
+      const { error } = await supabase.from('bills').insert({ household_id: householdId, ...input });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...input }: BillInput & { id: string }) => {
+      const { error } = await supabase.from('bills').update(input).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('bills').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const markPaid = useMutation({
+    mutationFn: async ({
+      id,
+      paidAmount,
+      paidByMemberId,
+    }: {
+      id: string;
+      paidAmount: number;
+      paidByMemberId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from('bills')
+        .update({
+          paid: true,
+          paid_amount: paidAmount,
+          paid_by_member_id: paidByMemberId,
+          paid_on: new Date().toISOString().slice(0, 10),
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, remove, markPaid };
+}
+
+// ---- Goal mutations ----
+
+export type GoalInput = {
+  name: string;
+  emoji: string;
+  target_amount: number;
+  monthly_amount: number;
+};
+
+export function useGoalMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['goals', householdId] });
+
+  const create = useMutation({
+    mutationFn: async (input: GoalInput) => {
+      const { error } = await supabase.from('goals').insert({ household_id: householdId, ...input });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...input }: GoalInput & { id: string }) => {
+      const { error } = await supabase.from('goals').update(input).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('goals').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  // "Mark paid" = add this month's contribution toward the goal.
+  const contribute = useMutation({
+    mutationFn: async ({
+      id,
+      saved_amount,
+      target_amount,
+      monthly_amount,
+    }: {
+      id: string;
+      saved_amount: number;
+      target_amount: number;
+      monthly_amount: number;
+    }) => {
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          saved_amount: Math.min(target_amount, saved_amount + monthly_amount),
+          paid_this_month: true,
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, remove, contribute };
+}
