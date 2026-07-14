@@ -37,6 +37,9 @@ yarn-error.*
 # seed script admin credentials (service_role key — never commit, never bundle)
 .env.seed
 
+# Supabase CLI local link state (project ref / pooler url — machine-specific)
+supabase/.temp/
+
 # local Claude Code settings (machine-specific permission overrides)
 .claude/settings.local.json
 

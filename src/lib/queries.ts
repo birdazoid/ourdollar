@@ -312,6 +312,76 @@ export function useTransactionMutations(householdId: string | null) {
   return { create, update, remove };
 }
 
+// ---- Household creation + invite claim (Phase 3, multi-household) ----
+
+export type CreateHouseholdInput = {
+  householdName: string;
+  memberName: string;
+  avatar?: string;
+};
+
+/**
+ * Creates a household owned by the current account, seeds the creator as the
+ * admin member, and adds an (empty) fun-money settings row. Done with plain
+ * inserts — existing RLS lets an owner bootstrap their own household. Returns
+ * the new household id so the caller can switch to it. Best-effort cleanup if a
+ * follow-up insert fails, so we don't leave an orphan household behind.
+ */
+export function useCreateHousehold() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateHouseholdInput): Promise<string> => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const accountId = userData.user?.id;
+      if (!accountId) throw new Error('Not signed in');
+
+      const { data: household, error: hErr } = await supabase
+        .from('households')
+        .insert({ name: input.householdName, owner_account_id: accountId })
+        .select()
+        .single();
+      if (hErr) throw hErr;
+
+      const { error: mErr } = await supabase.from('household_members').insert({
+        household_id: household.id,
+        account_id: accountId,
+        name: input.memberName,
+        avatar: input.avatar ?? '🙂',
+        is_admin: true,
+        has_account: true,
+      });
+      if (mErr) {
+        await supabase.from('households').delete().eq('id', household.id);
+        throw mErr;
+      }
+
+      const { error: fErr } = await supabase
+        .from('fun_money_settings')
+        .insert({ household_id: household.id, enabled: false });
+      if (fErr) {
+        await supabase.from('households').delete().eq('id', household.id);
+        throw fErr;
+      }
+
+      return household.id as string;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['households'] }),
+  });
+}
+
+/**
+ * Links any household_members rows whose invite_email matches the caller's
+ * account email (see the claim_pending_invites migration). Returns the number
+ * of memberships claimed. Safe to call on every login.
+ */
+export async function claimPendingInvites(): Promise<number> {
+  const { data, error } = await supabase.rpc('claim_pending_invites');
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
 // ---- Household + member mutations (Profile) ----
 
 export function useHouseholdMutations(householdId: string | null) {

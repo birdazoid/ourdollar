@@ -48,7 +48,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "seed": "tsx scripts/seed.ts",
-    "verify:spend-alert": "tsx scripts/verify-spend-alert.ts"
+    "verify:spend-alert": "tsx scripts/verify-spend-alert.ts",
+    "verify:multihousehold": "tsx scripts/verify-multihousehold.ts"
   },
   "private": true
 }

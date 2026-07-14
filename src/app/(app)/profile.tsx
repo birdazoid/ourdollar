@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Bell, Camera, ChevronLeft, Compass, LogOut, Plus, X } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Plus, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AddMemberSheet } from '@/components/add-member-sheet';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
+import { CreateHouseholdSheet } from '@/components/create-household-sheet';
 import { TextField } from '@/components/inputs';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
@@ -21,7 +22,7 @@ import type { HouseholdMember } from '@/lib/types';
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, signOut } = useSession();
-  const { householdId, household } = useHousehold();
+  const { householdId, household, households, setActiveHousehold } = useHousehold();
   const members = useMembers(householdId);
   const householdMut = useHouseholdMutations(householdId);
   const memberMut = useMemberMutations(householdId);
@@ -33,6 +34,7 @@ export default function ProfileScreen() {
   const [name, setName] = useState('');
   const [householdName, setHouseholdName] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+  const [creatingHousehold, setCreatingHousehold] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [reminders, setReminders] = useState({ due: true, overdue: true, weekClose: false });
 
@@ -138,8 +140,36 @@ export default function ProfileScreen() {
               )}
             </Card>
 
-            {/* Household */}
-            <Eyebrow>Household</Eyebrow>
+            {/* Household switcher */}
+            <Eyebrow>Your households</Eyebrow>
+            {households.map((h) => {
+              const active = h.id === householdId;
+              return (
+                <Pressable
+                  key={h.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`Switch to ${h.name}`}
+                  onPress={() => setActiveHousehold(h.id)}>
+                  <Card style={styles.switchRow}>
+                    <View style={[styles.settingIcon, active && styles.switchIconActive]}>
+                      <Home size={18} color={active ? Palette.sageDeep : Palette.ink} />
+                    </View>
+                    <View style={styles.flex}>
+                      <ThemedText type="bodyBold">{h.name}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {active ? 'Active' : 'Tap to switch'}
+                      </ThemedText>
+                    </View>
+                    {active && <Check size={18} color={Palette.sageDeep} />}
+                  </Card>
+                </Pressable>
+              );
+            })}
+            <DashedAdd label="Create a new household" onPress={() => setCreatingHousehold(true)} />
+
+            {/* Members of the active household */}
+            <Eyebrow>Members</Eyebrow>
             {(members.data ?? []).map((m) => {
               const isMe = m.account_id === session?.user.id;
               return (
@@ -214,6 +244,10 @@ export default function ProfileScreen() {
         onClose={() => setAddingMember(false)}
         onAdd={addMember}
         saving={memberMut.add.isPending}
+      />
+      <CreateHouseholdSheet
+        visible={creatingHousehold}
+        onClose={() => setCreatingHousehold(false)}
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </ThemedView>
@@ -375,6 +409,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eyebrow: { marginTop: Spacing.four, marginBottom: Spacing.two, letterSpacing: 0.6 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
+  switchIconActive: { backgroundColor: 'rgba(129,178,154,0.16)' },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
   memberAvatar: {
     width: 38,

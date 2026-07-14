@@ -268,9 +268,11 @@ const styles = StyleSheet.create({
   dayTodayText: { color: Palette.card },
   dayPast: { backgroundColor: 'rgba(61,64,91,0.08)' },
   pastNote: { textAlign: 'center', marginTop: Spacing.two },
-  funRow: { flexDirection: 'row', gap: Spacing.three },
+  funRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   funCard: {
-    flex: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 150,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
