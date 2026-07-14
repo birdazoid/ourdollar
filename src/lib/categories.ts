@@ -36,6 +36,8 @@ export const catRank = (cat: string) => {
 
 export const GOAL_EMOJI_OPTIONS = ['🎁', '🚗', '🏕️', '🏠', '✈️', '🎓', '💍', '🩺', '🐾', '🎉'] as const;
 
+export const AVATAR_OPTIONS = ['🙂', '🧑🏻', '👩🏻', '🧔🏽', '👩🏾', '🧑🏿', '👨🏼‍🦱', '👩🏻‍🦰', '🐶', '🐱', '🦊', '🌵'] as const;
+
 // Variable-spending categories for transactions (Week / Add Expense).
 export const TX_CATEGORIES = [
   { id: 'groceries', name: 'Groceries', color: '#81B29A', emoji: '🛒' },

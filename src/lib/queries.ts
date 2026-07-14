@@ -311,3 +311,88 @@ export function useTransactionMutations(householdId: string | null) {
 
   return { create, update, remove };
 }
+
+// ---- Household + member mutations (Profile) ----
+
+export function useHouseholdMutations(householdId: string | null) {
+  const qc = useQueryClient();
+
+  const rename = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase.from('households').update({ name }).eq('id', householdId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['households'] }),
+  });
+
+  return { rename };
+}
+
+export type NewMemberInput = {
+  name: string;
+  funMonthly: number;
+  inviteEmail: string | null;
+};
+
+export function useMemberMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['household_members', householdId] });
+    qc.invalidateQueries({ queryKey: ['fun_money_people', householdId] });
+  };
+
+  const update = useMutation({
+    mutationFn: async ({
+      id,
+      ...patch
+    }: {
+      id: string;
+      name?: string;
+      avatar?: string;
+      notify_on_spend?: boolean;
+    }) => {
+      const { error } = await supabase.from('household_members').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const add = useMutation({
+    mutationFn: async (input: NewMemberInput) => {
+      const { data, error } = await supabase
+        .from('household_members')
+        .insert({
+          household_id: householdId,
+          name: input.name,
+          avatar: '🙂',
+          is_admin: false,
+          has_account: false,
+          invite_email: input.inviteEmail,
+          invite_pending: !!input.inviteEmail,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      // Give the new member a fun-money allotment too.
+      const { error: funError } = await supabase.from('fun_money_people').insert({
+        household_id: householdId,
+        member_id: data.id,
+        monthly_amount: input.funMonthly,
+      });
+      if (funError) throw funError;
+    },
+    onSuccess: invalidate,
+  });
+
+  // fun_money_people.member_id cascades on delete, so removing the member
+  // removes their fun-money row automatically.
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('household_members').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { update, add, remove };
+}
