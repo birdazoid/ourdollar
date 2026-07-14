@@ -11,6 +11,7 @@ type Props = {
   title: string;
   subtitle?: string;
   subColor?: string;
+  badge?: ReactNode; // small pill rendered after the subtitle (e.g. Fun money)
   right?: ReactNode;
   footer?: ReactNode;
   onPress?: () => void;
@@ -25,6 +26,7 @@ export function ListRow({
   title,
   subtitle,
   subColor,
+  badge,
   right,
   footer,
   onPress,
@@ -43,9 +45,12 @@ export function ListRow({
               {title}
             </ThemedText>
             {subtitle && (
-              <ThemedText type="small" style={subColor ? { color: subColor } : undefined} themeColor={subColor ? undefined : 'textSecondary'} numberOfLines={1}>
-                {subtitle}
-              </ThemedText>
+              <View style={styles.subRow}>
+                <ThemedText type="small" style={subColor ? { color: subColor } : undefined} themeColor={subColor ? undefined : 'textSecondary'} numberOfLines={1}>
+                  {subtitle}
+                </ThemedText>
+                {badge}
+              </View>
             )}
           </View>
           {right}
@@ -68,6 +73,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { flex: 1, gap: 2 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   outline: { borderWidth: 1.5, borderColor: Palette.terracotta },
   dim: { opacity: 0.6 },
 });

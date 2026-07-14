@@ -9,6 +9,7 @@ import type {
   Goal,
   HouseholdMember,
   IncomeSource,
+  Transaction,
 } from '@/lib/types';
 
 /** Fetches all rows of a household-scoped table, newest first where sensible. */
@@ -42,6 +43,10 @@ export const useBills = (householdId: string | null) =>
 
 export const useGoals = (householdId: string | null) =>
   useQuery(householdListQuery<Goal>('goals', householdId));
+
+// Transactions ordered newest-occurred first; filtered to a week client-side.
+export const useTransactions = (householdId: string | null) =>
+  useQuery(householdListQuery<Transaction>('transactions', householdId, 'occurred_on'));
 
 // fun_money_people has no created_at column — order by id instead.
 export const useFunPeople = (householdId: string | null) =>
@@ -260,4 +265,49 @@ export function useGoalMutations(householdId: string | null) {
   });
 
   return { create, update, remove, contribute };
+}
+
+// ---- Transaction mutations ----
+
+export type TransactionInput = {
+  member_id: string | null;
+  amount: number;
+  category: string | null;
+  label: string;
+  type: 'expense' | 'income';
+  is_fun_money: boolean;
+  occurred_on: string;
+};
+
+export function useTransactionMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['transactions', householdId] });
+
+  const create = useMutation({
+    mutationFn: async (input: TransactionInput) => {
+      const { error } = await supabase
+        .from('transactions')
+        .insert({ household_id: householdId, ...input });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...input }: TransactionInput & { id: string }) => {
+      const { error } = await supabase.from('transactions').update(input).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, remove };
 }

@@ -8,22 +8,34 @@ import { Palette, Spacing } from '@/constants/theme';
 type Props = {
   eyebrow: string;
   big: string;
+  bigColor?: string;
   sub: string;
   subColor?: string;
   ringValue: number;
   ringColor?: string;
   ringLabel?: string;
+  ringCenter?: string; // overrides the default percentage inside the ring
 };
 
 /** White hero card with a big figure and a progress ring floated right. */
-export function HeroCard({ eyebrow, big, sub, subColor, ringValue, ringColor, ringLabel }: Props) {
+export function HeroCard({
+  eyebrow,
+  big,
+  bigColor,
+  sub,
+  subColor,
+  ringValue,
+  ringColor,
+  ringLabel,
+  ringCenter,
+}: Props) {
   return (
     <Card style={styles.card}>
       <View style={styles.left}>
         <ThemedText type="label" themeColor="textSecondary">
           {eyebrow}
         </ThemedText>
-        <ThemedText type="display" style={styles.big}>
+        <ThemedText type="display" style={[styles.big, bigColor ? { color: bigColor } : undefined]}>
           {big}
         </ThemedText>
         <ThemedText type="label" style={{ color: subColor ?? Palette.sageDeep }}>
@@ -31,7 +43,9 @@ export function HeroCard({ eyebrow, big, sub, subColor, ringValue, ringColor, ri
         </ThemedText>
       </View>
       <Ring value={ringValue} color={ringColor}>
-        <ThemedText type="subtitle">{Math.round(ringValue * 100)}%</ThemedText>
+        {(ringCenter ?? `${Math.round(ringValue * 100)}%`) !== '' && (
+          <ThemedText type="subtitle">{ringCenter ?? `${Math.round(ringValue * 100)}%`}</ThemedText>
+        )}
         {ringLabel && (
           <ThemedText type="small" themeColor="textSecondary">
             {ringLabel}
