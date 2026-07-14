@@ -227,7 +227,7 @@ export default function ProfileScreen() {
               tint="rgba(129,178,154,0.16)"
               title="Replay setup guide"
               subtitle="Walk through income, bills & goals again"
-              onPress={() => {}}
+              onPress={() => router.push('/onboarding')}
             />
             <SettingRow
               icon={<LogOut size={18} color={Palette.terracottaDeep} />}

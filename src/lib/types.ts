@@ -3,6 +3,15 @@
 
 export type Frequency = 'monthly' | 'semimonthly';
 
+export type Account = {
+  id: string;
+  email: string | null;
+  subscription_status: string;
+  subscription_tier: string;
+  onboarded: boolean;
+  created_at: string;
+};
+
 export type Household = {
   id: string;
   name: string;

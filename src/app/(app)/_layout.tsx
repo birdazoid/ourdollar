@@ -51,6 +51,7 @@ function HouseholdGate() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="profile" options={{ presentation: 'card' }} />
       <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
     </Stack>
   );
 }

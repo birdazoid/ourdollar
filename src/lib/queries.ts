@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
 import type {
+  Account,
   Bill,
   ExtraIncome,
   FunMoneyPerson,
@@ -310,6 +311,40 @@ export function useTransactionMutations(householdId: string | null) {
   });
 
   return { create, update, remove };
+}
+
+// ---- Account (subscription + onboarding state) ----
+
+/** The caller's own accounts row (RLS scopes it to auth.uid()). */
+export function useAccount(accountId: string | null) {
+  return useQuery({
+    queryKey: ['account', accountId],
+    enabled: !!accountId,
+    queryFn: async (): Promise<Account | null> => {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', accountId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as Account | null;
+    },
+  });
+}
+
+/** Marks first-run onboarding done so the wizard never auto-launches again. */
+export function useCompleteOnboarding(accountId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('accounts')
+        .update({ onboarded: true })
+        .eq('id', accountId!);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['account', accountId] }),
+  });
 }
 
 // ---- Household creation + invite claim (Phase 3, multi-household) ----
