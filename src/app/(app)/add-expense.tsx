@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2, X } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -55,6 +55,12 @@ export default function AddExpenseScreen() {
   const [day, setDay] = useState(editing?.occurred_on ?? todayISO());
   const [showSug, setShowSug] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+
+  // members load async, so currentMemberId is null on first render — adopt it as
+  // the default "who" once it resolves (unless the user already picked someone).
+  useEffect(() => {
+    if (memberId == null && currentMemberId) setMemberId(currentMemberId);
+  }, [currentMemberId, memberId]);
 
   // Merchant autosuggest from past transaction labels.
   const suggestions = useMemo(() => {
