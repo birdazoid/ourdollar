@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,9 +7,28 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
+import { syncPushToken } from '@/lib/notifications';
 
 export default function HomeScreen() {
   const { session, signOut } = useSession();
+  const [pushStatus, setPushStatus] = useState('Registering for notifications…');
+
+  useEffect(() => {
+    const accountId = session?.user.id;
+    if (!accountId) return;
+    let active = true;
+    syncPushToken(accountId)
+      .then((token) => {
+        if (!active) return;
+        setPushStatus(token ? `Push token saved:\n${token}` : 'Push not available on this device.');
+      })
+      .catch((err) => {
+        if (active) setPushStatus(`Push registration failed: ${err.message ?? err}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session?.user.id]);
 
   return (
     <ThemedView style={styles.container}>
@@ -19,6 +39,11 @@ export default function HomeScreen() {
             Signed in as {session?.user.email}
           </ThemedText>
         </View>
+
+        <ThemedText type="small" themeColor="textSecondary" style={styles.push}>
+          {pushStatus}
+        </ThemedText>
+
         <Button title="Sign out" variant="secondary" onPress={signOut} />
       </SafeAreaView>
     </ThemedView>
@@ -39,5 +64,8 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  push: {
+    textAlign: 'center',
   },
 });
