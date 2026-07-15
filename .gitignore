@@ -51,3 +51,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Local TestFlight feedback screenshots (may contain personal data)
+feedback/

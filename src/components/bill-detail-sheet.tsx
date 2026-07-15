@@ -1,7 +1,6 @@
-import { Pencil, Trash2 } from 'lucide-react-native';
+import { Check, Pencil, Trash2 } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
@@ -39,9 +38,15 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
 
           <View style={styles.actions}>
             {!bill.paid && (
-              <View style={styles.flex}>
-                <Button title="Mark paid" onPress={() => onPay(bill)} />
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                style={[styles.flex, styles.payBtn]}
+                onPress={() => onPay(bill)}>
+                <Check size={18} color={Palette.card} />
+                <ThemedText type="bodyBold" style={styles.payText}>
+                  Mark paid
+                </ThemedText>
+              </Pressable>
             )}
             <Pressable style={[styles.flex, styles.editBtn]} onPress={() => onEdit(bill)}>
               <Pencil size={16} color={Palette.ink} />
@@ -66,6 +71,16 @@ const styles = StyleSheet.create({
   infoText: {},
   actions: { flexDirection: 'row', gap: Spacing.two, alignItems: 'stretch' },
   flex: { flex: 1 },
+  payBtn: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    height: 52,
+    borderRadius: Radius.large,
+    backgroundColor: Palette.sageDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payText: { color: Palette.card },
   editBtn: {
     flexDirection: 'row',
     gap: Spacing.two,

@@ -1,6 +1,6 @@
 import { Check, ChevronRight, Plus } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
 import { BillSheet } from '@/components/bill-sheet';
@@ -59,9 +59,22 @@ export default function BillsScreen() {
   const memberName = (id: string | null) =>
     (members.data ?? []).find((m) => m.id === id)?.name ?? null;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const firstOverdueRef = useRef<View>(null);
+  function scrollToOverdue() {
+    const node = findNodeHandle(scrollRef.current);
+    if (node == null) return;
+    firstOverdueRef.current?.measureLayout(
+      node,
+      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }),
+      () => {}
+    );
+  }
+
   const billList = bills.data ?? [];
   const paid = billList.filter((b) => b.paid);
   const overdue = billList.filter((b) => !b.paid && (b.due_day ?? 99) < TODAY_DAY);
+  const firstOverdueId = overdue[0]?.id ?? null;
   const dueSoon = billList.filter(
     (b) => !b.paid && (b.due_day ?? 99) >= TODAY_DAY && (b.due_day ?? 99) <= TODAY_DAY + 7
   );
@@ -129,7 +142,7 @@ export default function BillsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen scrollRef={scrollRef}>
       <ScreenHeader eyebrow={MONTH_LABEL} title="Bills" />
 
       {loading ? (
@@ -146,7 +159,10 @@ export default function BillsScreen() {
 
           {(overdue.length > 0 || dueSoon.length > 0) && (
             <TwoUp>
-              <MiniCard label="Overdue" warn={overdue.length > 0}>
+              <MiniCard
+                label="Overdue"
+                warn={overdue.length > 0}
+                onPress={overdue.length ? scrollToOverdue : undefined}>
                 <ThemedText type="title" style={{ color: overdue.length ? Palette.terracotta : Palette.ink }}>
                   {overdue.length}
                 </ThemedText>
@@ -197,9 +213,8 @@ export default function BillsScreen() {
               <SectionHeader title={`${billEmoji(cat)} ${cat}`} />
               {catBills.map((b) => {
                 const isOverdue = !b.paid && (b.due_day ?? 99) < TODAY_DAY;
-                return (
+                const row = (
                   <ListRow
-                    key={b.id}
                     emoji={billEmoji(cat)}
                     tileColor={b.paid ? '#E7E3D3' : isOverdue ? 'rgba(224,122,95,0.14)' : 'rgba(129,178,154,0.14)'}
                     title={b.name}
@@ -219,6 +234,13 @@ export default function BillsScreen() {
                       </View>
                     }
                   />
+                );
+                return b.id === firstOverdueId ? (
+                  <View key={b.id} ref={firstOverdueRef} collapsable={false}>
+                    {row}
+                  </View>
+                ) : (
+                  <View key={b.id}>{row}</View>
                 );
               })}
             </View>

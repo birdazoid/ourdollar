@@ -118,13 +118,15 @@ export default function AddExpenseScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}>
           <Segmented
             value={type}
             onChange={(v) => setType(v as TxType)}
             options={[
               { value: 'expense', label: 'Expense' },
-              { value: 'income', label: '↩ Money back' },
+              { value: 'income', label: 'Income' },
             ]}
           />
 
@@ -241,7 +243,7 @@ export default function AddExpenseScreen() {
                 title={
                   isEdit
                     ? 'Save changes'
-                    : `${type === 'income' ? 'Add money back' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
+                    : `${type === 'income' ? 'Add income' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
                 }
                 disabled={!valid}
                 onPress={save}
@@ -262,7 +264,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
+    paddingTop: Spacing.four,
     paddingBottom: Spacing.three,
   },
   close: {

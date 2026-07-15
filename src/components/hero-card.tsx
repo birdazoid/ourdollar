@@ -1,6 +1,5 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Card } from '@/components/card';
 import { Ring } from '@/components/ring';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Spacing } from '@/constants/theme';
@@ -30,7 +29,7 @@ export function HeroCard({
   ringCenter,
 }: Props) {
   return (
-    <Card style={styles.card}>
+    <View style={styles.card}>
       <View style={styles.left}>
         <ThemedText type="label" themeColor="textSecondary">
           {eyebrow}
@@ -52,11 +51,12 @@ export function HeroCard({
           </ThemedText>
         )}
       </Ring>
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Transparent — the hero sits directly on the linen background (no white box).
   card: {
     flexDirection: 'row',
     alignItems: 'center',

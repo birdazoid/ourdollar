@@ -90,9 +90,12 @@ export default function OverviewScreen() {
     });
     const out: Bar[] = [];
     const now = new Date();
+    // 12-month view is cramped, so use single-letter month initials there;
+    // shorter ranges have room for the 3-letter abbreviation.
+    const monthStyle = n >= 12 ? 'narrow' : 'short';
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      out.push({ label: d.toLocaleDateString('en-US', { month: 'short' }), value: byMonth[monthKey(d)] ?? 0 });
+      out.push({ label: d.toLocaleDateString('en-US', { month: monthStyle }), value: byMonth[monthKey(d)] ?? 0 });
     }
     return out;
   }, [transactions.data, range]);

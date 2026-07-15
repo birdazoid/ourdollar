@@ -1,11 +1,5 @@
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -25,13 +19,12 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const isSignIn = mode === 'signIn';
 
   async function handleSubmit() {
     setError(null);
-    setNotice(null);
     if (!email.trim() || !password) {
       setError('Enter your email and password.');
       return;
@@ -43,20 +36,50 @@ export default function SignInScreen() {
       // On success, the session listener flips the app into the protected group.
     } else {
       const { error, needsConfirmation } = await signUp(email.trim(), password);
-      if (error) {
-        setError(error.message);
-      } else if (needsConfirmation) {
-        setNotice('Check your email to confirm your account, then sign in.');
-        setMode('signIn');
-      }
+      if (error) setError(error.message);
+      else if (needsConfirmation) setSentTo(email.trim());
+      // If no confirmation needed, the session listener takes over.
     }
     setLoading(false);
   }
 
-  function toggleMode() {
-    setMode(isSignIn ? 'signUp' : 'signIn');
+  function switchTo(next: Mode) {
+    setMode(next);
     setError(null);
-    setNotice(null);
+  }
+
+  // Dedicated "we sent you a confirmation email" state — clearer than a one-line note.
+  if (sentTo) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <ThemedText type="display" style={styles.confirmEmoji}>
+                📬
+              </ThemedText>
+              <ThemedText type="title">Check your inbox</ThemedText>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
+                We sent a confirmation link to{'\n'}
+                <ThemedText type="bodyBold">{sentTo}</ThemedText>
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.tagline}>
+                Tap the link in that email to verify your account, then sign in. Check spam if it
+                hasn&apos;t arrived in a minute.
+              </ThemedText>
+            </View>
+            <Button
+              title="Back to sign in"
+              onPress={() => {
+                setSentTo(null);
+                setPassword('');
+                setMode('signIn');
+              }}
+            />
+          </View>
+        </SafeAreaView>
+      </ThemedView>
+    );
   }
 
   return (
@@ -68,10 +91,20 @@ export default function SignInScreen() {
           <View style={styles.content}>
             <View style={styles.header}>
               <ThemedText type="display">OurDollar</ThemedText>
-              <ThemedText type="body" themeColor="textSecondary">
-                {isSignIn ? 'Welcome back.' : 'Create your account.'}
+              <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
+                {isSignIn
+                  ? 'Sign in to your household.'
+                  : 'Shared budgeting for the people you live with.'}
               </ThemedText>
             </View>
+
+            {!isSignIn && (
+              <View style={styles.perks}>
+                <Perk emoji="🧾" text="Track bills — and who paid what" />
+                <Perk emoji="✨" text="Save toward goals together" />
+                <Perk emoji="📆" text="A weekly spending number, auto-calculated" />
+              </View>
+            )}
 
             <View style={styles.form}>
               <TextInput
@@ -88,7 +121,7 @@ export default function SignInScreen() {
               />
               <TextInput
                 style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
-                placeholder="Password"
+                placeholder={isSignIn ? 'Password' : 'Create a password'}
                 placeholderTextColor={theme.textSecondary}
                 autoCapitalize="none"
                 secureTextEntry
@@ -104,11 +137,6 @@ export default function SignInScreen() {
                   {error}
                 </ThemedText>
               )}
-              {notice && (
-                <ThemedText type="small" themeColor="positiveDeep" style={styles.message}>
-                  {notice}
-                </ThemedText>
-              )}
 
               <Button
                 title={isSignIn ? 'Sign in' : 'Create account'}
@@ -116,9 +144,9 @@ export default function SignInScreen() {
                 loading={loading}
               />
               <Button
-                title={isSignIn ? 'New here? Create an account' : 'Have an account? Sign in'}
+                title={isSignIn ? 'New here? Create an account' : 'Already have an account? Sign in'}
                 variant="secondary"
-                onPress={toggleMode}
+                onPress={() => switchTo(isSignIn ? 'signUp' : 'signIn')}
                 disabled={loading}
               />
             </View>
@@ -126,6 +154,17 @@ export default function SignInScreen() {
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+function Perk({ emoji, text }: { emoji: string; text: string }) {
+  return (
+    <View style={styles.perk}>
+      <ThemedText type="subtitle">{emoji}</ThemedText>
+      <ThemedText type="body" style={styles.perkText}>
+        {text}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -137,12 +176,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: Spacing.four,
-    gap: Spacing.five,
+    gap: Spacing.four,
   },
   header: {
     alignItems: 'center',
     gap: Spacing.two,
   },
+  confirmEmoji: { marginBottom: Spacing.two },
+  tagline: { textAlign: 'center' },
+  perks: {
+    gap: Spacing.three,
+    backgroundColor: 'rgba(129,178,154,0.12)',
+    borderRadius: Radius.large,
+    padding: Spacing.four,
+  },
+  perk: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  perkText: { flex: 1 },
   form: {
     gap: Spacing.three,
   },

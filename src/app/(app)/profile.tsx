@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Plus, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddMemberSheet } from '@/components/add-member-sheet';
@@ -82,13 +82,16 @@ export default function ProfileScreen() {
             <ChevronLeft size={20} color={Palette.ink} />
           </Pressable>
           <ThemedText type="subtitle">Profile</ThemedText>
-          <View style={styles.iconBtn} />
+          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
           <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
         ) : (
-          <View style={styles.body}>
+          <ScrollView
+            style={styles.fill}
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}>
             {/* Identity */}
             <Card style={styles.identity}>
               <Pressable accessibilityRole="button" accessibilityLabel="Change avatar" onPress={() => setPickingAvatar((v) => !v)} style={styles.avatarWrap}>
@@ -235,7 +238,7 @@ export default function ProfileScreen() {
               title="Sign out"
               onPress={signOut}
             />
-          </View>
+          </ScrollView>
         )}
       </SafeAreaView>
 
@@ -347,6 +350,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerSpacer: { width: 40, height: 40 },
   loading: { marginTop: Spacing.six },
   body: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
   flex: { flex: 1 },
@@ -374,7 +378,12 @@ const styles = StyleSheet.create({
     borderColor: Palette.card,
   },
   editForm: { alignSelf: 'stretch', gap: Spacing.two, marginTop: Spacing.two },
-  editInput: { textAlign: 'center' },
+  editInput: {
+    textAlign: 'center',
+    backgroundColor: Palette.linen,
+    borderWidth: 1.5,
+    borderColor: 'rgba(61,64,91,0.18)',
+  },
   saveBtn: {
     alignSelf: 'center',
     backgroundColor: Palette.sage,

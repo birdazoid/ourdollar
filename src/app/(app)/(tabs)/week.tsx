@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
@@ -174,6 +174,18 @@ export default function WeekScreen() {
             title="Weekly spending"
             action={weekTxns.length ? `${weekTxns.length} logged` : undefined}
           />
+          {isCurrent && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add an expense"
+              onPress={() => router.push('/add-expense')}
+              style={styles.addExpense}>
+              <View style={styles.addBadge}>
+                <Plus size={16} color={Palette.card} strokeWidth={3} />
+              </View>
+              <ThemedText type="label">Add an expense</ThemedText>
+            </Pressable>
+          )}
           {dayGroups.length ? (
             dayGroups.map((g) => (
               <View key={g.date}>
@@ -284,6 +296,26 @@ const styles = StyleSheet.create({
   },
   funText: { flex: 1, minWidth: 0 },
   dayHeading: { marginTop: Spacing.two, marginBottom: Spacing.two, marginLeft: Spacing.one },
+  addExpense: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(61,64,91,0.25)',
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  addBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.sageDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   funBadge: {
     backgroundColor: 'rgba(242,204,143,0.4)',
     borderRadius: Radius.pill,
