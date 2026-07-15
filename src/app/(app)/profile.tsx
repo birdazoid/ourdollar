@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
-import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Mail, Plus, X } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Mail, Plus, Trash2, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddMemberSheet } from '@/components/add-member-sheet';
@@ -17,6 +17,7 @@ import { useSession } from '@/lib/auth';
 import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import {
+  deleteAccount,
   useAccount,
   useHouseholdMutations,
   useMemberMutations,
@@ -44,6 +45,7 @@ export default function ProfileScreen() {
   const [householdName, setHouseholdName] = useState('');
   const [addingMember, setAddingMember] = useState(false);
   const [creatingHousehold, setCreatingHousehold] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [reminders, setReminders] = useState({ due: true, overdue: true, weekClose: false });
 
@@ -71,6 +73,24 @@ export default function ProfileScreen() {
       message: `${m.name} will lose access and their fun money stash will be removed. This can't be undone.`,
       confirmLabel: 'Remove',
       onConfirm: () => memberMut.remove.mutate(m.id),
+    });
+  }
+  function askDeleteAccount() {
+    setConfirm({
+      title: 'Delete your account?',
+      message:
+        'This permanently deletes your account and any households you own — every bill, goal, income, and all history. This cannot be undone.',
+      confirmLabel: 'Delete account',
+      onConfirm: async () => {
+        try {
+          setDeletingAccount(true);
+          await deleteAccount();
+          await signOut();
+        } catch {
+          setDeletingAccount(false);
+          Alert.alert('Could not delete account', 'Something went wrong. Please try again.');
+        }
+      },
     });
   }
 
@@ -254,6 +274,13 @@ export default function ProfileScreen() {
               title="Sign out"
               onPress={signOut}
             />
+            <SettingRow
+              icon={<Trash2 size={18} color={Palette.terracottaDeep} />}
+              tint="rgba(224,122,95,0.14)"
+              title="Delete account"
+              subtitle="Permanently erase your account & data"
+              onPress={askDeleteAccount}
+            />
           </ScrollView>
         )}
       </SafeAreaView>
@@ -269,6 +296,15 @@ export default function ProfileScreen() {
         onClose={() => setCreatingHousehold(false)}
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+
+      {deletingAccount && (
+        <View style={styles.deletingOverlay}>
+          <ActivityIndicator color={Palette.card} />
+          <ThemedText type="bodyBold" style={styles.deletingText}>
+            Deleting your account…
+          </ThemedText>
+        </View>
+      )}
     </ThemedView>
   );
 }
@@ -367,6 +403,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerSpacer: { width: 40, height: 40 },
+  deletingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(61,64,91,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.three,
+  },
+  deletingText: { color: Palette.card },
   loading: { marginTop: Spacing.six },
   body: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
   flex: { flex: 1 },

@@ -49,7 +49,8 @@
     "lint": "expo lint",
     "seed": "tsx scripts/seed.ts",
     "verify:spend-alert": "tsx scripts/verify-spend-alert.ts",
-    "verify:multihousehold": "tsx scripts/verify-multihousehold.ts"
+    "verify:multihousehold": "tsx scripts/verify-multihousehold.ts",
+    "verify:account-deletion": "tsx scripts/verify-account-deletion.ts"
   },
   "private": true
 }

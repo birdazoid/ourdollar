@@ -348,6 +348,16 @@ export function useCompleteOnboarding(accountId: string | null) {
   });
 }
 
+/**
+ * Permanently deletes the caller's account and its data via the delete-account
+ * edge function (App Store requirement). The function identifies the user from
+ * their JWT; supabase-js attaches it automatically. Caller should sign out after.
+ */
+export async function deleteAccount(): Promise<void> {
+  const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+  if (error) throw error;
+}
+
 /** Product-update email consent (Phase 6). Opt-in only. */
 export function useSetMarketingOptIn(accountId: string | null) {
   const qc = useQueryClient();
