@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Plus, X } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Mail, Plus, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,13 +16,22 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
-import { useHouseholdMutations, useMemberMutations, useMembers, type NewMemberInput } from '@/lib/queries';
+import {
+  useAccount,
+  useHouseholdMutations,
+  useMemberMutations,
+  useMembers,
+  useSetMarketingOptIn,
+  type NewMemberInput,
+} from '@/lib/queries';
 import type { HouseholdMember } from '@/lib/types';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, signOut } = useSession();
   const { householdId, household, households, setActiveHousehold } = useHousehold();
+  const account = useAccount(session?.user.id ?? null);
+  const marketingMut = useSetMarketingOptIn(session?.user.id ?? null);
   const members = useMembers(householdId);
   const householdMut = useHouseholdMutations(householdId);
   const memberMut = useMemberMutations(householdId);
@@ -221,6 +230,13 @@ export default function ProfileScreen() {
               subtitle="If a bill slips past its date"
               value={reminders.overdue}
               onToggle={() => setReminders((r) => ({ ...r, overdue: !r.overdue }))}
+            />
+            <ToggleRow
+              icon={<Mail size={18} color={Palette.ink} />}
+              title="Product updates"
+              subtitle="Occasional news & tips by email"
+              value={account.data?.marketing_opt_in ?? false}
+              onToggle={() => marketingMut.mutate(!(account.data?.marketing_opt_in ?? false))}
             />
 
             {/* Account */}

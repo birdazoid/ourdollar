@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
@@ -345,6 +346,39 @@ export function useCompleteOnboarding(accountId: string | null) {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['account', accountId] }),
   });
+}
+
+/** Product-update email consent (Phase 6). Opt-in only. */
+export function useSetMarketingOptIn(accountId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (optIn: boolean) => {
+      const { error } = await supabase
+        .from('accounts')
+        .update({ marketing_opt_in: optIn })
+        .eq('id', accountId!);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['account', accountId] }),
+  });
+}
+
+// Sign-up runs before a session exists (email confirmation), so the marketing
+// checkbox choice is stashed and written to the account on first authed load.
+const PENDING_MARKETING_KEY = 'ourdollar.pendingMarketingOptIn';
+
+export async function stashPendingMarketingOptIn(optIn: boolean): Promise<void> {
+  await AsyncStorage.setItem(PENDING_MARKETING_KEY, optIn ? '1' : '0').catch(() => {});
+}
+
+export async function applyPendingMarketingOptIn(accountId: string): Promise<void> {
+  const stored = await AsyncStorage.getItem(PENDING_MARKETING_KEY).catch(() => null);
+  if (stored == null) return;
+  await AsyncStorage.removeItem(PENDING_MARKETING_KEY).catch(() => {});
+  // Only ever flips it on — never silently opts someone out of an existing choice.
+  if (stored === '1') {
+    await supabase.from('accounts').update({ marketing_opt_in: true }).eq('id', accountId);
+  }
 }
 
 // ---- Household creation + invite claim (Phase 3, multi-household) ----

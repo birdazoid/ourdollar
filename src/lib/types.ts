@@ -9,6 +9,7 @@ export type Account = {
   subscription_status: string;
   subscription_tier: string;
   onboarded: boolean;
+  marketing_opt_in: boolean;
   created_at: string;
 };
 

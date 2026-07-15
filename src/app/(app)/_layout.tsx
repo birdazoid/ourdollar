@@ -8,15 +8,18 @@ import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { HouseholdProvider, useHousehold } from '@/lib/household';
 import { syncPushToken } from '@/lib/notifications';
+import { applyPendingMarketingOptIn } from '@/lib/queries';
 
 export default function AppLayout() {
   const { session } = useSession();
 
-  // Register this device for push on first authed load (design-brief §2).
+  // Register this device for push + apply any pending marketing consent from
+  // sign-up, on first authed load (design-brief §2).
   useEffect(() => {
     const accountId = session?.user.id;
     if (accountId) {
       syncPushToken(accountId).catch(() => {});
+      applyPendingMarketingOptIn(accountId).catch(() => {});
     }
   }, [session?.user.id]);
 

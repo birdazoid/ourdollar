@@ -1,5 +1,6 @@
+import { Check } from 'lucide-react-native';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -8,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/auth';
+import { stashPendingMarketingOptIn } from '@/lib/queries';
 
 type Mode = 'signIn' | 'signUp';
 
@@ -20,6 +22,7 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   const isSignIn = mode === 'signIn';
 
@@ -35,6 +38,9 @@ export default function SignInScreen() {
       if (error) setError(error.message);
       // On success, the session listener flips the app into the protected group.
     } else {
+      // Stash the consent choice — it's written to the account on first authed
+      // load (there's no session yet when email confirmation is required).
+      await stashPendingMarketingOptIn(marketingOptIn);
       const { error, needsConfirmation } = await signUp(email.trim(), password);
       if (error) setError(error.message);
       else if (needsConfirmation) setSentTo(email.trim());
@@ -132,6 +138,22 @@ export default function SignInScreen() {
                 returnKeyType="go"
               />
 
+              {!isSignIn && (
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: marketingOptIn }}
+                  accessibilityLabel="Send me product updates"
+                  onPress={() => setMarketingOptIn((v) => !v)}
+                  style={styles.optInRow}>
+                  <View style={[styles.checkbox, marketingOptIn && styles.checkboxOn]}>
+                    {marketingOptIn && <Check size={14} color={Palette.card} strokeWidth={3} />}
+                  </View>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+                    Send me occasional product updates &amp; tips. You can turn this off anytime.
+                  </ThemedText>
+                </Pressable>
+              )}
+
               {error && (
                 <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
                   {error}
@@ -207,4 +229,16 @@ const styles = StyleSheet.create({
   message: {
     textAlign: 'center',
   },
+  optInRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.small,
+    borderWidth: 1.5,
+    borderColor: 'rgba(61,64,91,0.3)',
+    backgroundColor: Palette.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: Palette.sageDeep, borderColor: Palette.sageDeep },
 });
