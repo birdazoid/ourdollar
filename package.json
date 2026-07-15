@@ -50,7 +50,8 @@
     "seed": "tsx scripts/seed.ts",
     "verify:spend-alert": "tsx scripts/verify-spend-alert.ts",
     "verify:multihousehold": "tsx scripts/verify-multihousehold.ts",
-    "verify:account-deletion": "tsx scripts/verify-account-deletion.ts"
+    "verify:account-deletion": "tsx scripts/verify-account-deletion.ts",
+    "verify:send-invite": "tsx scripts/verify-send-invite.ts"
   },
   "private": true
 }

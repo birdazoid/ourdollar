@@ -33,6 +33,7 @@ import {
   useHouseholdMutations,
   useIncome,
   useIncomeMutations,
+  sendInvite,
   useMemberMutations,
   useMembers,
   type BillInput,
@@ -109,7 +110,11 @@ export default function OnboardingScreen() {
     setGoalSheet(null);
   }
   function addMember(input: NewMemberInput) {
-    memberMut.add.mutate(input);
+    memberMut.add.mutate(input, {
+      onSuccess: (memberId) => {
+        if (input.inviteEmail) sendInvite(memberId).catch(() => {});
+      },
+    });
     setAddingMember(false);
   }
 

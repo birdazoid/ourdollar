@@ -18,6 +18,7 @@ import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import {
   deleteAccount,
+  sendInvite,
   useAccount,
   useHouseholdMutations,
   useMemberMutations,
@@ -64,7 +65,11 @@ export default function ProfileScreen() {
     setPickingAvatar(false);
   }
   function addMember(input: NewMemberInput) {
-    memberMut.add.mutate(input);
+    memberMut.add.mutate(input, {
+      onSuccess: (memberId) => {
+        if (input.inviteEmail) sendInvite(memberId).catch(() => {});
+      },
+    });
     setAddingMember(false);
   }
   function askRemove(m: HouseholdMember) {

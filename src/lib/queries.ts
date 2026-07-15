@@ -358,6 +358,16 @@ export async function deleteAccount(): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Sends the household invite email via the send-invite edge function. Best-effort
+ * — the member row already exists (invite_pending), so a send failure just means
+ * the email didn't go out, not that the invite failed.
+ */
+export async function sendInvite(memberId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('send-invite', { body: { memberId } });
+  if (error) throw error;
+}
+
 /** Product-update email consent (Phase 6). Opt-in only. */
 export function useSetMarketingOptIn(accountId: string | null) {
   const qc = useQueryClient();
@@ -519,7 +529,7 @@ export function useMemberMutations(householdId: string | null) {
   });
 
   const add = useMutation({
-    mutationFn: async (input: NewMemberInput) => {
+    mutationFn: async (input: NewMemberInput): Promise<string> => {
       const { data, error } = await supabase
         .from('household_members')
         .insert({
@@ -541,6 +551,7 @@ export function useMemberMutations(householdId: string | null) {
         monthly_amount: input.funMonthly,
       });
       if (funError) throw funError;
+      return data.id as string;
     },
     onSuccess: invalidate,
   });
