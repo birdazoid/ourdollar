@@ -4,18 +4,20 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AddMemberSheet } from '@/components/add-member-sheet';
 import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { GoalSheet } from '@/components/goal-sheet';
 import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
-import { FieldLabel, TextField } from '@/components/inputs';
 import { ListRow } from '@/components/list-row';
 import { MoneyRow } from '@/components/money-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WeekStartPicker } from '@/components/week-start-picker';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
-import { billEmoji, GOAL_EMOJI_OPTIONS } from '@/lib/categories';
+import { billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
 import { computeBudget, fmt, monthlyEquiv } from '@/lib/money';
@@ -28,19 +30,24 @@ import {
   useFunSettings,
   useGoalMutations,
   useGoals,
+  useHouseholdMutations,
   useIncome,
   useIncomeMutations,
+  useMemberMutations,
   useMembers,
   type BillInput,
+  type GoalInput,
+  type NewMemberInput,
 } from '@/lib/queries';
-import type { Bill, IncomeSource } from '@/lib/types';
+import type { Bill, Goal, IncomeSource } from '@/lib/types';
+import { weekdayName } from '@/lib/week';
 
-const STEPS = ['Welcome', 'Income', 'Fixed expenses', 'Savings goals', 'Review'];
+const STEPS = ['Welcome', 'Household', 'Income', 'Fixed expenses', 'Savings goals', 'Review'];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
 
   const members = useMembers(householdId);
   const income = useIncome(householdId);
@@ -53,17 +60,15 @@ export default function OnboardingScreen() {
   const incomeMut = useIncomeMutations(householdId);
   const billMut = useBillMutations(householdId);
   const goalMut = useGoalMutations(householdId);
+  const memberMut = useMemberMutations(householdId);
+  const householdMut = useHouseholdMutations(householdId);
   const completeOnboarding = useCompleteOnboarding(session?.user.id ?? null);
 
   const [step, setStep] = useState(0);
   const [incomeSheet, setIncomeSheet] = useState<{ source: IncomeSource | null } | null>(null);
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
-
-  // Inline goal form (step 3).
-  const [goalName, setGoalName] = useState('');
-  const [goalTarget, setGoalTarget] = useState('');
-  const [goalMonthly, setGoalMonthly] = useState('');
-  const [goalEmoji, setGoalEmoji] = useState<string>(GOAL_EMOJI_OPTIONS[0]);
+  const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
+  const [addingMember, setAddingMember] = useState(false);
 
   const budget = computeBudget({
     incomeSources: income.data ?? [],
@@ -94,24 +99,20 @@ export default function OnboardingScreen() {
     billMut.remove.mutate(id);
     setBillSheet(null);
   }
-  function addGoal() {
-    const target = Number(goalTarget);
-    if (!goalName.trim() || !target) return;
-    goalMut.create.mutate({
-      name: goalName.trim(),
-      emoji: goalEmoji,
-      target_amount: target,
-      monthly_amount: Number(goalMonthly) || 0,
-    });
-    setGoalName('');
-    setGoalTarget('');
-    setGoalMonthly('');
-    setGoalEmoji(GOAL_EMOJI_OPTIONS[0]);
+  function saveGoal(input: GoalInput, id?: string) {
+    if (id) goalMut.update.mutate({ id, ...input });
+    else goalMut.create.mutate(input);
+    setGoalSheet(null);
+  }
+  function deleteGoal(id: string) {
+    goalMut.remove.mutate(id);
+    setGoalSheet(null);
+  }
+  function addMember(input: NewMemberInput) {
+    memberMut.add.mutate(input);
+    setAddingMember(false);
   }
 
-  // Finishing (or dismissing) marks onboarding done so it never auto-launches
-  // again, then returns to where the user came from (Profile replay) or the
-  // now-populated app.
   function exitWizard() {
     completeOnboarding.mutate();
     if (router.canGoBack()) router.back();
@@ -152,9 +153,39 @@ export default function OnboardingScreen() {
           {step === 1 && (
             <View>
               <StepHeader
+                emoji="🏠"
+                title="Who's in your household?"
+                desc="Add the people you share money with — a partner, roommates, or kids. You'll be able to set who earns what and give each person a fun-money stash."
+              />
+              {(members.data ?? []).map((m) => (
+                <ListRow
+                  key={m.id}
+                  emoji={m.avatar ?? '🙂'}
+                  title={m.account_id === session?.user.id ? `${m.name} (you)` : m.name}
+                  subtitle={m.is_admin ? 'Admin' : m.invite_pending ? `Invite sent · ${m.invite_email ?? ''}` : m.has_account ? 'Member' : 'Fun money only'}
+                />
+              ))}
+              <DashedAdd label="Add a household member" onPress={() => setAddingMember(true)} />
+
+              <View style={styles.weekBlock}>
+                <ThemedText type="bodyBold">When does your week start?</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.weekNote}>
+                  Your weekly spending resets each {weekdayName(household?.week_start_day ?? 0)}.
+                </ThemedText>
+                <WeekStartPicker
+                  value={household?.week_start_day ?? 0}
+                  onChange={(d) => householdMut.setWeekStart.mutate(d)}
+                />
+              </View>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View>
+              <StepHeader
                 emoji="💰"
                 title="What comes in?"
-                desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit or remove it."
+                desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit it."
               />
               {(income.data ?? []).map((s) => {
                 const m = memberById(s.member_id);
@@ -183,7 +214,7 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <View>
               <StepHeader
                 emoji="🧾"
@@ -219,7 +250,7 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <View>
               <StepHeader
                 emoji="✨"
@@ -233,58 +264,19 @@ export default function OnboardingScreen() {
                   tileColor="rgba(242,204,143,0.3)"
                   title={g.name}
                   subtitle={`${fmt(g.monthly_amount)}/mo toward ${fmt(g.target_amount)}`}
+                  onPress={() => setGoalSheet({ goal: g })}
+                  right={<ChevronRight size={16} color="#B7B8C4" />}
                 />
               ))}
-              <Card style={styles.goalForm}>
-                <View style={styles.emojiRow}>
-                  {GOAL_EMOJI_OPTIONS.map((e) => (
-                    <Pressable
-                      key={e}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Goal icon ${e}`}
-                      accessibilityState={{ selected: e === goalEmoji }}
-                      onPress={() => setGoalEmoji(e)}
-                      style={[styles.emojiTile, e === goalEmoji && styles.emojiOn]}>
-                      <ThemedText type="body">{e}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextField
-                  placeholder="Goal name (e.g. Christmas)"
-                  value={goalName}
-                  onChangeText={setGoalName}
-                  style={styles.goalInput}
-                />
-                <View style={styles.goalAmounts}>
-                  <TextField
-                    placeholder="Target $"
-                    value={goalTarget}
-                    onChangeText={(t) => setGoalTarget(t.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    style={styles.goalAmountInput}
-                  />
-                  <TextField
-                    placeholder="Monthly $"
-                    value={goalMonthly}
-                    onChangeText={(t) => setGoalMonthly(t.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    style={styles.goalAmountInput}
-                  />
-                </View>
-                <Button
-                  title="Add goal"
-                  variant="secondary"
-                  disabled={!goalName.trim() || !goalTarget}
-                  onPress={addGoal}
-                  style={styles.addGoalBtn}
-                />
-              </Card>
+              {(goals.data ?? []).length === 0 ? (
+                <EmptyCard emoji="✨" text="No goals yet — totally optional." cta="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
+              ) : (
+                <DashedAdd label="Add another goal" onPress={() => setGoalSheet({ goal: null })} />
+              )}
             </View>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <View>
               <StepHeader
                 emoji="🎉"
@@ -301,7 +293,7 @@ export default function OnboardingScreen() {
                 <MoneyRow label="Weekly allowance" value={fmt(budget.weeklyAllowance)} strong color={Palette.sageDeep} />
               </Card>
               <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
-                You can always adjust income, bills, or goals later from Setup.
+                You can always adjust income, bills, goals, or your week from Setup.
               </ThemedText>
             </View>
           )}
@@ -323,6 +315,12 @@ export default function OnboardingScreen() {
         </View>
       </SafeAreaView>
 
+      <AddMemberSheet
+        visible={addingMember}
+        onClose={() => setAddingMember(false)}
+        onAdd={addMember}
+        saving={memberMut.add.isPending}
+      />
       <IncomeSheet
         visible={!!incomeSheet}
         source={incomeSheet?.source ?? null}
@@ -340,6 +338,14 @@ export default function OnboardingScreen() {
         onDelete={deleteBill}
         saving={billMut.create.isPending || billMut.update.isPending}
       />
+      <GoalSheet
+        visible={!!goalSheet}
+        goal={goalSheet?.goal ?? null}
+        onClose={() => setGoalSheet(null)}
+        onSave={saveGoal}
+        onDelete={deleteGoal}
+        saving={goalMut.create.isPending || goalMut.update.isPending}
+      />
     </ThemedView>
   );
 }
@@ -354,13 +360,14 @@ function Welcome() {
         Let&apos;s set up your budget
       </ThemedText>
       <ThemedText type="body" themeColor="textSecondary" style={styles.welcomeDesc}>
-        Three quick steps — income, fixed bills, then savings goals. Each one builds on the last, so
-        your weekly spending number at the end is calculated for you automatically.
+        A few quick steps — your household, income, fixed bills, then savings goals. Each one builds
+        on the last, so your weekly spending number at the end is calculated for you automatically.
       </ThemedText>
       <View style={styles.previews}>
-        <StepPreview num="1" title="Income" desc="The foundation everything else is calculated from" />
-        <StepPreview num="2" title="Fixed expenses" desc="Bills that come out no matter what" />
-        <StepPreview num="3" title="Savings goals" desc="What you're setting aside each month" />
+        <StepPreview num="1" title="Household" desc="Who you share money with" />
+        <StepPreview num="2" title="Income" desc="The foundation everything is calculated from" />
+        <StepPreview num="3" title="Fixed expenses" desc="Bills that come out no matter what" />
+        <StepPreview num="4" title="Savings goals" desc="What you're setting aside each month" />
       </View>
     </View>
   );
@@ -391,7 +398,7 @@ function StepHeader({ emoji, title, desc }: { emoji: string; title: string; desc
         {emoji}
       </ThemedText>
       <ThemedText type="subtitle">{title}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.stepDesc}>
+      <ThemedText type="body" themeColor="textSecondary" style={styles.stepDesc}>
         {desc}
       </ThemedText>
     </View>
@@ -405,11 +412,7 @@ function EmptyCard({ emoji, text, cta, onPress }: { emoji: string; text: string;
       <ThemedText type="body" themeColor="textSecondary" style={styles.emptyText}>
         {text}
       </ThemedText>
-      <Pressable accessibilityRole="button" onPress={onPress}>
-        <ThemedText type="label" style={{ color: Palette.sageDeep }}>
-          {cta}
-        </ThemedText>
-      </Pressable>
+      <Button title={cta} onPress={onPress} style={styles.emptyBtn} />
     </Card>
   );
 }
@@ -487,11 +490,16 @@ const styles = StyleSheet.create({
   // Step header
   stepHeader: { marginBottom: Spacing.three },
   stepEmoji: { fontSize: 34, lineHeight: 40, marginBottom: Spacing.one },
-  stepDesc: { marginTop: Spacing.two, lineHeight: 18 },
+  stepDesc: { marginTop: Spacing.two, lineHeight: 22 },
+
+  // Household step
+  weekBlock: { marginTop: Spacing.four, gap: Spacing.one },
+  weekNote: { marginBottom: Spacing.two },
 
   // Empty / dashed / totals
-  emptyCard: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five },
+  emptyCard: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.four },
   emptyText: { textAlign: 'center' },
+  emptyBtn: { alignSelf: 'stretch', marginTop: Spacing.two },
   dashedAdd: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -522,25 +530,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     marginTop: Spacing.two,
   },
-
-  // Goal form
-  goalForm: { marginTop: Spacing.two, gap: Spacing.two },
-  emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.one },
-  emojiTile: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.medium,
-    backgroundColor: Palette.linen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  emojiOn: { borderColor: Palette.sage, backgroundColor: 'rgba(129,178,154,0.16)' },
-  goalInput: {},
-  goalAmounts: { flexDirection: 'row', gap: Spacing.two },
-  goalAmountInput: { flex: 1 },
-  addGoalBtn: { backgroundColor: 'rgba(129,178,154,0.16)', height: 48, marginTop: Spacing.one },
 
   // Review
   reviewCard: { paddingVertical: Spacing.two },

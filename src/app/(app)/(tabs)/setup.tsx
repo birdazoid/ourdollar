@@ -20,15 +20,19 @@ import {
   useFunPeople,
   useFunSettings,
   useGoals,
+  useHouseholdMutations,
   useIncome,
   useIncomeMutations,
   useMembers,
 } from '@/lib/queries';
+import { WeekStartPicker } from '@/components/week-start-picker';
+import { weekdayName } from '@/lib/week';
 import type { IncomeSource } from '@/lib/types';
 
 export default function SetupScreen() {
   const router = useRouter();
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
+  const householdMut = useHouseholdMutations(householdId);
 
   const members = useMembers(householdId);
   const income = useIncome(householdId);
@@ -191,6 +195,19 @@ export default function SetupScreen() {
             </ThemedText>
           </Card>
 
+          {/* WEEK START */}
+          <SectionHeader title="Your week" />
+          <Card>
+            <ThemedText type="bodyBold">Week starts on</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.weekStartNote}>
+              The Week screen resets each {weekdayName(household?.week_start_day ?? 0)}.
+            </ThemedText>
+            <WeekStartPicker
+              value={household?.week_start_day ?? 0}
+              onChange={(d) => householdMut.setWeekStart.mutate(d)}
+            />
+          </Card>
+
           {/* FUN MONEY */}
           <SectionHeader title="Fun money" />
           <Card style={styles.row}>
@@ -313,6 +330,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(61,64,91,0.15)',
   },
+  weekStartNote: { marginTop: 2, marginBottom: Spacing.three },
   dashedAdd: {
     flexDirection: 'row',
     alignItems: 'center',

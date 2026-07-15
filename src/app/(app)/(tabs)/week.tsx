@@ -30,7 +30,8 @@ import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 
 export default function WeekScreen() {
   const router = useRouter();
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
+  const weekStart = household?.week_start_day ?? 0;
 
   const members = useMembers(householdId);
   const transactions = useTransactions(householdId);
@@ -43,7 +44,7 @@ export default function WeekScreen() {
 
   const [offset, setOffset] = useState(0);
   const isCurrent = offset === 0;
-  const week = useMemo(() => getWeek(offset), [offset]);
+  const week = useMemo(() => getWeek(offset, weekStart), [offset, weekStart]);
 
   const funEnabled = funSettings.data?.enabled ?? false;
   const budget = computeBudget({

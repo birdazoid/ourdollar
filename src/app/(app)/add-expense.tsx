@@ -30,11 +30,12 @@ type TxType = 'expense' | 'income';
 export default function AddExpenseScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
   const { session } = useSession();
   const members = useMembers(householdId);
   const transactions = useTransactions(householdId);
   const txMut = useTransactionMutations(householdId);
+  const weekStart = household?.week_start_day ?? 0;
 
   const editing = (transactions.data ?? []).find((t) => t.id === id) ?? null;
   const isEdit = !!editing;
@@ -44,7 +45,7 @@ export default function AddExpenseScreen() {
     members.data?.[0]?.id ??
     null;
 
-  const weekDays = useMemo(() => getWeek(0).days, []);
+  const weekDays = useMemo(() => getWeek(0, weekStart).days, [weekStart]);
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : '');
   const [label, setLabel] = useState(editing?.label ?? '');

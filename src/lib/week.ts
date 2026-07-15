@@ -12,6 +12,9 @@ export type WeekDay = {
 const SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+/** Day-of-week name for a start-day index (0=Sun…6=Sat). */
+export const weekdayName = (day: number) => LONG[((day % 7) + 7) % 7];
+
 /** Local YYYY-MM-DD for today (avoids UTC off-by-one from toISOString). */
 export function todayISO(): string {
   const d = new Date();
@@ -20,24 +23,26 @@ export function todayISO(): string {
 }
 
 /**
- * The Sunday-start week `offset` weeks from the current one (0 = this week,
- * -1 = last week). Returns the 7 days and the [start,end] ISO bounds.
+ * The week `offset` weeks from the current one (0 = this week, -1 = last week),
+ * starting on `weekStartsOn` (0 = Sunday … 6 = Saturday). Returns the 7 days and
+ * the [start,end] ISO bounds.
  */
-export function getWeek(offset = 0) {
+export function getWeek(offset = 0, weekStartsOn = 0) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const sunday = new Date(now);
-  sunday.setDate(now.getDate() - now.getDay() + offset * 7);
+  const sinceStart = (now.getDay() - weekStartsOn + 7) % 7;
+  const start = new Date(now);
+  start.setDate(now.getDate() - sinceStart + offset * 7);
 
   const today = todayISO();
   const days: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(sunday);
-    d.setDate(sunday.getDate() + i);
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
     const iso = toISODateLocal(d);
     return {
       date: iso,
       dayNum: d.getDate(),
-      short: SHORT[i],
+      short: SHORT[d.getDay()],
       isToday: iso === today,
       isPast: iso < today,
     };

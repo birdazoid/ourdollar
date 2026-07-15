@@ -16,6 +16,7 @@ export type Household = {
   id: string;
   name: string;
   owner_account_id: string;
+  week_start_day: number; // 0 = Sunday … 6 = Saturday
   created_at: string;
 };
 

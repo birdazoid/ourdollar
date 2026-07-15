@@ -421,16 +421,28 @@ export async function claimPendingInvites(): Promise<number> {
 
 export function useHouseholdMutations(householdId: string | null) {
   const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['households'] });
 
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const { error } = await supabase.from('households').update({ name }).eq('id', householdId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['households'] }),
+    onSuccess: invalidate,
   });
 
-  return { rename };
+  const setWeekStart = useMutation({
+    mutationFn: async (week_start_day: number) => {
+      const { error } = await supabase
+        .from('households')
+        .update({ week_start_day })
+        .eq('id', householdId);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { rename, setWeekStart };
 }
 
 export type NewMemberInput = {
