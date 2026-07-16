@@ -18,12 +18,14 @@ import { TX_CATEGORIES, txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { fmt } from '@/lib/money';
 import {
+  useEnvelopes,
+  useFunSettings,
   useMembers,
   useTransactionMutations,
   useTransactions,
   type TransactionInput,
 } from '@/lib/queries';
-import { dayShort, getWeek, todayISO } from '@/lib/week';
+import { getWeek, todayISO } from '@/lib/week';
 
 type TxType = 'expense' | 'income';
 
@@ -34,8 +36,11 @@ export default function AddExpenseScreen() {
   const { session } = useSession();
   const members = useMembers(householdId);
   const transactions = useTransactions(householdId);
+  const envelopes = useEnvelopes(householdId);
+  const funSettings = useFunSettings(householdId);
   const txMut = useTransactionMutations(householdId);
   const weekStart = household?.week_start_day ?? 0;
+  const funEnabled = funSettings.data?.enabled ?? false;
 
   const editing = (transactions.data ?? []).find((t) => t.id === id) ?? null;
   const isEdit = !!editing;
@@ -45,7 +50,8 @@ export default function AddExpenseScreen() {
     members.data?.[0]?.id ??
     null;
 
-  const weekDays = useMemo(() => getWeek(0, weekStart).days, [weekStart]);
+  const wk = useMemo(() => getWeek(0, weekStart), [weekStart]);
+  const weekDays = wk.days;
 
   const [amount, setAmount] = useState(editing ? String(editing.amount) : '');
   const [label, setLabel] = useState(editing?.label ?? '');
@@ -79,6 +85,25 @@ export default function AddExpenseScreen() {
   const amountNum = Number(amount);
   const valid = amount !== '' && amountNum > 0 && label.trim() !== '' && !!category;
 
+  // Envelope hint: if the picked category is a planned one, show what's left in
+  // it this week so the spender sees the bucket at the moment of spending.
+  const activeEnv = category ? (envelopes.data ?? []).find((e) => e.category === category) : null;
+  const envSkipped = !!activeEnv && activeEnv.skipped_week_start === wk.start;
+  const catSpentThisWeek = activeEnv
+    ? (transactions.data ?? [])
+        .filter(
+          (t) =>
+            t.type === 'expense' &&
+            !t.is_fun_money &&
+            t.category === category &&
+            t.occurred_on >= wk.start &&
+            t.occurred_on <= wk.end &&
+            t.id !== editing?.id
+        )
+        .reduce((a, t) => a + t.amount, 0)
+    : 0;
+  const envRemaining = activeEnv ? activeEnv.weekly_amount - catSpentThisWeek : 0;
+
   function save() {
     const input: TransactionInput = {
       member_id: memberId,
@@ -86,7 +111,7 @@ export default function AddExpenseScreen() {
       category,
       label: label.trim(),
       type,
-      is_fun_money: type === 'expense' ? isFun : false,
+      is_fun_money: type === 'expense' && funEnabled ? isFun : false,
       occurred_on: day,
     };
     if (isEdit) txMut.update.mutate({ id: editing!.id, ...input });
@@ -186,6 +211,16 @@ export default function AddExpenseScreen() {
             })}
           </View>
 
+          {type === 'expense' && !isFun && activeEnv && (
+            <View style={styles.envHint}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {envSkipped
+                  ? `${txCategoryById(category).name} is planned — skipped this week`
+                  : `Planned category · ${fmt(envRemaining)} left of ${fmt(activeEnv.weekly_amount)} this week`}
+              </ThemedText>
+            </View>
+          )}
+
           {(members.data ?? []).length > 0 && (
             <>
               <FieldLabel>Who?</FieldLabel>
@@ -220,7 +255,7 @@ export default function AddExpenseScreen() {
             })}
           </View>
 
-          {type === 'expense' && (
+          {type === 'expense' && funEnabled && (
             <Pressable onPress={() => setIsFun(!isFun)} style={[styles.funRow, isFun && styles.funOn]}>
               <ThemedText type="subtitle">✨</ThemedText>
               <View style={styles.flex}>
@@ -291,6 +326,13 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(61,64,91,0.1)',
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  envHint: {
+    marginTop: Spacing.two,
+    backgroundColor: 'rgba(129,178,154,0.14)',
+    borderRadius: Radius.medium,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+  },
   catTile: {
     width: '31.5%',
     alignItems: 'center',

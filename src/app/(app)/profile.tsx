@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Bell, Camera, Check, ChevronLeft, Compass, Home, LogOut, Mail, Plus, Trash2, X } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronLeft, Home, LogOut, Mail, Plus, Trash2, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -266,13 +266,6 @@ export default function ProfileScreen() {
 
             {/* Account */}
             <Eyebrow>Account</Eyebrow>
-            <SettingRow
-              icon={<Compass size={18} color={Palette.sageDeep} />}
-              tint="rgba(129,178,154,0.16)"
-              title="Replay setup guide"
-              subtitle="Walk through income, bills & goals again"
-              onPress={() => router.push('/onboarding')}
-            />
             <SettingRow
               icon={<LogOut size={18} color={Palette.terracottaDeep} />}
               tint="rgba(224,122,95,0.14)"

@@ -1,9 +1,12 @@
-// Household invite email (Phase 6).
+// Household invite email + push (Phase 6, push added Phase 8).
 //
 // Called by the app right after an inviter adds a member with an email. The
 // recipient gets an email telling them who invited them and to which household,
-// and to sign up with THAT email address — signing up with a matching email
-// auto-links them to the invite (see claim_pending_invites).
+// and to use THAT email address when they sign up — the invite then shows up
+// in-app for them to accept or decline (see list_my_pending_invites). If the
+// invited email already belongs to an OurDollar account with a registered
+// device, we ALSO send them a push so an existing user hears about it right
+// away instead of only by email.
 //
 // Security: the caller is identified from their JWT. The function only sends if
 // (a) the named household_member row is a pending invite, and (b) the caller is
@@ -36,7 +39,7 @@ function inviteHtml(opts: { inviter: string; household: string; email: string })
       </p>
       <p style="font-size:15px;color:#6B6E8C;line-height:1.5">
         To join, get the app and create an account using <strong>this email address</strong>
-        (${opts.email}). You'll drop straight into the household.
+        (${opts.email}). Their invite will be waiting for you to accept when you open the app.
       </p>
       ${cta ? `<div style="margin:20px 0">${cta}</div>` : ''}
       <p style="font-size:13px;color:#6B6E8C;line-height:1.5">
@@ -128,7 +131,43 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'send failed', detail: result }), { status: 502 });
     }
 
-    return new Response(JSON.stringify({ sent: true, to }), {
+    // Best-effort push: if this email already belongs to a registered account,
+    // ping their device(s) too. Never affects the email result above.
+    let pushed = 0;
+    try {
+      const { data: account } = await admin
+        .from('accounts')
+        .select('id')
+        .ilike('email', to)
+        .maybeSingle();
+      if (account?.id) {
+        const { data: tokens } = await admin
+          .from('push_tokens')
+          .select('expo_push_token')
+          .eq('account_id', account.id);
+        const pushTokens = (tokens ?? [])
+          .map((t) => t.expo_push_token as string)
+          .filter(Boolean);
+        if (pushTokens.length > 0) {
+          const messages = pushTokens.map((pushTo) => ({
+            to: pushTo,
+            title: 'OurDollar',
+            body: `${inviter} invited you to join ${householdName}.`,
+            sound: 'default',
+          }));
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(messages),
+          });
+          pushed = messages.length;
+        }
+      }
+    } catch (pushErr) {
+      console.error('invite push error (non-fatal)', pushErr);
+    }
+
+    return new Response(JSON.stringify({ sent: true, to, pushed }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

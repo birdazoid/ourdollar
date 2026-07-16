@@ -9,9 +9,10 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import { AppState } from 'react-native';
 
 import { useSession } from '@/lib/auth';
-import { claimPendingInvites } from '@/lib/queries';
+import { usePendingInvites, type PendingInvite } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 import type { Household } from '@/lib/types';
 
@@ -19,6 +20,7 @@ type HouseholdContextValue = {
   householdId: string | null;
   household: Household | null;
   households: Household[];
+  pendingInvites: PendingInvite[];
   isLoading: boolean;
   setActiveHousehold: (id: string) => void;
 };
@@ -43,14 +45,9 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   const qc = useQueryClient();
 
   const [activeId, setActiveIdState] = useState<string | null>(null);
-  // Gate: on login we first try to claim any invites addressed to this user's
-  // email, so an invited-then-registered person doesn't briefly see the
-  // "create your first household" empty state before their household appears.
-  const [claimSettled, setClaimSettled] = useState(false);
 
   useEffect(() => {
     if (!userId) {
-      setClaimSettled(false);
       setActiveIdState(null);
       return;
     }
@@ -61,19 +58,22 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         if (!cancelled && stored) setActiveIdState(stored);
       })
       .catch(() => {});
-    // Claim invites, then refresh the household list to include any joined.
-    claimPendingInvites()
-      .then((claimed) => {
-        if (cancelled) return;
-        if (claimed > 0) qc.invalidateQueries({ queryKey: ['households'] });
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setClaimSettled(true);
-      });
     return () => {
       cancelled = true;
     };
+  }, [userId]);
+
+  // Re-check for invites (and any newly-joined households) whenever the app
+  // returns to the foreground, so an invite that arrives while a user is already
+  // signed in appears without a cold start.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && userId) {
+        qc.invalidateQueries({ queryKey: ['pendingInvites', userId] });
+        qc.invalidateQueries({ queryKey: ['households', userId] });
+      }
+    });
+    return () => sub.remove();
   }, [userId, qc]);
 
   const { data: households = [], isLoading: householdsLoading } = useQuery({
@@ -89,6 +89,8 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     },
   });
 
+  const { data: pendingInvites = [], isLoading: invitesLoading } = usePendingInvites(userId);
+
   const setActiveHousehold = useCallback(
     (id: string) => {
       setActiveIdState(id);
@@ -103,13 +105,14 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   const householdId = (activeIsVisible ? activeId : households[0]?.id) ?? null;
   const household = households.find((h) => h.id === householdId) ?? null;
 
-  // Not "ready" until invites are claimed AND the (possibly refetched) list has
-  // loaded — otherwise the empty state can flash for invited users.
-  const isLoading = !!session && (!claimSettled || householdsLoading);
+  // Not "ready" until both the household list and the invite list have loaded —
+  // otherwise the "create your first household" state can flash for a user who
+  // actually has a pending invite waiting.
+  const isLoading = !!session && (householdsLoading || invitesLoading);
 
   const value = useMemo<HouseholdContextValue>(
-    () => ({ householdId, household, households, isLoading, setActiveHousehold }),
-    [householdId, household, households, isLoading, setActiveHousehold]
+    () => ({ householdId, household, households, pendingInvites, isLoading, setActiveHousehold }),
+    [householdId, household, households, pendingInvites, isLoading, setActiveHousehold]
   );
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;

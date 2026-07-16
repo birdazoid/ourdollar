@@ -31,6 +31,8 @@ export type HouseholdMember = {
   has_account: boolean;
   invite_email: string | null;
   invite_pending: boolean;
+  invited_by_member_id: string | null;
+  invited_at: string | null;
   notify_on_spend: boolean;
   created_at: string;
 };
@@ -92,6 +94,18 @@ export type FunMoneyPerson = {
   household_id: string;
   member_id: string | null;
   monthly_amount: number;
+};
+
+// A weekly "envelope" = a transaction category given a weekly budget. Drains
+// from logged non-fun expenses in that category. `skipped_week_start` marks the
+// envelope as skipped for the week whose start date it equals (self-resetting).
+export type WeeklyEnvelope = {
+  id: string;
+  household_id: string;
+  category: string;
+  weekly_amount: number;
+  skipped_week_start: string | null;
+  created_at: string;
 };
 
 export type Transaction = {

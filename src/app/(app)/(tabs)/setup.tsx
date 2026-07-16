@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Minus, Plus } from 'lucide-react-native';
+import { ChevronRight, Compass, Minus, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
@@ -258,6 +258,26 @@ export default function SetupScreen() {
           {funEnabled && (
             <DashedAdd label="Add a household member" onPress={() => router.push('/profile')} />
           )}
+
+          {/* SETUP GUIDE */}
+          <SectionHeader title="Setup guide" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Replay setup guide"
+            onPress={() => router.push('/onboarding')}>
+            <Card style={styles.row}>
+              <View style={styles.replayIcon}>
+                <Compass size={18} color={Palette.sageDeep} />
+              </View>
+              <View style={styles.rowBody}>
+                <ThemedText type="bodyBold">Replay setup guide</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Walk through income, bills &amp; goals again
+                </ThemedText>
+              </View>
+              <ChevronRight size={16} color="#B7B8C4" />
+            </Card>
+          </Pressable>
         </>
       )}
 
@@ -331,6 +351,14 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(61,64,91,0.15)',
   },
   weekStartNote: { marginTop: 2, marginBottom: Spacing.three },
+  replayIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.medium,
+    backgroundColor: 'rgba(129,178,154,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dashedAdd: {
     flexDirection: 'row',
     alignItems: 'center',

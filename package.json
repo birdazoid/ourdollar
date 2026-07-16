@@ -51,7 +51,9 @@
     "verify:spend-alert": "tsx scripts/verify-spend-alert.ts",
     "verify:multihousehold": "tsx scripts/verify-multihousehold.ts",
     "verify:account-deletion": "tsx scripts/verify-account-deletion.ts",
-    "verify:send-invite": "tsx scripts/verify-send-invite.ts"
+    "verify:send-invite": "tsx scripts/verify-send-invite.ts",
+    "verify:invite-accept": "tsx scripts/verify-invite-accept.ts",
+    "verify:envelopes": "tsx scripts/verify-envelopes.ts"
   },
   "private": true
 }

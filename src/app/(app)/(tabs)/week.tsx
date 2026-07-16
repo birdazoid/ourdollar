@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { Ring } from '@/components/ring';
@@ -14,9 +15,11 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
-import { computeBudget, fmt } from '@/lib/money';
+import { computeBudget, computeEnvelopes, fmt, type EnvelopeStatus } from '@/lib/money';
 import {
   useBills,
+  useEnvelopes,
+  useEnvelopeMutations,
   useExtraIncome,
   useFunPeople,
   useFunSettings,
@@ -24,8 +27,9 @@ import {
   useIncome,
   useMembers,
   useTransactions,
+  type EnvelopeDraft,
 } from '@/lib/queries';
-import type { Transaction } from '@/lib/types';
+import type { Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 
 export default function WeekScreen() {
@@ -41,8 +45,11 @@ export default function WeekScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const envelopes = useEnvelopes(householdId);
+  const envMut = useEnvelopeMutations(householdId);
 
   const [offset, setOffset] = useState(0);
+  const [envSheet, setEnvSheet] = useState<{ envelope: WeeklyEnvelope | null } | null>(null);
   const isCurrent = offset === 0;
   const week = useMemo(() => getWeek(offset, weekStart), [offset, weekStart]);
 
@@ -68,6 +75,50 @@ export default function WeekScreen() {
   const over = remaining < 0;
   const frac = over ? 1 : allowance > 0 ? Math.max(0, Math.min(1, remaining / allowance)) : 0;
 
+  // Envelopes ("planned spending") reshape the CURRENT week only — past weeks
+  // keep the plain "money left" view (budgets/skip aren't tracked historically).
+  const spentByCategory: Record<string, number> = {};
+  for (const t of weekTxns) {
+    if (t.type === 'expense' && !t.is_fun_money) {
+      const c = t.category ?? 'other';
+      spentByCategory[c] = (spentByCategory[c] ?? 0) + t.amount;
+    }
+  }
+  const envSummary = computeEnvelopes({
+    weeklyAllowance: allowance,
+    incomeBack,
+    totalNonFunExpense: spent,
+    spentByCategory,
+    envelopes: (envelopes.data ?? []).map((e) => ({
+      id: e.id,
+      category: e.category,
+      weekly_amount: e.weekly_amount,
+      skipped: isCurrent && e.skipped_week_start === week.start,
+    })),
+  });
+  const showEnvelopes = isCurrent && envSummary.hasEnvelopes;
+  const envFree = envSummary.freeToSpend;
+  const envFreeFrac =
+    envSummary.effAllowance > 0
+      ? Math.max(0, Math.min(1, Math.max(envFree, 0) / envSummary.effAllowance))
+      : 0;
+
+  function toggleSkip(env: EnvelopeStatus) {
+    envMut.setSkip.mutate({ id: env.id, weekStart: env.skipped ? null : week.start });
+  }
+
+  const usedCategories = (envelopes.data ?? []).map((e) => e.category);
+  const rawEnvelope = (id: string) => (envelopes.data ?? []).find((e) => e.id === id) ?? null;
+  function saveEnvelope(draft: EnvelopeDraft, id?: string) {
+    if (id) envMut.update.mutate({ id, weekly_amount: draft.weekly_amount });
+    else envMut.add.mutate(draft);
+    setEnvSheet(null);
+  }
+  function removeEnvelope(id: string) {
+    envMut.remove.mutate(id);
+    setEnvSheet(null);
+  }
+
   const memberName = (id: string | null) =>
     (members.data ?? []).find((m) => m.id === id)?.name ?? 'Someone';
 
@@ -91,22 +142,36 @@ export default function WeekScreen() {
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
       ) : (
         <>
-          <HeroCard
-            eyebrow={isCurrent ? "This week's spending money" : `Week of ${weekRangeLabel(week.days)}`}
-            big={over ? '-' + fmt(-remaining) : fmt(remaining)}
-            bigColor={over ? Palette.terracottaDeep : Palette.ink}
-            sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
-            subColor={over ? Palette.terracottaDeep : undefined}
-            ringValue={frac}
-            ringColor={over ? Palette.terracotta : Palette.sage}
-            ringLabel={over ? 'over' : 'left'}
-            ringCenter=""
-          />
+          {showEnvelopes ? (
+            <HeroCard
+              eyebrow="This week's free-to-spend"
+              big={envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
+              bigColor={envFree < 0 ? Palette.terracottaDeep : Palette.ink}
+              sub={`${fmt(envSummary.spent)} spent · ${fmt(envSummary.reserved)} still planned`}
+              subColor={envFree < 0 ? Palette.terracottaDeep : undefined}
+              ringValue={envFreeFrac}
+              ringColor={envFree < 0 ? Palette.terracotta : Palette.sage}
+              ringLabel={envFree < 0 ? 'over' : 'free'}
+              ringCenter=""
+            />
+          ) : (
+            <HeroCard
+              eyebrow={isCurrent ? "This week's spending money" : `Week of ${weekRangeLabel(week.days)}`}
+              big={over ? '-' + fmt(-remaining) : fmt(remaining)}
+              bigColor={over ? Palette.terracottaDeep : Palette.ink}
+              sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
+              subColor={over ? Palette.terracottaDeep : undefined}
+              ringValue={frac}
+              ringColor={over ? Palette.terracotta : Palette.sage}
+              ringLabel={over ? 'over' : 'left'}
+              ringCenter=""
+            />
+          )}
 
           {/* Day-of-week tracker with week navigation */}
           <View style={styles.trackerRow}>
             <NavArrow dir="left" onPress={() => setOffset(offset - 1)} disabled={false} />
-            <Card style={styles.tracker}>
+            <View style={styles.tracker}>
               {week.days.map((d) => (
                 <View key={d.date} style={styles.dayCol}>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -127,13 +192,81 @@ export default function WeekScreen() {
                   </View>
                 </View>
               ))}
-            </Card>
+            </View>
             <NavArrow dir="right" onPress={() => setOffset(offset + 1)} disabled={isCurrent} />
           </View>
           {!isCurrent && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.pastNote}>
               Viewing a past week · read only
             </ThemedText>
+          )}
+
+          {/* Planned spending (envelopes) — current week. Always shown so a
+              household can set envelopes up here; free-to-spend is the last row. */}
+          {isCurrent && (
+            <>
+              <SectionHeader
+                title="Planned this week"
+                action={envSummary.reserved > 0 ? `${fmt(envSummary.reserved)} still to come` : undefined}
+              />
+              {envSummary.hasEnvelopes && (
+                <Card style={styles.allowCard}>
+                  <View style={styles.allowBar}>
+                    {envSummary.spent > 0 && (
+                      <View style={[styles.allowSeg, { flex: envSummary.spent, backgroundColor: '#B8B29B' }]} />
+                    )}
+                    {envSummary.reserved > 0 && (
+                      <View style={[styles.allowSeg, { flex: envSummary.reserved, backgroundColor: Palette.sand }]} />
+                    )}
+                    {Math.max(envFree, 0) > 0 && (
+                      <View style={[styles.allowSeg, { flex: Math.max(envFree, 0), backgroundColor: Palette.sage }]} />
+                    )}
+                  </View>
+                  <View style={styles.legendRow}>
+                    <Legend color="#B8B29B" label="Spent" value={fmt(envSummary.spent)} />
+                    <Legend color={Palette.sand} label="Planned" value={fmt(envSummary.reserved)} />
+                    <Legend color={Palette.sage} label="Free" value={fmt(Math.max(envFree, 0))} />
+                  </View>
+                </Card>
+              )}
+              {envSummary.envelopes.map((env) => (
+                <EnvelopeRow
+                  key={env.id}
+                  env={env}
+                  onPress={() => setEnvSheet({ envelope: rawEnvelope(env.id) })}
+                  onSkipToggle={() => toggleSkip(env)}
+                />
+              ))}
+
+              {/* Free-to-spend — everything not wrapped in an envelope. */}
+              <View style={styles.freeRow}>
+                <View style={styles.freeTile}>
+                  <ThemedText type="subtitle">💸</ThemedText>
+                </View>
+                <View style={styles.flex}>
+                  <ThemedText type="bodyBold" style={styles.freeText}>
+                    Free to spend
+                  </ThemedText>
+                  <ThemedText type="small" style={styles.freeSub}>
+                    {envSummary.hasEnvelopes ? 'Everything not planned' : 'Set up planned costs to reserve some'}
+                  </ThemedText>
+                </View>
+                <ThemedText type="bodyBold" style={styles.freeText}>
+                  {envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
+                </ThemedText>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add a planned category"
+                onPress={() => setEnvSheet({ envelope: null })}
+                style={styles.addExpense}>
+                <View style={styles.addBadge}>
+                  <Plus size={16} color={Palette.card} strokeWidth={3} />
+                </View>
+                <ThemedText type="label">Add a planned category</ThemedText>
+              </Pressable>
+            </>
           )}
 
           {/* Fun money per person (current week only) */}
@@ -243,21 +376,106 @@ export default function WeekScreen() {
           )}
         </>
       )}
+
+      <EnvelopeSheet
+        visible={!!envSheet}
+        envelope={envSheet?.envelope ?? null}
+        usedCategories={usedCategories}
+        onClose={() => setEnvSheet(null)}
+        onSave={saveEnvelope}
+        onDelete={removeEnvelope}
+        saving={envMut.add.isPending || envMut.update.isPending}
+      />
     </Screen>
   );
 }
 
 function NavArrow({ dir, onPress, disabled }: { dir: 'left' | 'right'; onPress: () => void; disabled: boolean }) {
   const Icon = dir === 'left' ? ChevronLeft : ChevronRight;
+  // Both boxes stay identical; a disabled arrow just dims its chevron.
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={[styles.navArrow, disabled && styles.navDisabled]}>
-      <Icon size={18} color={Palette.ink} />
+    <Pressable onPress={onPress} disabled={disabled} style={styles.navArrow}>
+      <Icon size={18} color={disabled ? 'rgba(61,64,91,0.28)' : Palette.ink} />
     </Pressable>
+  );
+}
+
+function Legend({ color, label, value }: { color: string; label: string; value: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <ThemedText type="small" themeColor="textSecondary">
+        {label}{' '}
+      </ThemedText>
+      <ThemedText type="small">{value}</ThemedText>
+    </View>
+  );
+}
+
+function EnvelopeRow({
+  env,
+  onPress,
+  onSkipToggle,
+}: {
+  env: EnvelopeStatus;
+  onPress: () => void;
+  onSkipToggle: () => void;
+}) {
+  const cat = txCategoryById(env.category);
+  const frac = env.budget > 0 ? Math.max(0, Math.min(1, env.spent / env.budget)) : 0;
+  const barColor =
+    env.state === 'over' ? Palette.terracotta : env.state === 'skipped' ? '#C7C4B8' : Palette.sage;
+
+  let subtitle: string;
+  let rightText: string;
+  let rightColor: string | undefined;
+  if (env.state === 'skipped') {
+    subtitle = 'Skipped this week';
+    rightText = '—';
+  } else if (env.state === 'untouched') {
+    subtitle = 'Not spent yet · still to come';
+    rightText = `${fmt(env.remaining)} left`;
+  } else if (env.state === 'over') {
+    subtitle = `${fmt(env.spent)} of ${fmt(env.budget)}`;
+    rightText = `${fmt(env.over)} over`;
+    rightColor = Palette.terracottaDeep;
+  } else {
+    subtitle = `${fmt(env.spent)} of ${fmt(env.budget)}`;
+    rightText = `${fmt(env.remaining)} left`;
+  }
+
+  return (
+    <ListRow
+      emoji={cat.emoji}
+      tileColor={cat.color + '26'}
+      title={cat.name}
+      subtitle={subtitle}
+      dim={env.state === 'skipped'}
+      onPress={onPress}
+      right={
+        <ThemedText type="bodyBold" style={rightColor ? { color: rightColor } : undefined}>
+          {rightText}
+        </ThemedText>
+      }
+      footer={
+        <View style={styles.envFooter}>
+          <View style={styles.envTrack}>
+            <View style={[styles.envFill, { width: `${frac * 100}%`, backgroundColor: barColor }]} />
+          </View>
+          <Pressable onPress={onSkipToggle} hitSlop={8} style={styles.skipBtn}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {env.skipped ? 'Skipped · Undo' : 'Skip this week'}
+            </ThemedText>
+          </Pressable>
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   loading: { marginTop: Spacing.six },
+  flex: { flex: 1 },
   trackerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
   navArrow: {
     width: 40,
@@ -267,7 +485,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navDisabled: { opacity: 0.3 },
   tracker: { flex: 1, flexDirection: 'row', paddingVertical: Spacing.two, paddingHorizontal: Spacing.one },
   dayCol: { flex: 1, alignItems: 'center', gap: Spacing.one },
   dayDot: {
@@ -281,6 +498,46 @@ const styles = StyleSheet.create({
   dayTodayText: { color: Palette.card },
   dayPast: { backgroundColor: 'rgba(61,64,91,0.08)' },
   pastNote: { textAlign: 'center', marginTop: Spacing.two },
+  allowCard: { marginBottom: Spacing.three, gap: Spacing.two + 2 },
+  allowBar: {
+    flexDirection: 'row',
+    height: 12,
+    borderRadius: Radius.pill,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(61,64,91,0.06)',
+  },
+  allowSeg: { height: '100%' },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendDot: { width: 8, height: 8, borderRadius: Radius.pill, marginRight: Spacing.one },
+  envFooter: { marginTop: Spacing.two + 2, gap: Spacing.two },
+  envTrack: {
+    height: 8,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(61,64,91,0.06)',
+    overflow: 'hidden',
+  },
+  envFill: { height: '100%', borderRadius: Radius.pill },
+  skipBtn: { alignSelf: 'flex-start' },
+  freeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: 'rgba(129,178,154,0.16)',
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    marginBottom: Spacing.two + 2,
+  },
+  freeTile: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.medium,
+    backgroundColor: Palette.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freeText: { color: Palette.sageDeep },
+  freeSub: { color: 'rgba(94,143,119,0.85)' },
   funRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   funCard: {
     flexBasis: '47%',

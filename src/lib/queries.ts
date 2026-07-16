@@ -12,6 +12,7 @@ import type {
   HouseholdMember,
   IncomeSource,
   Transaction,
+  WeeklyEnvelope,
 } from '@/lib/types';
 
 /** Fetches all rows of a household-scoped table, newest first where sensible. */
@@ -53,6 +54,9 @@ export const useTransactions = (householdId: string | null) =>
 // fun_money_people has no created_at column — order by id instead.
 export const useFunPeople = (householdId: string | null) =>
   useQuery(householdListQuery<FunMoneyPerson>('fun_money_people', householdId, 'id'));
+
+export const useEnvelopes = (householdId: string | null) =>
+  useQuery(householdListQuery<WeeklyEnvelope>('weekly_envelopes', householdId, 'created_at'));
 
 export const useFunSettings = (householdId: string | null) =>
   useQuery({
@@ -137,6 +141,59 @@ export function useFunMoneyMutations(householdId: string | null) {
   });
 
   return { setEnabled, setPersonAmount };
+}
+
+// ---- Weekly envelope mutations ("planned spending") ----
+
+export type EnvelopeDraft = { category: string; weekly_amount: number };
+
+export function useEnvelopeMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['weekly_envelopes', householdId] });
+
+  const add = useMutation({
+    mutationFn: async (draft: EnvelopeDraft) => {
+      const { error } = await supabase
+        .from('weekly_envelopes')
+        .insert({ household_id: householdId, ...draft });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, weekly_amount }: { id: string; weekly_amount: number }) => {
+      const { error } = await supabase
+        .from('weekly_envelopes')
+        .update({ weekly_amount })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('weekly_envelopes').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  // Skip (or un-skip) an envelope for a given week. `weekStart` is that week's
+  // start date (YYYY-MM-DD); null clears the skip.
+  const setSkip = useMutation({
+    mutationFn: async ({ id, weekStart }: { id: string; weekStart: string | null }) => {
+      const { error } = await supabase
+        .from('weekly_envelopes')
+        .update({ skipped_week_start: weekStart })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { add, update, remove, setSkip };
 }
 
 // ---- Bill mutations ----
@@ -463,12 +520,73 @@ export function useCreateHousehold() {
 /**
  * Links any household_members rows whose invite_email matches the caller's
  * account email (see the claim_pending_invites migration). Returns the number
- * of memberships claimed. Safe to call on every login.
+ * of memberships claimed. Retained for reference/tests — the app now surfaces
+ * invites for explicit accept/decline (see listMyPendingInvites) rather than
+ * auto-claiming on login.
  */
 export async function claimPendingInvites(): Promise<number> {
   const { data, error } = await supabase.rpc('claim_pending_invites');
   if (error) throw error;
   return (data as number) ?? 0;
+}
+
+// ---- Pending invites (explicit accept / decline, Phase 8) ----
+
+export type PendingInvite = {
+  member_id: string;
+  household_id: string;
+  household_name: string;
+  inviter_name: string;
+  invited_at: string | null;
+};
+
+/** Invites addressed to the signed-in user's email, awaiting their response. */
+export async function listMyPendingInvites(): Promise<PendingInvite[]> {
+  const { data, error } = await supabase.rpc('list_my_pending_invites');
+  if (error) throw error;
+  return (data as PendingInvite[]) ?? [];
+}
+
+export function usePendingInvites(userId: string | null) {
+  return useQuery({
+    queryKey: ['pendingInvites', userId],
+    enabled: !!userId,
+    queryFn: listMyPendingInvites,
+  });
+}
+
+/**
+ * Accept / decline one pending invite. Both re-verify the email match on the
+ * server, so a caller can only act on invites addressed to them. On success we
+ * refresh both the invite list and the household list (an accept adds a
+ * membership that should appear immediately).
+ */
+export function useInviteResponses() {
+  const qc = useQueryClient();
+  const settle = () => {
+    qc.invalidateQueries({ queryKey: ['pendingInvites'] });
+    qc.invalidateQueries({ queryKey: ['households'] });
+  };
+
+  const accept = useMutation({
+    mutationFn: async (memberId: string): Promise<boolean> => {
+      const { data, error } = await supabase.rpc('accept_invite', { p_member_id: memberId });
+      if (error) throw error;
+      return (data as boolean) ?? false;
+    },
+    onSuccess: settle,
+  });
+
+  const decline = useMutation({
+    mutationFn: async (memberId: string): Promise<boolean> => {
+      const { data, error } = await supabase.rpc('decline_invite', { p_member_id: memberId });
+      if (error) throw error;
+      return (data as boolean) ?? false;
+    },
+    onSuccess: settle,
+  });
+
+  return { accept, decline };
 }
 
 // ---- Household + member mutations (Profile) ----
@@ -530,6 +648,23 @@ export function useMemberMutations(householdId: string | null) {
 
   const add = useMutation({
     mutationFn: async (input: NewMemberInput): Promise<string> => {
+      // For a real invite, record who sent it so the invitee's prompt can name
+      // them (best-effort — a null inviter just shows "Someone").
+      let invitedBy: string | null = null;
+      if (input.inviteEmail) {
+        const { data: userData } = await supabase.auth.getUser();
+        const accountId = userData.user?.id;
+        if (accountId) {
+          const { data: me } = await supabase
+            .from('household_members')
+            .select('id')
+            .eq('household_id', householdId!)
+            .eq('account_id', accountId)
+            .maybeSingle();
+          invitedBy = me?.id ?? null;
+        }
+      }
+
       const { data, error } = await supabase
         .from('household_members')
         .insert({
@@ -540,6 +675,8 @@ export function useMemberMutations(householdId: string | null) {
           has_account: false,
           invite_email: input.inviteEmail,
           invite_pending: !!input.inviteEmail,
+          invited_by_member_id: input.inviteEmail ? invitedBy : null,
+          invited_at: input.inviteEmail ? new Date().toISOString() : null,
         })
         .select()
         .single();

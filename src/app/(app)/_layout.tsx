@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { FirstHousehold } from '@/components/first-household';
+import { InviteInbox, InviteWelcome } from '@/components/invites';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
@@ -34,7 +35,7 @@ export default function AppLayout() {
 // nothing while loading, the create-your-first-household screen if they belong
 // to none, otherwise the normal app stack.
 function HouseholdGate() {
-  const { isLoading, households } = useHousehold();
+  const { isLoading, households, pendingInvites } = useHousehold();
 
   if (isLoading) {
     return (
@@ -44,18 +45,25 @@ function HouseholdGate() {
     );
   }
 
+  // No household yet: an invited user gets the accept/decline welcome; everyone
+  // else gets the create-your-first-household step.
   if (households.length === 0) {
-    return <FirstHousehold />;
+    return pendingInvites.length > 0 ? <InviteWelcome /> : <FirstHousehold />;
   }
 
+  // Already in a household: run the app, and surface any waiting invite as an
+  // overlay (e.g. an existing user invited to a second household).
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="profile" options={{ presentation: 'card' }} />
-      <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="profile" options={{ presentation: 'card' }} />
+        <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+      </Stack>
+      <InviteInbox />
+    </>
   );
 }
 

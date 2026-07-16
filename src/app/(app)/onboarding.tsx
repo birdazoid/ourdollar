@@ -12,6 +12,7 @@ import { GoalSheet } from '@/components/goal-sheet';
 import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
 import { ListRow } from '@/components/list-row';
 import { MoneyRow } from '@/components/money-row';
+import { PlannedSpending } from '@/components/planned-spending';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WeekStartPicker } from '@/components/week-start-picker';
@@ -25,6 +26,7 @@ import {
   useBillMutations,
   useBills,
   useCompleteOnboarding,
+  useEnvelopes,
   useExtraIncome,
   useFunPeople,
   useFunSettings,
@@ -43,7 +45,15 @@ import {
 import type { Bill, Goal, IncomeSource } from '@/lib/types';
 import { weekdayName } from '@/lib/week';
 
-const STEPS = ['Welcome', 'Household', 'Income', 'Fixed expenses', 'Savings goals', 'Review'];
+const STEPS = [
+  'Welcome',
+  'Household',
+  'Income',
+  'Fixed expenses',
+  'Savings goals',
+  'Planned spending',
+  'Review',
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -57,6 +67,7 @@ export default function OnboardingScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const envelopes = useEnvelopes(householdId);
 
   const incomeMut = useIncomeMutations(householdId);
   const billMut = useBillMutations(householdId);
@@ -284,6 +295,17 @@ export default function OnboardingScreen() {
           {step === 5 && (
             <View>
               <StepHeader
+                emoji="🛒"
+                title="What do you spend every week?"
+                desc="Optional — set aside your constant weekly costs like groceries and gas. They'll be reserved from your weekly money so your Week screen shows what's truly free to spend after them."
+              />
+              <PlannedSpending householdId={householdId} />
+            </View>
+          )}
+
+          {step === 6 && (
+            <View>
+              <StepHeader
                 emoji="🎉"
                 title="You're set up"
                 desc="Here's how your money breaks down each month, calculated from everything you just entered."
@@ -297,6 +319,15 @@ export default function OnboardingScreen() {
                 <Dashed />
                 <MoneyRow label="Weekly allowance" value={fmt(budget.weeklyAllowance)} strong color={Palette.sageDeep} />
               </Card>
+              {(envelopes.data ?? []).length > 0 && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
+                  You&apos;ve planned{' '}
+                  {fmt((envelopes.data ?? []).reduce((a, e) => a + e.weekly_amount, 0))}/week across{' '}
+                  {(envelopes.data ?? []).length}{' '}
+                  {(envelopes.data ?? []).length === 1 ? 'category' : 'categories'} — you&apos;ll see
+                  them fill up on your Week screen.
+                </ThemedText>
+              )}
               <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
                 You can always adjust income, bills, goals, or your week from Setup.
               </ThemedText>
@@ -365,14 +396,16 @@ function Welcome() {
         Let&apos;s set up your budget
       </ThemedText>
       <ThemedText type="body" themeColor="textSecondary" style={styles.welcomeDesc}>
-        A few quick steps — your household, income, fixed bills, then savings goals. Each one builds
-        on the last, so your weekly spending number at the end is calculated for you automatically.
+        A few quick steps — your household, income, fixed bills, savings goals, then your weekly
+        essentials. Each one builds on the last, so your weekly spending number at the end is
+        calculated for you automatically.
       </ThemedText>
       <View style={styles.previews}>
         <StepPreview num="1" title="Household" desc="Who you share money with" />
         <StepPreview num="2" title="Income" desc="The foundation everything is calculated from" />
         <StepPreview num="3" title="Fixed expenses" desc="Bills that come out no matter what" />
         <StepPreview num="4" title="Savings goals" desc="What you're setting aside each month" />
+        <StepPreview num="5" title="Planned spending" desc="Weekly essentials like groceries and gas" />
       </View>
     </View>
   );
@@ -454,7 +487,7 @@ function Dashed() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1 },
-  header: { paddingHorizontal: Spacing.four, paddingTop: Spacing.two, paddingBottom: Spacing.two },
+  header: { paddingHorizontal: Spacing.four, paddingTop: Spacing.four, paddingBottom: Spacing.two },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,6 +584,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
+    paddingBottom: Spacing.three,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(61,64,91,0.12)',
   },
