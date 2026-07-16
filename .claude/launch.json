@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web"],
       "port": 8081
+    },
+    {
+      "name": "ourdollar-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "marketing-site", "run", "dev"],
+      "port": 3000
     }
   ]
 }
