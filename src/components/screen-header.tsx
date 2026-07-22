@@ -5,19 +5,24 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
+import { householdColor } from '@/lib/household-color';
 import { useMembers } from '@/lib/queries';
 
 type Props = { eyebrow?: string; title: string; avatar?: string | null };
 
 /** Shared top bar: eyebrow + title on the left, tappable profile avatar right.
- *  The avatar defaults to the current member's chosen avatar (matches setup). */
+ *  The avatar defaults to the current member's chosen avatar (matches setup).
+ *  With more than one household, a color-coded household pill sits on top so the
+ *  active household is always visible and switching is obvious. */
 export function ScreenHeader({ eyebrow, title, avatar }: Props) {
   const router = useRouter();
   const { session } = useSession();
-  const { householdId } = useHousehold();
+  const { householdId, household, households } = useHousehold();
   const members = useMembers(householdId);
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id);
   const shownAvatar = avatar ?? me?.avatar ?? '🙂';
+  const multi = households.length > 1;
+  const color = household ? householdColor(household) : null;
   return (
     <View style={styles.row}>
       <View style={styles.titles}>
@@ -28,6 +33,18 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
         )}
         <ThemedText type="title">{title}</ThemedText>
       </View>
+      {multi && household && color && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Household: ${household.name}. Switch household`}
+          onPress={() => router.push('/profile')}
+          style={[styles.hhPill, { backgroundColor: color.tint }]}>
+          <View style={[styles.hhDot, { backgroundColor: color.dot }]} />
+          <ThemedText type="small" style={styles.hhName} numberOfLines={1}>
+            {household.name}
+          </ThemedText>
+        </Pressable>
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open profile"
@@ -56,6 +73,17 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  hhPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one + 2,
+    maxWidth: 150,
+    borderRadius: Radius.pill,
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.two + 2,
+  },
+  hhDot: { width: 9, height: 9, borderRadius: Radius.pill },
+  hhName: { flexShrink: 1, fontWeight: '500' },
   avatar: {
     width: 46,
     height: 46,

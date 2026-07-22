@@ -6,6 +6,8 @@ export type Frequency = 'monthly' | 'semimonthly';
 export type Account = {
   id: string;
   email: string | null;
+  name: string | null;
+  avatar: string | null;
   subscription_status: string;
   subscription_tier: string;
   onboarded: boolean;
@@ -18,6 +20,7 @@ export type Household = {
   name: string;
   owner_account_id: string;
   week_start_day: number; // 0 = Sunday … 6 = Saturday
+  color: string | null; // household-color palette key; null = id-hash default
   created_at: string;
 };
 
@@ -33,6 +36,8 @@ export type HouseholdMember = {
   invite_pending: boolean;
   invited_by_member_id: string | null;
   invited_at: string | null;
+  approval_pending: boolean;
+  added_by_member_id: string | null;
   notify_on_spend: boolean;
   created_at: string;
 };

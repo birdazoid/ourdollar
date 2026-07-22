@@ -20,79 +20,81 @@ const emailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
 export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
   const [name, setName] = useState('');
-  const [funMonthly, setFunMonthly] = useState('100');
-  const [sendInvite, setSendInvite] = useState(true);
   const [email, setEmail] = useState('');
+  const [funOn, setFunOn] = useState(false);
+  const [funMonthly, setFunMonthly] = useState('100');
 
   useEffect(() => {
     if (visible) {
       setName('');
-      setFunMonthly('100');
-      setSendInvite(true);
       setEmail('');
+      setFunOn(false);
+      setFunMonthly('100');
     }
   }, [visible]);
 
-  const valid = name.trim() !== '' && (!sendInvite || emailValid(email));
+  // Every new member is invited, so a valid email is always required.
+  const valid = name.trim() !== '' && emailValid(email);
 
   return (
     <Sheet visible={visible} title="Add a household member" onClose={onClose}>
+      <FieldLabel>Name</FieldLabel>
       <TextField placeholder="Name" value={name} onChangeText={setName} style={styles.mb} />
 
-      <FieldLabel>Fun money per month</FieldLabel>
+      <FieldLabel>Their email</FieldLabel>
       <TextField
-        placeholder="Fun $/mo"
-        value={funMonthly}
-        onChangeText={(t) => setFunMonthly(t.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
-        inputMode="numeric"
-        style={styles.mb}
+        placeholder="name@email.com"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        inputMode="email"
+        autoCapitalize="none"
+        style={email !== '' && !emailValid(email) ? styles.emailError : undefined}
       />
+      {email !== '' && !emailValid(email) ? (
+        <ThemedText type="small" themeColor="warningDeep" style={styles.errText}>
+          Enter a valid email so we can send their invite.
+        </ThemedText>
+      ) : (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+          They&apos;ll get an email to download the app and join with their own profile.
+        </ThemedText>
+      )}
 
-      <Pressable
-        onPress={() => setSendInvite(!sendInvite)}
-        style={[styles.inviteRow, sendInvite && styles.inviteOn]}>
-        <ThemedText type="subtitle">✉️</ThemedText>
+      <Pressable onPress={() => setFunOn(!funOn)} style={[styles.funRow, funOn && styles.funOnRow]}>
+        <ThemedText type="subtitle">✨</ThemedText>
         <View style={styles.flex}>
-          <ThemedText type="bodyBold">Send them an invite</ThemedText>
+          <ThemedText type="bodyBold">Give them fun money</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {sendInvite
-              ? "They'll get an email to download the app and create an account"
-              : 'Add without an account — fun money tracking only'}
+            {funOn ? 'A personal, no-questions-asked stash' : 'Optional monthly personal spending'}
           </ThemedText>
         </View>
-        <Switch value={sendInvite} onValueChange={setSendInvite} />
+        <Switch value={funOn} onValueChange={setFunOn} onColor={Palette.sand} />
       </Pressable>
 
-      {sendInvite && (
-        <View style={styles.emailWrap}>
-          <FieldLabel>Their email</FieldLabel>
+      {funOn && (
+        <>
+          <FieldLabel>Fun money per month</FieldLabel>
           <TextField
-            placeholder="name@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            inputMode="email"
-            autoCapitalize="none"
-            style={email && !emailValid(email) ? styles.emailError : undefined}
+            placeholder="Fun $/mo"
+            value={funMonthly}
+            onChangeText={(t) => setFunMonthly(t.replace(/[^0-9]/g, ''))}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            style={styles.mb}
           />
-          {email !== '' && !emailValid(email) && (
-            <ThemedText type="small" themeColor="warningDeep" style={styles.errText}>
-              Enter a valid email so we know where to send the invite.
-            </ThemedText>
-          )}
-        </View>
+        </>
       )}
 
       <Button
-        title={sendInvite ? 'Add & send invite' : 'Add member'}
+        title="Add & send invite"
         disabled={!valid}
         loading={saving}
         onPress={() =>
           onAdd({
             name: name.trim(),
-            funMonthly: Number(funMonthly) || 0,
-            inviteEmail: sendInvite ? email.trim() : null,
+            funMonthly: funOn ? Number(funMonthly) || 0 : 0,
+            inviteEmail: email.trim(),
           })
         }
       />
@@ -103,7 +105,8 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
 const styles = StyleSheet.create({
   mb: { marginBottom: Spacing.three },
   flex: { flex: 1 },
-  inviteRow: {
+  hint: { marginTop: Spacing.one, marginBottom: Spacing.three, lineHeight: 18 },
+  funRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
@@ -112,8 +115,7 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     marginBottom: Spacing.three,
   },
-  inviteOn: { backgroundColor: 'rgba(129,178,154,0.16)' },
-  emailWrap: { marginBottom: Spacing.three },
+  funOnRow: { backgroundColor: 'rgba(242,204,143,0.22)' },
   emailError: { borderWidth: 1.5, borderColor: Palette.terracotta },
-  errText: { marginTop: Spacing.one, marginLeft: Spacing.one },
+  errText: { marginTop: Spacing.one, marginBottom: Spacing.three, marginLeft: Spacing.one },
 });

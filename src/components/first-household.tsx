@@ -7,22 +7,14 @@ import { CreateHouseholdSheet } from '@/components/create-household-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette, Radius, Spacing } from '@/constants/theme';
-import { useSession } from '@/lib/auth';
 
 /**
- * Empty state for a brand-new account with no households yet. Full onboarding
- * (the income/bills/goals wizard) is Phase 4 — this is the minimal "give your
- * household a name" step so the account never lands on empty, broken tabs.
+ * Empty state for an account with a profile but no households yet. Identity
+ * (name/avatar) is already set at the account level, so this only names the
+ * household and optionally invites people.
  */
 export function FirstHousehold() {
-  const { session } = useSession();
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  // A friendly default for their display name, from the email local-part.
-  const emailLocal = session?.user.email?.split('@')[0] ?? '';
-  const defaultName = emailLocal
-    ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1)
-    : '';
 
   return (
     <ThemedView style={styles.fill}>
@@ -42,11 +34,7 @@ export function FirstHousehold() {
         </View>
       </SafeAreaView>
 
-      <CreateHouseholdSheet
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        defaultName={defaultName}
-      />
+      <CreateHouseholdSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </ThemedView>
   );
 }

@@ -53,7 +53,9 @@
     "verify:account-deletion": "tsx scripts/verify-account-deletion.ts",
     "verify:send-invite": "tsx scripts/verify-send-invite.ts",
     "verify:invite-accept": "tsx scripts/verify-invite-accept.ts",
-    "verify:envelopes": "tsx scripts/verify-envelopes.ts"
+    "verify:envelopes": "tsx scripts/verify-envelopes.ts",
+    "verify:account-profile": "tsx scripts/verify-account-profile.ts",
+    "verify:household-roles": "tsx scripts/verify-household-roles.ts"
   },
   "private": true
 }

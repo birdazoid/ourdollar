@@ -9,7 +9,6 @@ import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette, Radius, Spacing } from '@/constants/theme';
-import { useSession } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
 import { useInviteResponses, type PendingInvite } from '@/lib/queries';
 
@@ -96,13 +95,10 @@ export function InviteInbox() {
  * can join an invite, or fall back to creating their own household.
  */
 export function InviteWelcome() {
-  const { session } = useSession();
   const { pendingInvites } = useHousehold();
   const { accept, decline } = useInviteResponses();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const emailLocal = session?.user.email?.split('@')[0] ?? '';
-  const defaultName = emailLocal ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : '';
   const busy = accept.isPending || decline.isPending;
 
   return (
@@ -140,11 +136,7 @@ export function InviteWelcome() {
         </View>
       </SafeAreaView>
 
-      <CreateHouseholdSheet
-        visible={createOpen}
-        onClose={() => setCreateOpen(false)}
-        defaultName={defaultName}
-      />
+      <CreateHouseholdSheet visible={createOpen} onClose={() => setCreateOpen(false)} />
     </ThemedView>
   );
 }

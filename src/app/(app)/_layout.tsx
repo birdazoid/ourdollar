@@ -4,12 +4,13 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { FirstHousehold } from '@/components/first-household';
 import { InviteInbox, InviteWelcome } from '@/components/invites';
+import { ProfileSetup } from '@/components/profile-setup';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { HouseholdProvider, useHousehold } from '@/lib/household';
 import { syncPushToken } from '@/lib/notifications';
-import { applyPendingMarketingOptIn } from '@/lib/queries';
+import { applyPendingMarketingOptIn, useAccount } from '@/lib/queries';
 
 export default function AppLayout() {
   const { session } = useSession();
@@ -26,9 +27,30 @@ export default function AppLayout() {
 
   return (
     <HouseholdProvider>
-      <HouseholdGate />
+      <RootGate />
     </HouseholdProvider>
   );
+}
+
+// Before any household logic: a signed-in account with no profile name yet is a
+// brand-new user — send them through one-time profile setup (name + avatar).
+function RootGate() {
+  const { session } = useSession();
+  const account = useAccount(session?.user.id ?? null);
+
+  if (account.isLoading) {
+    return (
+      <ThemedView style={styles.center}>
+        <ActivityIndicator color={Palette.sageDeep} />
+      </ThemedView>
+    );
+  }
+
+  if (account.data && !account.data.name?.trim()) {
+    return <ProfileSetup />;
+  }
+
+  return <HouseholdGate />;
 }
 
 // Decides what an authed user sees based on their household membership:

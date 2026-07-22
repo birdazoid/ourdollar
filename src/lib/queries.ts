@@ -406,6 +406,35 @@ export function useCompleteOnboarding(accountId: string | null) {
 }
 
 /**
+ * Sets the account-level profile (name + avatar) and mirrors it onto all of this
+ * account's household_members rows, so the person shows up the same everywhere.
+ * RLS allows the member update — the caller is a member of their own households.
+ */
+export function useUpdateProfile(accountId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: { name?: string; avatar?: string }) => {
+      if (!accountId) throw new Error('Not signed in');
+      const clean: Record<string, string> = {};
+      if (patch.name !== undefined) clean.name = patch.name;
+      if (patch.avatar !== undefined) clean.avatar = patch.avatar;
+      if (Object.keys(clean).length === 0) return;
+      const { error } = await supabase.from('accounts').update(clean).eq('id', accountId);
+      if (error) throw error;
+      const { error: mErr } = await supabase
+        .from('household_members')
+        .update(clean)
+        .eq('account_id', accountId);
+      if (mErr) throw mErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['account', accountId] });
+      qc.invalidateQueries({ queryKey: ['household_members'] });
+    },
+  });
+}
+
+/**
  * Permanently deletes the caller's account and its data via the delete-account
  * edge function (App Store requirement). The function identifies the user from
  * their JWT; supabase-js attaches it automatically. Caller should sign out after.
@@ -462,16 +491,18 @@ export async function applyPendingMarketingOptIn(accountId: string): Promise<voi
 
 export type CreateHouseholdInput = {
   householdName: string;
-  memberName: string;
-  avatar?: string;
+  /** Optional emails to invite into the new household. */
+  inviteEmails?: string[];
 };
 
 /**
  * Creates a household owned by the current account, seeds the creator as the
- * admin member, and adds an (empty) fun-money settings row. Done with plain
- * inserts — existing RLS lets an owner bootstrap their own household. Returns
- * the new household id so the caller can switch to it. Best-effort cleanup if a
- * follow-up insert fails, so we don't leave an orphan household behind.
+ * admin member from their ACCOUNT profile (name/avatar — no longer re-entered
+ * per household), and adds an (empty) fun-money settings row. Optionally invites
+ * people by email (placeholder member rows + best-effort invite email). Plain
+ * inserts — existing RLS lets an owner bootstrap their own household. Returns the
+ * new household id so the caller can switch to it. Best-effort cleanup if a
+ * core follow-up insert fails, so we don't leave an orphan household behind.
  */
 export function useCreateHousehold() {
   const qc = useQueryClient();
@@ -483,6 +514,12 @@ export function useCreateHousehold() {
       const accountId = userData.user?.id;
       if (!accountId) throw new Error('Not signed in');
 
+      const { data: acct } = await supabase
+        .from('accounts')
+        .select('name, avatar')
+        .eq('id', accountId)
+        .maybeSingle();
+
       const { data: household, error: hErr } = await supabase
         .from('households')
         .insert({ name: input.householdName, owner_account_id: accountId })
@@ -490,14 +527,18 @@ export function useCreateHousehold() {
         .single();
       if (hErr) throw hErr;
 
-      const { error: mErr } = await supabase.from('household_members').insert({
-        household_id: household.id,
-        account_id: accountId,
-        name: input.memberName,
-        avatar: input.avatar ?? '🙂',
-        is_admin: true,
-        has_account: true,
-      });
+      const { data: adminMember, error: mErr } = await supabase
+        .from('household_members')
+        .insert({
+          household_id: household.id,
+          account_id: accountId,
+          name: acct?.name ?? 'Me',
+          avatar: acct?.avatar ?? '🙂',
+          is_admin: true,
+          has_account: true,
+        })
+        .select()
+        .single();
       if (mErr) {
         await supabase.from('households').delete().eq('id', household.id);
         throw mErr;
@@ -509,6 +550,31 @@ export function useCreateHousehold() {
       if (fErr) {
         await supabase.from('households').delete().eq('id', household.id);
         throw fErr;
+      }
+
+      // Invites are best-effort — a failure here doesn't undo the household.
+      const emails = (input.inviteEmails ?? []).map((e) => e.trim()).filter(Boolean);
+      for (const email of emails) {
+        const local = email.split('@')[0] ?? '';
+        const placeholder = local ? local.charAt(0).toUpperCase() + local.slice(1) : 'Invited';
+        const { data: invite } = await supabase
+          .from('household_members')
+          .insert({
+            household_id: household.id,
+            name: placeholder,
+            avatar: '🙂',
+            is_admin: false,
+            has_account: false,
+            invite_email: email,
+            invite_pending: true,
+            invited_by_member_id: adminMember.id,
+            invited_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (invite) {
+          supabase.functions.invoke('send-invite', { body: { memberId: invite.id } }).catch(() => {});
+        }
       }
 
       return household.id as string;
@@ -591,6 +657,22 @@ export function useInviteResponses() {
 
 // ---- Household + member mutations (Profile) ----
 
+/** Updates a household's name and/or accent color by id (owner-only at DB level). */
+export function useUpdateHousehold() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name, color }: { id: string; name?: string; color?: string }) => {
+      const patch: Record<string, string> = {};
+      if (name !== undefined) patch.name = name;
+      if (color !== undefined) patch.color = color;
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await supabase.from('households').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['households'] }),
+  });
+}
+
 export function useHouseholdMutations(householdId: string | null) {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ['households'] });
@@ -621,7 +703,54 @@ export type NewMemberInput = {
   name: string;
   funMonthly: number;
   inviteEmail: string | null;
+  /** True when the adder isn't an owner/admin — the add waits for approval. */
+  approvalPending?: boolean;
 };
+
+/**
+ * Owner/admin actions on members, all via SECURITY DEFINER RPCs that re-check the
+ * caller's role server-side (see the household_roles migration).
+ */
+export function useMemberRoleActions(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['household_members', householdId] });
+    qc.invalidateQueries({ queryKey: ['households'] });
+  };
+
+  const approve = useMutation({
+    mutationFn: async (memberId: string) => {
+      const { data, error } = await supabase.rpc('approve_member', { p_member_id: memberId });
+      if (error) throw error;
+      // A non-null email means there's a pending invite to send now that it's approved.
+      if (data) {
+        await supabase.functions.invoke('send-invite', { body: { memberId } }).catch(() => {});
+      }
+    },
+    onSuccess: invalidate,
+  });
+
+  const setAdmin = useMutation({
+    mutationFn: async ({ memberId, isAdmin }: { memberId: string; isAdmin: boolean }) => {
+      const { error } = await supabase.rpc('set_member_admin', {
+        p_member_id: memberId,
+        p_is_admin: isAdmin,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const transfer = useMutation({
+    mutationFn: async (memberId: string) => {
+      const { error } = await supabase.rpc('transfer_ownership', { p_member_id: memberId });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { approve, setAdmin, transfer };
+}
 
 export function useMemberMutations(householdId: string | null) {
   const qc = useQueryClient();
@@ -648,21 +777,19 @@ export function useMemberMutations(householdId: string | null) {
 
   const add = useMutation({
     mutationFn: async (input: NewMemberInput): Promise<string> => {
-      // For a real invite, record who sent it so the invitee's prompt can name
-      // them (best-effort — a null inviter just shows "Someone").
-      let invitedBy: string | null = null;
-      if (input.inviteEmail) {
-        const { data: userData } = await supabase.auth.getUser();
-        const accountId = userData.user?.id;
-        if (accountId) {
-          const { data: me } = await supabase
-            .from('household_members')
-            .select('id')
-            .eq('household_id', householdId!)
-            .eq('account_id', accountId)
-            .maybeSingle();
-          invitedBy = me?.id ?? null;
-        }
+      // Look up the adder's own member row — recorded as inviter/adder so the
+      // invitee's prompt and the approval queue can name them.
+      let callerMemberId: string | null = null;
+      const { data: userData } = await supabase.auth.getUser();
+      const accountId = userData.user?.id;
+      if (accountId) {
+        const { data: me } = await supabase
+          .from('household_members')
+          .select('id')
+          .eq('household_id', householdId!)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        callerMemberId = me?.id ?? null;
       }
 
       const { data, error } = await supabase
@@ -675,19 +802,23 @@ export function useMemberMutations(householdId: string | null) {
           has_account: false,
           invite_email: input.inviteEmail,
           invite_pending: !!input.inviteEmail,
-          invited_by_member_id: input.inviteEmail ? invitedBy : null,
+          invited_by_member_id: input.inviteEmail ? callerMemberId : null,
           invited_at: input.inviteEmail ? new Date().toISOString() : null,
+          approval_pending: input.approvalPending ?? false,
+          added_by_member_id: callerMemberId,
         })
         .select()
         .single();
       if (error) throw error;
-      // Give the new member a fun-money allotment too.
-      const { error: funError } = await supabase.from('fun_money_people').insert({
-        household_id: householdId,
-        member_id: data.id,
-        monthly_amount: input.funMonthly,
-      });
-      if (funError) throw funError;
+      // Only give them a fun-money allotment when the toggle was on.
+      if (input.funMonthly > 0) {
+        const { error: funError } = await supabase.from('fun_money_people').insert({
+          household_id: householdId,
+          member_id: data.id,
+          monthly_amount: input.funMonthly,
+        });
+        if (funError) throw funError;
+      }
       return data.id as string;
     },
     onSuccess: invalidate,

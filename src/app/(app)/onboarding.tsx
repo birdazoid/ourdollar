@@ -121,11 +121,17 @@ export default function OnboardingScreen() {
     setGoalSheet(null);
   }
   function addMember(input: NewMemberInput) {
-    memberMut.add.mutate(input, {
-      onSuccess: (memberId) => {
-        if (input.inviteEmail) sendInvite(memberId).catch(() => {});
-      },
-    });
+    // Non-owner/admin adds are held for approval, and the invite waits.
+    const me = (members.data ?? []).find((m) => m.account_id === session?.user.id);
+    const pending = !me?.is_admin;
+    memberMut.add.mutate(
+      { ...input, approvalPending: pending },
+      {
+        onSuccess: (memberId) => {
+          if (input.inviteEmail && !pending) sendInvite(memberId).catch(() => {});
+        },
+      }
+    );
     setAddingMember(false);
   }
 

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Bell, Camera, Check, ChevronLeft, Home, LogOut, Mail, Plus, Trash2, X } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronLeft, Home, LogOut, Mail, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,8 @@ import { AddMemberSheet } from '@/components/add-member-sheet';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { CreateHouseholdSheet } from '@/components/create-household-sheet';
-import { TextField } from '@/components/inputs';
+import { FieldLabel, TextField } from '@/components/inputs';
+import { Sheet } from '@/components/sheet';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,17 +17,20 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
+import { householdColor, HOUSEHOLD_COLORS } from '@/lib/household-color';
 import {
   deleteAccount,
   sendInvite,
   useAccount,
-  useHouseholdMutations,
   useMemberMutations,
+  useMemberRoleActions,
   useMembers,
   useSetMarketingOptIn,
+  useUpdateHousehold,
+  useUpdateProfile,
   type NewMemberInput,
 } from '@/lib/queries';
-import type { HouseholdMember } from '@/lib/types';
+import type { Household, HouseholdMember } from '@/lib/types';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -35,16 +39,34 @@ export default function ProfileScreen() {
   const account = useAccount(session?.user.id ?? null);
   const marketingMut = useSetMarketingOptIn(session?.user.id ?? null);
   const members = useMembers(householdId);
-  const householdMut = useHouseholdMutations(householdId);
   const memberMut = useMemberMutations(householdId);
+  const roleActions = useMemberRoleActions(householdId);
+  const updateProfile = useUpdateProfile(session?.user.id ?? null);
+  const updateHousehold = useUpdateHousehold();
 
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id) ?? null;
+  const iAmOwner = !!household && household.owner_account_id === session?.user.id;
+  const iAmAdmin = me?.is_admin ?? false; // the owner is always an admin
+  const allMembers = members.data ?? [];
+  const pendingMembers = allMembers.filter((m) => m.approval_pending);
+  const activeMembers = allMembers.filter((m) => !m.approval_pending);
+  const memberById = (id: string | null) => allMembers.find((m) => m.id === id) ?? null;
+  const roleLabel = (m: HouseholdMember) => {
+    if (household && m.account_id === household.owner_account_id) return 'Owner';
+    if (m.is_admin) return 'Admin';
+    if (m.invite_pending) return `Invited · ${m.invite_email ?? ''}`;
+    if (m.has_account) return 'Member';
+    return 'Fun money only';
+  };
 
   const [pickingAvatar, setPickingAvatar] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
-  const [householdName, setHouseholdName] = useState('');
+  const [renaming, setRenaming] = useState<Household | null>(null);
+  const [renameText, setRenameText] = useState('');
+  const [renameColor, setRenameColor] = useState<string>('sage');
   const [addingMember, setAddingMember] = useState(false);
+  const [memberActions, setMemberActions] = useState<HouseholdMember | null>(null);
   const [creatingHousehold, setCreatingHousehold] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -52,33 +74,66 @@ export default function ProfileScreen() {
 
   function startEdit() {
     setName(me?.name ?? '');
-    setHouseholdName(household?.name ?? '');
     setEditing(true);
   }
   function saveEdit() {
-    if (me && name.trim()) memberMut.update.mutate({ id: me.id, name: name.trim() });
-    if (household && householdName.trim()) householdMut.rename.mutate(householdName.trim());
+    // Profile = account-level name + avatar only. Household names are renamed
+    // per-card below.
+    if (name.trim()) updateProfile.mutate({ name: name.trim() });
     setEditing(false);
   }
+  function openRename(h: Household) {
+    setRenaming(h);
+    setRenameText(h.name);
+    setRenameColor(householdColor(h).key);
+  }
+  function saveRename() {
+    if (renaming && renameText.trim()) {
+      updateHousehold.mutate({ id: renaming.id, name: renameText.trim(), color: renameColor });
+    }
+    setRenaming(null);
+  }
   function pickAvatar(a: string) {
-    if (me) memberMut.update.mutate({ id: me.id, avatar: a });
+    updateProfile.mutate({ avatar: a });
     setPickingAvatar(false);
   }
   function addMember(input: NewMemberInput) {
-    memberMut.add.mutate(input, {
-      onSuccess: (memberId) => {
-        if (input.inviteEmail) sendInvite(memberId).catch(() => {});
-      },
-    });
+    // Non-owner/admin adds are held for approval, and the invite email waits.
+    const pending = !iAmAdmin;
+    memberMut.add.mutate(
+      { ...input, approvalPending: pending },
+      {
+        onSuccess: (memberId) => {
+          if (input.inviteEmail && !pending) sendInvite(memberId).catch(() => {});
+        },
+      }
+    );
     setAddingMember(false);
   }
   function askRemove(m: HouseholdMember) {
+    setMemberActions(null);
+    const self = m.account_id === session?.user.id;
     setConfirm({
-      title: 'Remove this member?',
-      message: `${m.name} will lose access and their fun money stash will be removed. This can't be undone.`,
-      confirmLabel: 'Remove',
+      title: self ? 'Leave this household?' : 'Remove this member?',
+      message: self
+        ? `You'll lose access to ${household?.name ?? 'this household'}. You can be re-invited later.`
+        : `${m.name} will lose access and their fun money stash will be removed. This can't be undone.`,
+      confirmLabel: self ? 'Leave' : 'Remove',
       onConfirm: () => memberMut.remove.mutate(m.id),
     });
+  }
+  function askTransfer(m: HouseholdMember) {
+    setMemberActions(null);
+    setConfirm({
+      title: `Make ${m.name} the owner?`,
+      message: `${m.name} will become the household owner. You'll stay on as an admin, but only the new owner can transfer ownership or manage admins.`,
+      confirmLabel: 'Transfer',
+      onConfirm: () => roleActions.transfer.mutate(m.id),
+    });
+  }
+  function toggleAdmin(m: HouseholdMember) {
+    setMemberActions(null);
+    roleActions.setAdmin.mutate({ memberId: m.id, isAdmin: !m.is_admin });
   }
   function askDeleteAccount() {
     setConfirm({
@@ -98,13 +153,6 @@ export default function ProfileScreen() {
       },
     });
   }
-
-  const statusFor = (m: HouseholdMember) => {
-    if (m.is_admin) return 'Admin';
-    if (m.invite_pending) return `Invite sent · ${m.invite_email ?? ''}`;
-    if (m.has_account) return 'Member';
-    return 'No account · fun money only';
-  };
 
   const loading = !householdId || members.isLoading;
 
@@ -140,12 +188,6 @@ export default function ProfileScreen() {
               {editing ? (
                 <View style={styles.editForm}>
                   <TextField placeholder="Your name" value={name} onChangeText={setName} style={styles.editInput} />
-                  <TextField
-                    placeholder="Household name"
-                    value={householdName}
-                    onChangeText={setHouseholdName}
-                    style={styles.editInput}
-                  />
                   <Pressable accessibilityRole="button" onPress={saveEdit} style={styles.saveBtn}>
                     <ThemedText type="label" style={styles.saveText}>
                       Save
@@ -181,34 +223,106 @@ export default function ProfileScreen() {
             <Eyebrow>Your households</Eyebrow>
             {households.map((h) => {
               const active = h.id === householdId;
+              const owner = h.owner_account_id === session?.user.id;
+              const color = householdColor(h);
               return (
-                <Pressable
-                  key={h.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Switch to ${h.name}`}
-                  onPress={() => setActiveHousehold(h.id)}>
-                  <Card style={styles.switchRow}>
-                    <View style={[styles.settingIcon, active && styles.switchIconActive]}>
-                      <Home size={18} color={active ? Palette.sageDeep : Palette.ink} />
-                    </View>
-                    <View style={styles.flex}>
-                      <ThemedText type="bodyBold">{h.name}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {active ? 'Active' : 'Tap to switch'}
-                      </ThemedText>
-                    </View>
-                    {active && <Check size={18} color={Palette.sageDeep} />}
-                  </Card>
-                </Pressable>
+                <Card key={h.id} style={styles.switchRow}>
+                  <View style={[styles.settingIcon, { backgroundColor: color.tint }]}>
+                    <Home size={18} color={color.dot} />
+                  </View>
+                  <View style={styles.flex}>
+                    <ThemedText type="bodyBold">{h.name}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {active ? 'Active' : owner ? 'Owner' : 'Member'}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.cardActions}>
+                    {owner && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Rename ${h.name}`}
+                        hitSlop={6}
+                        onPress={() => openRename(h)}
+                        style={styles.iconBtnSm}>
+                        <Pencil size={15} color={Palette.ink} />
+                      </Pressable>
+                    )}
+                    {active ? (
+                      <View style={styles.activeBadge}>
+                        <Check size={16} color={Palette.sageDeep} />
+                        <ThemedText type="small" style={styles.activeText}>
+                          Active
+                        </ThemedText>
+                      </View>
+                    ) : (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Switch to ${h.name}`}
+                        onPress={() => setActiveHousehold(h.id)}
+                        style={styles.switchBtn}>
+                        <ThemedText type="label" style={styles.switchText}>
+                          Switch
+                        </ThemedText>
+                      </Pressable>
+                    )}
+                  </View>
+                </Card>
               );
             })}
             <DashedAdd label="Create a new household" onPress={() => setCreatingHousehold(true)} />
 
+            {/* Pending approvals (owner/admin only) */}
+            {iAmAdmin && pendingMembers.length > 0 && (
+              <>
+                <Eyebrow>Pending approval</Eyebrow>
+                {pendingMembers.map((m) => {
+                  const addedBy = memberById(m.added_by_member_id);
+                  return (
+                    <Card key={m.id} style={styles.memberRow}>
+                      <View style={styles.memberAvatar}>
+                        <ThemedText type="body">{m.avatar ?? '🙂'}</ThemedText>
+                      </View>
+                      <View style={styles.flex}>
+                        <ThemedText type="bodyBold">{m.invite_email ?? m.name}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {addedBy ? `Added by ${addedBy.name}` : 'Awaiting approval'}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.cardActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Reject ${m.name}`}
+                          hitSlop={6}
+                          onPress={() => memberMut.remove.mutate(m.id)}
+                          style={styles.iconBtnSm}>
+                          <X size={16} color={Palette.terracotta} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Approve ${m.name}`}
+                          onPress={() => roleActions.approve.mutate(m.id)}
+                          style={styles.approveBtn}>
+                          <ThemedText type="label" style={styles.saveText}>
+                            Approve
+                          </ThemedText>
+                        </Pressable>
+                      </View>
+                    </Card>
+                  );
+                })}
+              </>
+            )}
+
             {/* Members of the active household */}
             <Eyebrow>Members</Eyebrow>
-            {(members.data ?? []).map((m) => {
+            {activeMembers.map((m) => {
               const isMe = m.account_id === session?.user.id;
+              const isOwnerRow = !!household && m.account_id === household.owner_account_id;
+              const elevated = isOwnerRow || m.is_admin;
+              const canManage =
+                (iAmOwner && !isOwnerRow) ||
+                (iAmAdmin && !isOwnerRow && !isMe) ||
+                (isMe && !isOwnerRow);
               return (
                 <Card key={m.id} style={styles.memberRow}>
                   <View style={styles.memberAvatar}>
@@ -219,13 +333,21 @@ export default function ProfileScreen() {
                       {m.name}
                       {isMe ? ' (you)' : ''}
                     </ThemedText>
-                    <ThemedText type="small" style={{ color: m.is_admin ? Palette.sageDeep : undefined }} themeColor={m.is_admin ? undefined : 'textSecondary'}>
-                      {statusFor(m)}
+                    <ThemedText
+                      type="small"
+                      style={{ color: elevated ? Palette.sageDeep : undefined }}
+                      themeColor={elevated ? undefined : 'textSecondary'}>
+                      {roleLabel(m)}
                     </ThemedText>
                   </View>
-                  {!m.is_admin && me?.is_admin && (
-                    <Pressable onPress={() => askRemove(m)} accessibilityLabel={`Remove ${m.name}`} style={styles.removeBtn}>
-                      <X size={17} color={Palette.terracotta} />
+                  {canManage && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${m.name}`}
+                      hitSlop={6}
+                      onPress={() => setMemberActions(m)}
+                      style={styles.iconBtnSm}>
+                      <MoreHorizontal size={18} color={Palette.ink} />
                     </Pressable>
                   )}
                 </Card>
@@ -293,6 +415,73 @@ export default function ProfileScreen() {
         visible={creatingHousehold}
         onClose={() => setCreatingHousehold(false)}
       />
+      <Sheet visible={!!renaming} title="Edit household" onClose={() => setRenaming(null)}>
+        <FieldLabel>Household name</FieldLabel>
+        <TextField
+          placeholder="Household name"
+          value={renameText}
+          onChangeText={setRenameText}
+          autoFocus
+        />
+        <FieldLabel>Color</FieldLabel>
+        <View style={styles.colorRow}>
+          {HOUSEHOLD_COLORS.map((c) => (
+            <Pressable
+              key={c.key}
+              accessibilityRole="button"
+              accessibilityLabel={`Color ${c.key}`}
+              accessibilityState={{ selected: c.key === renameColor }}
+              onPress={() => setRenameColor(c.key)}
+              style={[
+                styles.colorSwatch,
+                { backgroundColor: c.tint },
+                c.key === renameColor && { borderColor: c.dot },
+              ]}>
+              <View style={[styles.colorDot, { backgroundColor: c.dot }]} />
+            </Pressable>
+          ))}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={saveRename}
+          disabled={!renameText.trim()}
+          style={[styles.renameSave, !renameText.trim() && styles.renameSaveDisabled]}>
+          <ThemedText type="bodyBold" style={styles.saveText}>
+            Save
+          </ThemedText>
+        </Pressable>
+      </Sheet>
+      <Sheet
+        visible={!!memberActions}
+        title={memberActions?.name ?? 'Member'}
+        onClose={() => setMemberActions(null)}>
+        {memberActions &&
+          (() => {
+            const ma = memberActions;
+            const maIsOwner = !!household && ma.account_id === household.owner_account_id;
+            const maIsMe = ma.account_id === session?.user.id;
+            const maHasAccount = !!ma.account_id;
+            return (
+              <View>
+                {iAmOwner && maHasAccount && !maIsOwner && (
+                  <ActionRow
+                    label={ma.is_admin ? 'Remove as admin' : 'Make admin (share ownership)'}
+                    onPress={() => toggleAdmin(ma)}
+                  />
+                )}
+                {iAmOwner && maHasAccount && !maIsOwner && (
+                  <ActionRow label="Transfer ownership" onPress={() => askTransfer(ma)} />
+                )}
+                {(iAmOwner || iAmAdmin) && !maIsOwner && !maIsMe && (
+                  <ActionRow label="Remove from household" danger onPress={() => askRemove(ma)} />
+                )}
+                {maIsMe && !maIsOwner && (
+                  <ActionRow label="Leave household" danger onPress={() => askRemove(ma)} />
+                )}
+              </View>
+            );
+          })()}
+      </Sheet>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
 
       {deletingAccount && (
@@ -368,6 +557,16 @@ function SettingRow({
           )}
         </View>
       </Card>
+    </Pressable>
+  );
+}
+
+function ActionRow({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.actionRow}>
+      <ThemedText type="bodyBold" style={danger ? { color: Palette.terracottaDeep } : undefined}>
+        {label}
+      </ThemedText>
     </Pressable>
   );
 }
@@ -481,7 +680,55 @@ const styles = StyleSheet.create({
   },
   eyebrow: { marginTop: Spacing.four, marginBottom: Spacing.two, letterSpacing: 0.6 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
-  switchIconActive: { backgroundColor: 'rgba(129,178,154,0.16)' },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  iconBtnSm: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(61,64,91,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchBtn: {
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(129,178,154,0.18)',
+  },
+  switchText: { color: Palette.sageDeep },
+  activeBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  activeText: { color: Palette.sageDeep },
+  approveBtn: {
+    paddingVertical: Spacing.one + 2,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.sageDeep,
+  },
+  actionRow: {
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(61,64,91,0.08)',
+  },
+  colorRow: { flexDirection: 'row', gap: Spacing.two, marginBottom: Spacing.two },
+  colorSwatch: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorDot: { width: 20, height: 20, borderRadius: Radius.pill },
+  renameSave: {
+    marginTop: Spacing.three,
+    height: 52,
+    borderRadius: Radius.large,
+    backgroundColor: Palette.sageDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  renameSaveDisabled: { opacity: 0.5 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
   memberAvatar: {
     width: 38,
