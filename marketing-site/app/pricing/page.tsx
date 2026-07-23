@@ -38,7 +38,7 @@ export default function Pricing() {
     <>
       <Nav />
       <section className="section" style={{ paddingBottom: 40 }}>
-        <div className="container" style={{ textAlign: 'center' }}>
+        <div className="container" style={{ textAlign: 'center' }} data-reveal>
           <p className="eyebrow">Pricing</p>
           <h2 style={{ marginBottom: 14 }}>Free to start. Fair to upgrade.</h2>
           <p className="lead" style={{ margin: '0 auto' }}>
@@ -52,7 +52,7 @@ export default function Pricing() {
         <div className="container">
           <div className="price-grid">
             {/* Free */}
-            <div className="plan">
+            <div className="plan" data-reveal>
               <h3>Free</h3>
               <div className="price">
                 $0<small> / forever</small>
@@ -71,7 +71,7 @@ export default function Pricing() {
             </div>
 
             {/* Premium */}
-            <div className="plan featured">
+            <div className="plan featured" data-reveal style={{ '--reveal-delay': '0.1s' } as React.CSSProperties}>
               <span className="plan-tag">{premiumLive ? 'Best value' : 'Coming soon'}</span>
               <h3>Premium</h3>
               {premiumLive ? (

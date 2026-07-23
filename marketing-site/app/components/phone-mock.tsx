@@ -28,8 +28,8 @@ function Ring({ pct, color }: { pct: number; color: string }) {
 
 export function PhoneMock() {
   return (
-    <div className="hero-visual">
-      <div className="phone">
+    <div className="hero-visual" data-parallax="0.05">
+      <div className="phone" data-image-reveal>
         <div className="phone-screen">
           <div className="phone-notch" />
           <div className="pm-label">This week</div>

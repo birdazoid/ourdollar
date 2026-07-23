@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Fraunces, Karla } from 'next/font/google';
 import { siteConfig } from '@/site.config';
+import { SiteEffects } from './components/site-effects';
 import './globals.css';
 
 const fraunces = Fraunces({
@@ -39,7 +40,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${karla.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteEffects />
+      </body>
     </html>
   );
 }
