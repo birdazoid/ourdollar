@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { siteConfig } from '@/site.config';
 
@@ -7,8 +8,8 @@ export function Footer() {
       <div className="container footer-inner">
         <div>
           <Link href="/" className="brand" style={{ fontSize: 19 }}>
-            <span className="brand-mark" style={{ width: 28, height: 28, fontSize: 16 }}>
-              ◐
+            <span className="brand-mark" style={{ width: 28, height: 28 }}>
+              <Image src="/brand/ourdollar-logo.svg" alt="" width={15} height={15} />
             </span>
             {siteConfig.name}
           </Link>

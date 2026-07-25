@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { siteConfig } from '@/site.config';
 
@@ -6,7 +7,9 @@ export function Nav() {
     <header className="nav">
       <div className="container nav-inner">
         <Link href="/" className="brand">
-          <span className="brand-mark">◐</span>
+          <span className="brand-mark">
+            <Image src="/brand/ourdollar-logo.svg" alt="" width={18} height={18} priority />
+          </span>
           {siteConfig.name}
         </Link>
         <nav className="nav-links">
