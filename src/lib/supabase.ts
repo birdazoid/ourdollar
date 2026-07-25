@@ -11,11 +11,28 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// A request whose socket gets suspended mid-flight (app backgrounded, screen
+// locked, a cell-network handoff) can otherwise hang forever — its promise
+// never resolves OR rejects, which leaves React Query's isLoading stuck true
+// and the UI stuck on a spinner indefinitely. Give every request a hard
+// timeout so it always settles.
+const REQUEST_TIMEOUT_MS = 15_000;
+function timeoutFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return fetch(input, { ...init, signal: init?.signal ?? controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+  },
+  global: {
+    fetch: timeoutFetch,
   },
 });

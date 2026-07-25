@@ -8,11 +8,13 @@ import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { Ring } from '@/components/ring';
+import { RolloverPrompt } from '@/components/rollover-prompt';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
+import { useSession } from '@/lib/auth';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { computeBudget, computeEnvelopes, fmt, type EnvelopeStatus } from '@/lib/money';
@@ -26,14 +28,19 @@ import {
   useGoals,
   useIncome,
   useMembers,
+  useRolloverSettled,
+  useSettleRollover,
   useTransactions,
+  useWeekAdjustment,
   type EnvelopeDraft,
+  type RolloverResolution,
 } from '@/lib/queries';
 import type { Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 
 export default function WeekScreen() {
   const router = useRouter();
+  const { session } = useSession();
   const { householdId, household } = useHousehold();
   const weekStart = household?.week_start_day ?? 0;
 
@@ -52,6 +59,7 @@ export default function WeekScreen() {
   const [envSheet, setEnvSheet] = useState<{ envelope: WeeklyEnvelope | null } | null>(null);
   const isCurrent = offset === 0;
   const week = useMemo(() => getWeek(offset, weekStart), [offset, weekStart]);
+  const lastWeek = useMemo(() => getWeek(-1, weekStart), [weekStart]);
 
   const funEnabled = funSettings.data?.enabled ?? false;
   const budget = computeBudget({
@@ -71,9 +79,47 @@ export default function WeekScreen() {
     .filter((t) => t.type === 'expense' && !t.is_fun_money)
     .reduce((a, t) => a + t.amount, 0);
   const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-  const remaining = allowance - spent + incomeBack;
+
+  // Any amount carried into this specific week from settling a prior week's
+  // leftover/overage (0 for a week with no settlement targeting it).
+  const weekAdjustment = useWeekAdjustment(householdId, week.start);
+  const adjustment = weekAdjustment.data ?? 0;
+
+  const remaining = allowance - spent + incomeBack + adjustment;
   const over = remaining < 0;
   const frac = over ? 1 : allowance > 0 ? Math.max(0, Math.min(1, remaining / allowance)) : 0;
+
+  // Rollover prompt: ask (only once, only for the current week) what to do with
+  // last week's leftover/overage rather than silently folding it in.
+  const lastWeekTxns = (transactions.data ?? []).filter(
+    (t) => t.occurred_on >= lastWeek.start && t.occurred_on <= lastWeek.end
+  );
+  const lastSpent = lastWeekTxns
+    .filter((t) => t.type === 'expense' && !t.is_fun_money)
+    .reduce((a, t) => a + t.amount, 0);
+  const lastIncomeBack = lastWeekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+  const lastRemaining = Math.round((allowance - lastSpent + lastIncomeBack) * 100) / 100;
+
+  const rolloverSettled = useRolloverSettled(householdId, isCurrent ? lastWeek.start : null);
+  const settleRollover = useSettleRollover(householdId);
+  const me = (members.data ?? []).find((m) => m.account_id === session?.user.id) ?? null;
+
+  const showRolloverPrompt =
+    isCurrent && allowance > 0 && lastRemaining !== 0 && rolloverSettled.data === false;
+
+  function resolveRollover(resolution: RolloverResolution, goalId?: string) {
+    const goal = goalId ? (goals.data ?? []).find((g) => g.id === goalId) : undefined;
+    settleRollover.mutate({
+      fromWeekStart: lastWeek.start,
+      toWeekStart: week.start,
+      amount: lastRemaining,
+      resolution,
+      goalId,
+      goalSavedAmount: goal?.saved_amount,
+      goalTargetAmount: goal?.target_amount,
+      settledByMemberId: me?.id ?? null,
+    });
+  }
 
   // Envelopes ("planned spending") reshape the CURRENT week only — past weeks
   // keep the plain "money left" view (budgets/skip aren't tracked historically).
@@ -86,7 +132,7 @@ export default function WeekScreen() {
   }
   const envSummary = computeEnvelopes({
     weeklyAllowance: allowance,
-    incomeBack,
+    incomeBack: incomeBack + adjustment,
     totalNonFunExpense: spent,
     spentByCategory,
     envelopes: (envelopes.data ?? []).map((e) => ({
@@ -385,6 +431,13 @@ export default function WeekScreen() {
         onSave={saveEnvelope}
         onDelete={removeEnvelope}
         saving={envMut.add.isPending || envMut.update.isPending}
+      />
+      <RolloverPrompt
+        visible={showRolloverPrompt}
+        amount={lastRemaining}
+        goals={goals.data ?? []}
+        loading={settleRollover.isPending}
+        onResolve={resolveRollover}
       />
     </Screen>
   );

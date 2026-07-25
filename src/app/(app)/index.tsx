@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, StyleSheet } from 'react-native';
 
+import { RetryScreen } from '@/components/retry-screen';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
@@ -21,6 +22,18 @@ export default function AppIndex() {
       <ThemedView style={styles.center}>
         <ActivityIndicator color={Palette.sageDeep} />
       </ThemedView>
+    );
+  }
+
+  if (account.isError || income.isError || bills.isError) {
+    return (
+      <RetryScreen
+        onRetry={() => {
+          account.refetch();
+          income.refetch();
+          bills.refetch();
+        }}
+      />
     );
   }
 

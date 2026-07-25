@@ -22,6 +22,8 @@ type HouseholdContextValue = {
   households: Household[];
   pendingInvites: PendingInvite[];
   isLoading: boolean;
+  isError: boolean;
+  retry: () => void;
   setActiveHousehold: (id: string) => void;
 };
 
@@ -76,7 +78,12 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     return () => sub.remove();
   }, [userId, qc]);
 
-  const { data: households = [], isLoading: householdsLoading } = useQuery({
+  const {
+    data: households = [],
+    isLoading: householdsLoading,
+    isError: householdsError,
+    refetch: refetchHouseholds,
+  } = useQuery({
     queryKey: ['households', userId],
     enabled: !!session,
     queryFn: async () => {
@@ -89,7 +96,12 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     },
   });
 
-  const { data: pendingInvites = [], isLoading: invitesLoading } = usePendingInvites(userId);
+  const {
+    data: pendingInvites = [],
+    isLoading: invitesLoading,
+    isError: invitesError,
+    refetch: refetchInvites,
+  } = usePendingInvites(userId);
 
   const setActiveHousehold = useCallback(
     (id: string) => {
@@ -109,10 +121,15 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   // otherwise the "create your first household" state can flash for a user who
   // actually has a pending invite waiting.
   const isLoading = !!session && (householdsLoading || invitesLoading);
+  const isError = householdsError || invitesError;
+  const retry = useCallback(() => {
+    refetchHouseholds();
+    refetchInvites();
+  }, [refetchHouseholds, refetchInvites]);
 
   const value = useMemo<HouseholdContextValue>(
-    () => ({ householdId, household, households, pendingInvites, isLoading, setActiveHousehold }),
-    [householdId, household, households, pendingInvites, isLoading, setActiveHousehold]
+    () => ({ householdId, household, households, pendingInvites, isLoading, isError, retry, setActiveHousehold }),
+    [householdId, household, households, pendingInvites, isLoading, isError, retry, setActiveHousehold]
   );
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;

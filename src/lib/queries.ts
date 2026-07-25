@@ -670,6 +670,88 @@ export function useInviteResponses() {
   return { accept, decline };
 }
 
+// ---- Week rollover / overage settlement ----
+
+/** Total already carried into a given week from prior settlements (0 if none). */
+export function useWeekAdjustment(householdId: string | null, weekStart: string | null) {
+  return useQuery({
+    queryKey: ['week_rollovers', 'adjustment', householdId, weekStart],
+    enabled: !!householdId && !!weekStart,
+    queryFn: async (): Promise<number> => {
+      const { data, error } = await supabase
+        .from('week_rollovers')
+        .select('applied_amount')
+        .eq('household_id', householdId!)
+        .eq('to_week_start', weekStart!);
+      if (error) throw error;
+      return (data ?? []).reduce((a, r) => a + Number(r.applied_amount), 0);
+    },
+  });
+}
+
+/** Whether the week that ended on `fromWeekStart` has already been settled. */
+export function useRolloverSettled(householdId: string | null, fromWeekStart: string | null) {
+  return useQuery({
+    queryKey: ['week_rollovers', 'settled', householdId, fromWeekStart],
+    enabled: !!householdId && !!fromWeekStart,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('week_rollovers')
+        .select('id')
+        .eq('household_id', householdId!)
+        .eq('from_week_start', fromWeekStart!)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    },
+  });
+}
+
+export type RolloverResolution = 'carry_forward' | 'goal' | 'dismiss';
+
+export type SettleRolloverInput = {
+  fromWeekStart: string;
+  toWeekStart: string;
+  amount: number; // signed: + leftover, − overage
+  resolution: RolloverResolution;
+  goalId?: string;
+  goalSavedAmount?: number;
+  goalTargetAmount?: number;
+  settledByMemberId?: string | null;
+};
+
+/** Records how a just-ended week's leftover/overage was resolved (once per week). */
+export function useSettleRollover(householdId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SettleRolloverInput) => {
+      const applied = input.resolution === 'carry_forward' ? input.amount : 0;
+      const { error } = await supabase.from('week_rollovers').insert({
+        household_id: householdId,
+        from_week_start: input.fromWeekStart,
+        to_week_start: input.toWeekStart,
+        amount: input.amount,
+        resolution: input.resolution,
+        applied_amount: applied,
+        goal_id: input.resolution === 'goal' ? (input.goalId ?? null) : null,
+        settled_by_member_id: input.settledByMemberId ?? null,
+      });
+      if (error) throw error;
+
+      if (input.resolution === 'goal' && input.goalId && input.goalSavedAmount != null) {
+        const cap = input.goalTargetAmount ?? Infinity;
+        const next = Math.max(0, Math.min(cap, input.goalSavedAmount + input.amount));
+        const { error: gErr } = await supabase.from('goals').update({ saved_amount: next }).eq('id', input.goalId);
+        if (gErr) throw gErr;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['week_rollovers'] });
+      qc.invalidateQueries({ queryKey: ['goals', householdId] });
+    },
+  });
+}
+
 // ---- Household + member mutations (Profile) ----
 
 /** Updates a household's name and/or accent color by id (owner-only at DB level). */

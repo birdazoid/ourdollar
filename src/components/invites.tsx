@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -11,6 +11,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
 import { useInviteResponses, type PendingInvite } from '@/lib/queries';
+
+const onInviteError = () =>
+  Alert.alert("Couldn't reach the server", 'Check your connection and try again.');
 
 /** One invite: who invited you to which household, with Decline / Join. */
 function InviteRow({
@@ -81,8 +84,8 @@ export function InviteInbox() {
           key={inv.member_id}
           invite={inv}
           busy={busy}
-          onAccept={() => accept.mutate(inv.member_id)}
-          onDecline={() => decline.mutate(inv.member_id)}
+          onAccept={() => accept.mutate(inv.member_id, { onError: onInviteError })}
+          onDecline={() => decline.mutate(inv.member_id, { onError: onInviteError })}
         />
       ))}
     </Sheet>

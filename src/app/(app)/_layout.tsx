@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 import { FirstHousehold } from '@/components/first-household';
 import { InviteInbox, InviteWelcome } from '@/components/invites';
 import { ProfileSetup } from '@/components/profile-setup';
+import { RetryScreen } from '@/components/retry-screen';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
@@ -46,6 +47,10 @@ function RootGate() {
     );
   }
 
+  if (account.isError) {
+    return <RetryScreen onRetry={() => account.refetch()} />;
+  }
+
   if (account.data && !account.data.name?.trim()) {
     return <ProfileSetup />;
   }
@@ -57,7 +62,7 @@ function RootGate() {
 // nothing while loading, the create-your-first-household screen if they belong
 // to none, otherwise the normal app stack.
 function HouseholdGate() {
-  const { isLoading, households, pendingInvites } = useHousehold();
+  const { isLoading, isError, retry, households, pendingInvites } = useHousehold();
 
   if (isLoading) {
     return (
@@ -65,6 +70,10 @@ function HouseholdGate() {
         <ActivityIndicator color={Palette.sageDeep} />
       </ThemedView>
     );
+  }
+
+  if (isError) {
+    return <RetryScreen onRetry={retry} />;
   }
 
   // No household yet: an invited user gets the accept/decline welcome; everyone
