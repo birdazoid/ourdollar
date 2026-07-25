@@ -35,6 +35,21 @@ function householdListQuery<T>(table: string, householdId: string | null, order 
 export const useMembers = (householdId: string | null) =>
   useQuery(householdListQuery<HouseholdMember>('household_members', householdId, 'created_at'));
 
+// Every member across all of the caller's households (RLS scopes to households
+// they belong to). Used by Profile to show each household's roster.
+export const useAllMembers = () =>
+  useQuery({
+    queryKey: ['household_members', 'all'],
+    queryFn: async (): Promise<HouseholdMember[]> => {
+      const { data, error } = await supabase
+        .from('household_members')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data as HouseholdMember[];
+    },
+  });
+
 export const useIncome = (householdId: string | null) =>
   useQuery(householdListQuery<IncomeSource>('income_sources', householdId));
 
@@ -714,7 +729,7 @@ export type NewMemberInput = {
 export function useMemberRoleActions(householdId: string | null) {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['household_members', householdId] });
+    qc.invalidateQueries({ queryKey: ['household_members'] });
     qc.invalidateQueries({ queryKey: ['households'] });
   };
 
@@ -755,7 +770,8 @@ export function useMemberRoleActions(householdId: string | null) {
 export function useMemberMutations(householdId: string | null) {
   const qc = useQueryClient();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['household_members', householdId] });
+    // Prefix key so both the active-household and all-households member queries refresh.
+    qc.invalidateQueries({ queryKey: ['household_members'] });
     qc.invalidateQueries({ queryKey: ['fun_money_people', householdId] });
   };
 

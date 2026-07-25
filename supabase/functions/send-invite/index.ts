@@ -107,32 +107,9 @@ Deno.serve(async (req) => {
     const householdName = household?.name ?? 'their household';
     const to = invite.invite_email as string;
 
-    // Config check last, so authorization/invite validation runs regardless.
-    const apiKey = Deno.env.get('RESEND_API_KEY');
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'email not configured' }), { status: 503 });
-    }
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM,
-        to: [to],
-        subject: `${inviter} invited you to ${householdName} on OurDollar`,
-        html: inviteHtml({ inviter, household: householdName, email: to }),
-        text: `${inviter} invited you to join "${householdName}" on OurDollar. Get the app and create an account with this email (${to}) to join.`,
-      }),
-    });
-
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error('resend error', result);
-      return new Response(JSON.stringify({ error: 'send failed', detail: result }), { status: 502 });
-    }
-
-    // Best-effort push: if this email already belongs to a registered account,
-    // ping their device(s) too. Never affects the email result above.
+    // Best-effort push FIRST, so an existing account still gets pinged even if
+    // email isn't configured yet or the email send fails — the two notifications
+    // are independent.
     let pushed = 0;
     try {
       const { data: account } = await admin
@@ -165,6 +142,31 @@ Deno.serve(async (req) => {
       }
     } catch (pushErr) {
       console.error('invite push error (non-fatal)', pushErr);
+    }
+
+    // Email — sent to EVERY invitee (account or not), as an extra notification on
+    // top of the push. A failure here no longer blocks the push above.
+    const apiKey = Deno.env.get('RESEND_API_KEY');
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'email not configured', pushed }), { status: 503 });
+    }
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: FROM,
+        to: [to],
+        subject: `${inviter} invited you to ${householdName} on OurDollar`,
+        html: inviteHtml({ inviter, household: householdName, email: to }),
+        text: `${inviter} invited you to join "${householdName}" on OurDollar. Get the app and create an account with this email (${to}) to join.`,
+      }),
+    });
+
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('resend error', result);
+      return new Response(JSON.stringify({ error: 'send failed', detail: result, pushed }), { status: 502 });
     }
 
     return new Response(JSON.stringify({ sent: true, to, pushed }), {

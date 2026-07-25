@@ -31,6 +31,8 @@ type TxType = 'expense' | 'income';
 
 export default function AddExpenseScreen() {
   const router = useRouter();
+  // Fall back to Week when there's no history to pop (e.g. a web reload).
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/week'));
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { householdId, household } = useHousehold();
   const { session } = useSession();
@@ -116,7 +118,7 @@ export default function AddExpenseScreen() {
     };
     if (isEdit) txMut.update.mutate({ id: editing!.id, ...input });
     else txMut.create.mutate(input);
-    router.back();
+    goBack();
   }
 
   function askDelete() {
@@ -126,7 +128,7 @@ export default function AddExpenseScreen() {
       message: `This removes "${editing.label}" (${fmt(editing.amount)}) from your log.`,
       onConfirm: () => {
         txMut.remove.mutate(editing.id);
-        router.back();
+        goBack();
       },
     });
   }
@@ -136,7 +138,7 @@ export default function AddExpenseScreen() {
       <SafeAreaView style={styles.fill}>
         <View style={styles.header}>
           <ThemedText type="title">{isEdit ? 'Edit expense' : 'Add expense'}</ThemedText>
-          <Pressable accessibilityLabel="Close" onPress={() => router.back()} style={styles.close}>
+          <Pressable accessibilityLabel="Close" onPress={goBack} style={styles.close}>
             <X size={22} color={Palette.ink} />
           </Pressable>
         </View>

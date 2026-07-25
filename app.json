@@ -8,7 +8,6 @@
     "scheme": "ourdollar",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.adriantownsend.ourdollar",
       "supportsTablet": true,
       "infoPlist": {
@@ -18,7 +17,7 @@
     "android": {
       "package": "com.adriantownsend.ourdollar",
       "adaptiveIcon": {
-        "backgroundColor": "#F4F1DE",
+        "backgroundColor": "#8db19c",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -34,9 +33,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F4F1DE",
+          "backgroundColor": "#8db19c",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
         }
       ],
       "expo-notifications"
