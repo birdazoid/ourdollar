@@ -37,7 +37,7 @@ export const siteConfig = {
     // Set true ONLY after professional legal review. While false, a visible
     // "draft" banner is shown on the Privacy and Terms pages.
     reviewed: false,
-    effectiveDate: '[[EFFECTIVE_DATE]]',
+    effectiveDate: 'July 24, 2026',
     legalEntity: '[[LEGAL_ENTITY]]',
     contactEmail: '[[CONTACT_EMAIL]]',
     websiteUrl: 'https://ourdollar.app',

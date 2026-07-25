@@ -32,12 +32,15 @@ async function loadLegal(file: string): Promise<string> {
 export async function LegalDoc({
   file,
   title,
+  hideDraftBanner = false,
 }: {
   file: string;
   title: string;
+  /** Suppress the "draft — pending legal review" banner for this page only. */
+  hideDraftBanner?: boolean;
 }) {
   const body = await loadLegal(file);
-  const showDraftBanner = !siteConfig.legal.reviewed;
+  const showDraftBanner = !siteConfig.legal.reviewed && !hideDraftBanner;
 
   return (
     <article className="legal container">

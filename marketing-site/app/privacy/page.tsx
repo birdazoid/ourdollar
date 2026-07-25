@@ -12,7 +12,7 @@ export default function PrivacyPage() {
   return (
     <>
       <Nav />
-      <LegalDoc file="privacy-policy.md" title="Privacy Policy" />
+      <LegalDoc file="privacy-policy.md" title="Privacy Policy" hideDraftBanner />
       <Footer />
     </>
   );
