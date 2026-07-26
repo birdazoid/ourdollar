@@ -1,17 +1,23 @@
 import { useRouter } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { BarChart3, CalendarDays, Home, Plus, SlidersHorizontal, type LucideIcon } from 'lucide-react-native';
+import { Plus, type LucideIcon } from 'lucide-react-native';
+import type { ComponentType } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { SvgProps } from 'react-native-svg';
 
+import IconBills from '@/assets/icons/icon-bills.svg';
+import IconGraph from '@/assets/icons/icon-graph.svg';
+import IconSettings from '@/assets/icons/icon-settings.svg';
+import IconWeek from '@/assets/icons/icon-week.svg';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
-const TABS: Record<string, { icon: LucideIcon; label: string }> = {
-  bills: { icon: CalendarDays, label: 'Bills' },
-  week: { icon: Home, label: 'Week' },
-  overview: { icon: BarChart3, label: 'Overview' },
-  setup: { icon: SlidersHorizontal, label: 'Setup' },
+const TABS: Record<string, { icon: LucideIcon | ComponentType<SvgProps>; label: string }> = {
+  bills: { icon: IconBills, label: 'Bills' },
+  week: { icon: IconWeek, label: 'Week' },
+  overview: { icon: IconGraph, label: 'Overview' },
+  setup: { icon: IconSettings, label: 'Setup' },
 };
 
 // Bills · Week · [ + ] · Overview · Setup
@@ -41,7 +47,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         accessibilityState={{ selected: active }}
         onPress={() => go(name)}
         style={styles.tab}>
-        <Icon size={22} color={color} strokeWidth={active ? 2.6 : 2} />
+        <Icon width={25} height={25} color={color} strokeWidth={active ? 2.6 : 2} />
         <ThemedText type="small" style={[styles.tabLabel, { color }]}>
           {cfg.label}
         </ThemedText>

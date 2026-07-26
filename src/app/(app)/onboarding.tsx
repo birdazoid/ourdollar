@@ -1,13 +1,24 @@
 import { useRouter } from 'expo-router';
 import { ChevronRight, Plus, X } from 'lucide-react-native';
+import type { ComponentType, ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { SvgProps } from 'react-native-svg';
 
+import IllustrationFixedExpenses from '@/assets/illustrations/onboarding-fixed-expenses.svg';
+import IllustrationHousehold from '@/assets/illustrations/onboarding-household.svg';
+import IllustrationIncome from '@/assets/illustrations/onboarding-income.svg';
+import IllustrationPlannedSpending from '@/assets/illustrations/onboarding-planned-spending.svg';
+import IllustrationReview from '@/assets/illustrations/onboarding-review.svg';
+import IllustrationSavingsGoals from '@/assets/illustrations/onboarding-savings-goals.svg';
+import IllustrationWelcome from '@/assets/illustrations/onboarding-welcome.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
 import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { CategoryGlyph } from '@/components/category-glyph';
+import { GoalGlyph } from '@/components/goal-glyph';
 import { GoalSheet } from '@/components/goal-sheet';
 import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
 import { ListRow } from '@/components/list-row';
@@ -175,7 +186,8 @@ export default function OnboardingScreen() {
           {step === 1 && (
             <View>
               <StepHeader
-                emoji="🏠"
+                illustration={IllustrationHousehold}
+                illustrationSize={{ width: 130, height: 118 }}
                 title="Who's in your household?"
                 desc="Add the people you share money with — a partner, roommates, or kids. You'll be able to set who earns what and give each person a fun-money stash."
               />
@@ -205,7 +217,8 @@ export default function OnboardingScreen() {
           {step === 2 && (
             <View>
               <StepHeader
-                emoji="💰"
+                illustration={IllustrationIncome}
+                illustrationSize={{ width: 127, height: 130 }}
                 title="What comes in?"
                 desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit it."
               />
@@ -239,7 +252,8 @@ export default function OnboardingScreen() {
           {step === 3 && (
             <View>
               <StepHeader
-                emoji="🧾"
+                illustration={IllustrationFixedExpenses}
+                illustrationSize={{ width: 130, height: 99 }}
                 title="What's already spoken for?"
                 desc="Add the bills that come out no matter what — rent or mortgage, loans, utilities, subscriptions. We set this aside before figuring your weekly spending money."
               />
@@ -251,7 +265,7 @@ export default function OnboardingScreen() {
                   {(bills.data ?? []).map((b) => (
                     <ListRow
                       key={b.id}
-                      emoji={billEmoji(b.category)}
+                      emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
                       title={b.name}
                       subtitle={`${b.category} · due the ${ordinal(b.due_day ?? 0)}`}
                       onPress={() => setBillSheet({ bill: b })}
@@ -275,15 +289,15 @@ export default function OnboardingScreen() {
           {step === 4 && (
             <View>
               <StepHeader
-                emoji="✨"
+                illustration={IllustrationSavingsGoals}
+                illustrationSize={{ width: 116, height: 140 }}
                 title="What are you saving toward?"
                 desc="Optional, but this is how consistent saving happens automatically — set a target and a monthly amount, and we fold it into your budget before the weekly number is calculated."
               />
               {(goals.data ?? []).map((g) => (
                 <ListRow
                   key={g.id}
-                  emoji={g.emoji ?? '🎯'}
-                  tileColor="rgba(242,204,143,0.3)"
+                  emoji={<GoalGlyph emoji={g.emoji} />}
                   title={g.name}
                   subtitle={`${fmt(g.monthly_amount)}/mo toward ${fmt(g.target_amount)}`}
                   onPress={() => setGoalSheet({ goal: g })}
@@ -291,7 +305,7 @@ export default function OnboardingScreen() {
                 />
               ))}
               {(goals.data ?? []).length === 0 ? (
-                <EmptyCard emoji="✨" text="No goals yet — totally optional." cta="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
+                <EmptyCard emoji={<GoalGlyph emoji={null} />} text="No goals yet — totally optional." cta="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
               ) : (
                 <DashedAdd label="Add another goal" onPress={() => setGoalSheet({ goal: null })} />
               )}
@@ -301,7 +315,8 @@ export default function OnboardingScreen() {
           {step === 5 && (
             <View>
               <StepHeader
-                emoji="🛒"
+                illustration={IllustrationPlannedSpending}
+                illustrationSize={{ width: 130, height: 118 }}
                 title="What do you spend every week?"
                 desc="Optional — set aside your constant weekly costs like groceries and gas. They'll be reserved from your weekly money so your Week screen shows what's truly free to spend after them."
               />
@@ -312,7 +327,8 @@ export default function OnboardingScreen() {
           {step === 6 && (
             <View>
               <StepHeader
-                emoji="🎉"
+                illustration={IllustrationReview}
+                illustrationSize={{ width: 127, height: 130 }}
                 title="You're set up"
                 desc="Here's how your money breaks down each month, calculated from everything you just entered."
               />
@@ -395,9 +411,7 @@ export default function OnboardingScreen() {
 function Welcome() {
   return (
     <View style={styles.welcome}>
-      <ThemedText type="display" style={styles.welcomeEmoji}>
-        👋
-      </ThemedText>
+      <IllustrationWelcome width={150} height={134} style={styles.welcomeIllustration} />
       <ThemedText type="title" style={styles.welcomeTitle}>
         Let&apos;s set up your budget
       </ThemedText>
@@ -435,12 +449,20 @@ function StepPreview({ num, title, desc }: { num: string; title: string; desc: s
   );
 }
 
-function StepHeader({ emoji, title, desc }: { emoji: string; title: string; desc: string }) {
+function StepHeader({
+  illustration: Illustration,
+  illustrationSize: { width, height } = { width: 130, height: 130 },
+  title,
+  desc,
+}: {
+  illustration: ComponentType<SvgProps>;
+  illustrationSize?: { width: number; height: number };
+  title: string;
+  desc: string;
+}) {
   return (
     <View style={styles.stepHeader}>
-      <ThemedText type="title" style={styles.stepEmoji}>
-        {emoji}
-      </ThemedText>
+      <Illustration width={width} height={height} style={styles.stepIllustration} />
       <ThemedText type="subtitle">{title}</ThemedText>
       <ThemedText type="body" themeColor="textSecondary" style={styles.stepDesc}>
         {desc}
@@ -449,10 +471,10 @@ function StepHeader({ emoji, title, desc }: { emoji: string; title: string; desc
   );
 }
 
-function EmptyCard({ emoji, text, cta, onPress }: { emoji: string; text: string; cta: string; onPress: () => void }) {
+function EmptyCard({ emoji, text, cta, onPress }: { emoji: ReactNode; text: string; cta: string; onPress: () => void }) {
   return (
     <Card style={styles.emptyCard}>
-      <ThemedText type="subtitle">{emoji}</ThemedText>
+      {typeof emoji === 'string' ? <ThemedText type="subtitle">{emoji}</ThemedText> : emoji}
       <ThemedText type="body" themeColor="textSecondary" style={styles.emptyText}>
         {text}
       </ThemedText>
@@ -516,7 +538,7 @@ const styles = StyleSheet.create({
 
   // Welcome
   welcome: { alignItems: 'center', paddingTop: Spacing.four },
-  welcomeEmoji: { fontSize: 52, lineHeight: 60, marginBottom: Spacing.three },
+  welcomeIllustration: { marginBottom: Spacing.three },
   welcomeTitle: { textAlign: 'center', marginBottom: Spacing.two },
   welcomeDesc: { textAlign: 'center', paddingHorizontal: Spacing.two },
   previews: { alignSelf: 'stretch', gap: Spacing.three, marginTop: Spacing.five },
@@ -533,7 +555,7 @@ const styles = StyleSheet.create({
 
   // Step header
   stepHeader: { marginBottom: Spacing.three },
-  stepEmoji: { fontSize: 34, lineHeight: 40, marginBottom: Spacing.one },
+  stepIllustration: { alignSelf: 'center', marginTop: Spacing.four, marginBottom: Spacing.four },
   stepDesc: { marginTop: Spacing.two, lineHeight: 22 },
 
   // Household step

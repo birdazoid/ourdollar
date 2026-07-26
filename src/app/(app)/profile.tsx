@@ -1,17 +1,13 @@
 import { useRouter } from 'expo-router';
 import {
-  Bell,
   Camera,
   ChevronDown,
   ChevronLeft,
   ChevronUp,
-  Home,
-  LogOut,
   Mail,
   MoreHorizontal,
   Pencil,
   Plus,
-  Share2,
   Trash2,
   X,
 } from 'lucide-react-native';
@@ -19,7 +15,12 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import IconHousing from '@/assets/icons/icon-housing.svg';
+import IconNotifications from '@/assets/icons/icon-notifications.svg';
+import IconShare from '@/assets/icons/icon-share.svg';
+import IconSignOut from '@/assets/icons/icon-sign-out.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
+import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
@@ -232,7 +233,7 @@ export default function ProfileScreen() {
                 onPress={() => setPickingAvatar((v) => !v)}
                 style={styles.avatarWrap}>
                 <View style={styles.avatar}>
-                  <ThemedText type="display">{me?.avatar ?? '🙂'}</ThemedText>
+                  <AvatarGlyph value={me?.avatar} size={84} />
                 </View>
                 <View style={styles.cameraBadge}>
                   <Camera size={13} color={Palette.card} />
@@ -271,7 +272,7 @@ export default function ProfileScreen() {
                       accessibilityLabel={`Avatar ${a}`}
                       onPress={() => pickAvatar(a)}
                       style={styles.avatarOption}>
-                      <ThemedText type="subtitle">{a}</ThemedText>
+                      <AvatarGlyph value={a} size={40} />
                     </Pressable>
                   ))}
                 </View>
@@ -283,8 +284,8 @@ export default function ProfileScreen() {
             {household && activeColor && (
               <Card style={styles.activeCard}>
                 <View style={styles.hhHeader}>
-                  <View style={[styles.hhTile, { backgroundColor: activeColor.tint }]}>
-                    <Home size={18} color={activeColor.dot} />
+                  <View style={styles.hhTile}>
+                    <IconHousing width={25} height={25} color={activeColor.dot} />
                   </View>
                   <View style={styles.flex}>
                     <ThemedText type="bodyBold">{household.name}</ThemedText>
@@ -312,7 +313,7 @@ export default function ProfileScreen() {
                       return (
                         <View key={m.id} style={styles.memberRow}>
                           <View style={styles.memberAvatar}>
-                            <ThemedText type="body">{m.avatar ?? '🙂'}</ThemedText>
+                            <AvatarGlyph value={m.avatar} size={38} />
                           </View>
                           <View style={styles.flex}>
                             <ThemedText type="bodyBold" numberOfLines={1}>
@@ -436,21 +437,21 @@ export default function ProfileScreen() {
             {/* Notifications — flat rows, no cards */}
             <Eyebrow>Notifications</Eyebrow>
             <ToggleRow
-              icon={<Bell size={18} color={Palette.ink} />}
+              icon={<IconNotifications width={21} height={21} color={Palette.ink} />}
               title="Spend alerts"
               subtitle="When a housemate logs an expense"
               value={me?.notify_on_spend ?? true}
               onToggle={() => me && memberMut.update.mutate({ id: me.id, notify_on_spend: !(me.notify_on_spend ?? true) })}
             />
             <ToggleRow
-              icon={<Bell size={18} color={Palette.ink} />}
+              icon={<IconNotifications width={21} height={21} color={Palette.ink} />}
               title="Bill due reminders"
               subtitle="A nudge the day before"
               value={reminders.due}
               onToggle={() => setReminders((r) => ({ ...r, due: !r.due }))}
             />
             <ToggleRow
-              icon={<Bell size={18} color={Palette.ink} />}
+              icon={<IconNotifications width={21} height={21} color={Palette.ink} />}
               title="Overdue alerts"
               subtitle="If a bill slips past its date"
               value={reminders.overdue}
@@ -467,8 +468,7 @@ export default function ProfileScreen() {
             {/* Refer a friend */}
             <Eyebrow>Spread the word</Eyebrow>
             <SettingRow
-              icon={<Share2 size={18} color={Palette.sageDeep} />}
-              tint="rgba(129,178,154,0.16)"
+              icon={<IconShare width={21} height={21} color={Palette.sageDeep} />}
               title="Invite friends to OurDollar"
               subtitle="Share the app with anyone"
               onPress={shareApp}
@@ -477,14 +477,12 @@ export default function ProfileScreen() {
             {/* Account — flat rows, no cards */}
             <Eyebrow>Account</Eyebrow>
             <SettingRow
-              icon={<LogOut size={18} color={Palette.terracottaDeep} />}
-              tint="rgba(224,122,95,0.14)"
+              icon={<IconSignOut width={21} height={21} color={Palette.terracottaDeep} />}
               title="Sign out"
               onPress={signOut}
             />
             <SettingRow
               icon={<Trash2 size={18} color={Palette.terracottaDeep} />}
-              tint="rgba(224,122,95,0.14)"
               title="Delete account"
               subtitle="Permanently erase your account & data"
               onPress={askDeleteAccount}
@@ -603,7 +601,7 @@ function MemberRow({
   return (
     <View style={styles.memberRow}>
       <View style={styles.memberAvatar}>
-        <ThemedText type="body">{member.avatar ?? '🙂'}</ThemedText>
+        <AvatarGlyph value={member.avatar} size={38} />
       </View>
       <View style={styles.flex}>
         <ThemedText type="bodyBold" numberOfLines={1}>
@@ -687,20 +685,18 @@ function ToggleRow({
 
 function SettingRow({
   icon,
-  tint,
   title,
   subtitle,
   onPress,
 }: {
   icon: ReactNode;
-  tint: string;
   title: string;
   subtitle?: string;
   onPress: () => void;
 }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={styles.flatRow}>
-      <View style={[styles.settingIcon, { backgroundColor: tint }]}>{icon}</View>
+      <View style={styles.settingIcon}>{icon}</View>
       <View style={styles.flex}>
         <ThemedText type="bodyBold">{title}</ThemedText>
         {subtitle && (
@@ -755,6 +751,7 @@ const styles = StyleSheet.create({
     height: 84,
     borderRadius: Radius.pill,
     backgroundColor: Palette.sage,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -806,6 +803,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.card,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
 
   eyebrow: { marginTop: Spacing.four, marginBottom: Spacing.two, letterSpacing: 0.6 },
@@ -837,6 +835,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(129,178,154,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   iconBtnSm: {
@@ -877,8 +876,6 @@ const styles = StyleSheet.create({
   settingIcon: {
     width: 38,
     height: 38,
-    borderRadius: Radius.medium,
-    backgroundColor: 'rgba(61,64,91,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },

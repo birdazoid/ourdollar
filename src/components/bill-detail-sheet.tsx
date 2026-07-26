@@ -1,53 +1,78 @@
 import { Check, Pencil, Trash2 } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { MoneyInput } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { billEmoji } from '@/lib/categories';
-import { fmt } from '@/lib/money';
 import { ordinal } from '@/lib/format';
-import type { Bill, HouseholdMember } from '@/lib/types';
+import { fmt } from '@/lib/money';
+import type { Bill } from '@/lib/types';
 
 type Props = {
   bill: Bill | null;
   paidByName?: string | null;
   onClose: () => void;
-  onPay: (bill: Bill) => void;
+  onPay: (bill: Bill, amount: number) => void;
   onEdit: (bill: Bill) => void;
   onDelete: (id: string) => void;
+  saving?: boolean;
 };
 
-export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDelete }: Props) {
+/** Bill detail: shows status, lets you confirm/adjust the amount and mark paid, then edit or delete — all in one sheet. */
+export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDelete, saving }: Props) {
+  const [amount, setAmount] = useState('');
+
+  useEffect(() => {
+    if (bill) setAmount(bill.amount != null ? String(bill.amount) : '');
+  }, [bill]);
+
+  const amountNum = Number(amount);
+  const validAmount = amount !== '' && !Number.isNaN(amountNum);
+
   return (
     <Sheet visible={!!bill} title={bill ? `${billEmoji(bill.category)} ${bill.name}` : undefined} onClose={onClose}>
       {bill && (
         <>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>
+          <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>
             {bill.category} · {bill.paid ? `paid ${paidByName ? `by ${paidByName} ` : ''}${bill.paid_on ?? ''}` : `due the ${ordinal(bill.due_day ?? 0)}`}
           </ThemedText>
 
-          <Card style={styles.infoCard}>
-            <ThemedText type="body" themeColor="textSecondary" style={styles.infoText}>
-              {bill.varies
-                ? 'Amount varies month to month — confirm the amount when you mark it paid.'
-                : `Fixed — steady ${fmt(bill.amount)}/mo.`}
-            </ThemedText>
-          </Card>
+          {bill.paid ? (
+            <Card style={styles.infoCard}>
+              <ThemedText type="body" themeColor="textSecondary">
+                {bill.varies ? `Varies month to month — paid ${fmt(bill.amount)} this time.` : `Fixed — steady ${fmt(bill.amount)}/mo.`}
+              </ThemedText>
+            </Card>
+          ) : (
+            <>
+              {bill.varies && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.variesNote}>
+                  Amount varies month to month — adjust it below if needed.
+                </ThemedText>
+              )}
+              <MoneyInput value={amount} onChangeText={setAmount} size={34} />
+            </>
+          )}
 
           <View style={styles.actions}>
             {!bill.paid && (
               <Pressable
                 accessibilityRole="button"
-                style={[styles.flex, styles.payBtn]}
-                onPress={() => onPay(bill)}>
+                disabled={!validAmount}
+                style={[styles.flex, styles.payBtn, !validAmount && styles.payBtnDisabled]}
+                onPress={() => onPay(bill, amountNum)}>
                 <Check size={18} color={Palette.card} />
                 <ThemedText type="bodyBold" style={styles.payText}>
-                  Mark paid
+                  {saving ? 'Marking paid…' : `Mark paid${validAmount ? ' · ' + fmt(amountNum) : ''}`}
                 </ThemedText>
               </Pressable>
             )}
+          </View>
+          <View style={styles.actions}>
             <Pressable style={[styles.flex, styles.editBtn]} onPress={() => onEdit(bill)}>
               <Pencil size={16} color={Palette.ink} />
               <ThemedText type="bodyBold">Edit</ThemedText>
@@ -66,10 +91,10 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
 }
 
 const styles = StyleSheet.create({
-  sub: { marginTop: -Spacing.two, marginBottom: Spacing.three },
+  sub: { marginBottom: Spacing.three },
   infoCard: { marginBottom: Spacing.three },
-  infoText: {},
-  actions: { flexDirection: 'row', gap: Spacing.two, alignItems: 'stretch' },
+  variesNote: { marginBottom: Spacing.two },
+  actions: { flexDirection: 'row', gap: Spacing.two, alignItems: 'stretch', marginTop: Spacing.three },
   flex: { flex: 1 },
   payBtn: {
     flexDirection: 'row',
@@ -80,6 +105,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  payBtnDisabled: { opacity: 0.5 },
   payText: { color: Palette.card },
   editBtn: {
     flexDirection: 'row',

@@ -1,8 +1,15 @@
 import { Check } from 'lucide-react-native';
 import { useState } from 'react';
+import type { ComponentType } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { SvgProps } from 'react-native-svg';
 
+import Logo from '@/assets/brand/ourdollar-logo.svg';
+import IconBills from '@/assets/icons/icon-bills.svg';
+import IconSave from '@/assets/icons/icon-save.svg';
+import IconWeek from '@/assets/icons/icon-week.svg';
+import IllustrationLanding from '@/assets/illustrations/landing-login.svg';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -96,7 +103,13 @@ export default function SignInScreen() {
           style={styles.flex}>
           <View style={styles.content}>
             <View style={styles.header}>
-              <ThemedText type="display">OurDollar</ThemedText>
+              {isSignIn && (
+                <IllustrationLanding width={150} height={143} style={styles.headerIllustration} />
+              )}
+              <View style={styles.wordmarkRow}>
+                <Logo width={34} height={34} />
+                <ThemedText type="display">OurDollar</ThemedText>
+              </View>
               <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
                 {isSignIn
                   ? 'Sign in to your household.'
@@ -106,9 +119,9 @@ export default function SignInScreen() {
 
             {!isSignIn && (
               <View style={styles.perks}>
-                <Perk emoji="🧾" text="Track bills — and who paid what" />
-                <Perk emoji="✨" text="Save toward goals together" />
-                <Perk emoji="📆" text="A weekly spending number, auto-calculated" />
+                <Perk icon={IconBills} text="Track bills — and who paid what" />
+                <Perk icon={IconSave} text="Save toward goals together" />
+                <Perk icon={IconWeek} text="A weekly spending number, auto-calculated" />
               </View>
             )}
 
@@ -179,10 +192,10 @@ export default function SignInScreen() {
   );
 }
 
-function Perk({ emoji, text }: { emoji: string; text: string }) {
+function Perk({ icon: Icon, text }: { icon: ComponentType<SvgProps>; text: string }) {
   return (
     <View style={styles.perk}>
-      <ThemedText type="subtitle">{emoji}</ThemedText>
+      <Icon width={24} height={24} color={Palette.sageDeep} />
       <ThemedText type="body" style={styles.perkText}>
         {text}
       </ThemedText>
@@ -205,6 +218,8 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   confirmEmoji: { marginBottom: Spacing.two },
+  headerIllustration: { marginTop: -Spacing.five, marginBottom: Spacing.four },
+  wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   tagline: { textAlign: 'center' },
   perks: {
     gap: Spacing.three,

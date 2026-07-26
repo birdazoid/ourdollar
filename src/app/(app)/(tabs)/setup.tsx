@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
-import { ChevronRight, Compass, Minus, Plus } from 'lucide-react-native';
+import { ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
@@ -209,10 +210,10 @@ export default function SetupScreen() {
           </Card>
 
           {/* FUN MONEY */}
-          <SectionHeader title="Fun money" />
+          <SectionHeader title="Fun money" icon={<IconCelebrate width={21} height={21} color={Palette.ink} />} />
           <Card style={styles.row}>
             <View style={styles.rowBody}>
-              <ThemedText type="bodyBold">✨ Enable fun money</ThemedText>
+              <ThemedText type="bodyBold">Enable fun money</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 A no-questions-asked personal stash
               </ThemedText>
@@ -266,9 +267,6 @@ export default function SetupScreen() {
             accessibilityLabel="Replay setup guide"
             onPress={() => router.push('/onboarding')}>
             <Card style={styles.row}>
-              <View style={styles.replayIcon}>
-                <Compass size={18} color={Palette.sageDeep} />
-              </View>
               <View style={styles.rowBody}>
                 <ThemedText type="bodyBold">Replay setup guide</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
@@ -351,14 +349,6 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(61,64,91,0.15)',
   },
   weekStartNote: { marginTop: 2, marginBottom: Spacing.three },
-  replayIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.medium,
-    backgroundColor: 'rgba(129,178,154,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dashedAdd: {
     flexDirection: 'row',
     alignItems: 'center',

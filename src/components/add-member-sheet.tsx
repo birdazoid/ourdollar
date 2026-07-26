@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
 import { Button } from '@/components/button';
 import { FieldLabel, TextField } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
@@ -62,7 +63,7 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
       )}
 
       <Pressable onPress={() => setFunOn(!funOn)} style={[styles.funRow, funOn && styles.funOnRow]}>
-        <ThemedText type="subtitle">✨</ThemedText>
+        <IconCelebrate width={23} height={23} color={Palette.ink} />
         <View style={styles.flex}>
           <ThemedText type="bodyBold">Give them fun money</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">

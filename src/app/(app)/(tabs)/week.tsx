@@ -3,7 +3,9 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import IconFreeToSpend from '@/assets/icons/icon-free-to-spend.svg';
 import { Card } from '@/components/card';
+import { CategoryGlyph } from '@/components/category-glyph';
 import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
@@ -287,7 +289,7 @@ export default function WeekScreen() {
               {/* Free-to-spend — everything not wrapped in an envelope. */}
               <View style={styles.freeRow}>
                 <View style={styles.freeTile}>
-                  <ThemedText type="subtitle">💸</ThemedText>
+                  <IconFreeToSpend width={26} height={26} color={Palette.sageDeep} />
                 </View>
                 <View style={styles.flex}>
                   <ThemedText type="bodyBold" style={styles.freeText}>
@@ -378,8 +380,13 @@ export default function WeekScreen() {
                   return (
                     <ListRow
                       key={t.id}
-                      emoji={isIncome ? '💵' : cat.emoji}
-                      tileColor={(isIncome ? Palette.sage : cat.color) + '26'}
+                      emoji={
+                        isIncome ? (
+                          '💵'
+                        ) : (
+                          <CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />
+                        )
+                      }
                       title={t.label ?? cat.name}
                       subtitle={`${isIncome ? 'Money back' : cat.name} · ${memberName(t.member_id)}`}
                       badge={
@@ -499,8 +506,7 @@ function EnvelopeRow({
 
   return (
     <ListRow
-      emoji={cat.emoji}
-      tileColor={cat.color + '26'}
+      emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />}
       title={cat.name}
       subtitle={subtitle}
       dim={env.state === 'skipped'}
@@ -584,8 +590,6 @@ const styles = StyleSheet.create({
   freeTile: {
     width: 44,
     height: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Palette.card,
     alignItems: 'center',
     justifyContent: 'center',
   },

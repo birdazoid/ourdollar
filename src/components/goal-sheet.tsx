@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { GoalGlyph } from '@/components/goal-glyph';
 import { FieldLabel, TextField } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
@@ -84,7 +85,7 @@ export function GoalSheet({ visible, goal, onClose, onSave, onDelete, saving }: 
           const on = emoji === e;
           return (
             <Pressable key={e} onPress={() => setEmoji(e)} style={[styles.emojiTile, on && styles.emojiOn]}>
-              <ThemedText type="subtitle">{e}</ThemedText>
+              <GoalGlyph emoji={e} />
             </Pressable>
           );
         })}

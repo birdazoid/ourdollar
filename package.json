@@ -38,6 +38,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "~19.2.2",
     "dotenv": "^17.4.2",
+    "react-native-svg-transformer": "^1.5.3",
     "sharp": "^0.35.3",
     "tsx": "^4.23.1",
     "typescript": "~6.0.3"
@@ -49,6 +50,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "seed": "tsx scripts/seed.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "verify:spend-alert": "tsx scripts/verify-spend-alert.ts",
     "verify:multihousehold": "tsx scripts/verify-multihousehold.ts",
     "verify:account-deletion": "tsx scripts/verify-account-deletion.ts",

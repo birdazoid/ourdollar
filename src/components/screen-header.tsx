@@ -38,7 +38,7 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
           accessibilityRole="button"
           accessibilityLabel={`Household: ${household.name}. Switch household`}
           onPress={() => router.push('/profile')}
-          style={[styles.hhPill, { backgroundColor: color.tint }]}>
+          style={styles.hhPill}>
           <View style={[styles.hhDot, { backgroundColor: color.dot }]} />
           <ThemedText type="small" style={styles.hhName} numberOfLines={1}>
             {household.name}

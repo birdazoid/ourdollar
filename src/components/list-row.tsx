@@ -6,8 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
 type Props = {
-  emoji: string;
-  tileColor?: string;
+  emoji: ReactNode;
   title: string;
   subtitle?: string;
   subColor?: string;
@@ -17,12 +16,12 @@ type Props = {
   onPress?: () => void;
   outline?: boolean; // terracotta outline (overdue)
   dim?: boolean; // muted/paid state
+  strikethrough?: boolean; // line through the title (done/paid state)
 };
 
 /** The shared rounded-tile list row used by bills, goals, income, expenses. */
 export function ListRow({
   emoji,
-  tileColor = 'rgba(129,178,154,0.18)',
   title,
   subtitle,
   subColor,
@@ -32,16 +31,20 @@ export function ListRow({
   onPress,
   outline,
   dim,
+  strikethrough,
 }: Props) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={styles.wrap}>
       <Card style={[styles.card, outline && styles.outline, dim && styles.dim]}>
         <View style={styles.topRow}>
-          <View style={[styles.tile, { backgroundColor: tileColor }]}>
-            <ThemedText type="subtitle">{emoji}</ThemedText>
+          <View style={styles.tile}>
+            {typeof emoji === 'string' ? <ThemedText type="subtitle">{emoji}</ThemedText> : emoji}
           </View>
           <View style={styles.body}>
-            <ThemedText type="bodyBold" numberOfLines={1}>
+            <ThemedText
+              type="bodyBold"
+              numberOfLines={1}
+              style={strikethrough && styles.strikethrough}>
               {title}
             </ThemedText>
             {subtitle && (
@@ -76,4 +79,5 @@ const styles = StyleSheet.create({
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   outline: { borderWidth: 1.5, borderColor: Palette.terracotta },
   dim: { opacity: 0.6 },
+  strikethrough: { textDecorationLine: 'line-through' },
 });

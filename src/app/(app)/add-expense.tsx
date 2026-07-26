@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { CategoryGlyph } from '@/components/category-glyph';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { FieldLabel, MoneyInput, TextField } from '@/components/inputs';
 import { Segmented } from '@/components/segmented';
@@ -204,7 +206,7 @@ export default function AddExpenseScreen() {
                   key={c.id}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
-                  <ThemedText type="subtitle">{c.emoji}</ThemedText>
+                  <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} />
                   <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
                     {c.name}
                   </ThemedText>
@@ -259,7 +261,7 @@ export default function AddExpenseScreen() {
 
           {type === 'expense' && funEnabled && (
             <Pressable onPress={() => setIsFun(!isFun)} style={[styles.funRow, isFun && styles.funOn]}>
-              <ThemedText type="subtitle">✨</ThemedText>
+              <IconCelebrate width={23} height={23} color={Palette.ink} />
               <View style={styles.flex}>
                 <ThemedText type="bodyBold">Fun money</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">

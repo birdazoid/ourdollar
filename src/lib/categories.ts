@@ -36,7 +36,18 @@ export const catRank = (cat: string) => {
 
 export const GOAL_EMOJI_OPTIONS = ['🎁', '🚗', '🏕️', '🏠', '✈️', '🎓', '💍', '🩺', '🐾', '🎉'] as const;
 
-export const AVATAR_OPTIONS = ['🙂', '🧑🏻', '👩🏻', '🧔🏽', '👩🏾', '🧑🏿', '👨🏼‍🦱', '👩🏻‍🦰', '🐶', '🐱', '🦊', '🌵'] as const;
+export const AVATAR_OPTIONS = [
+  'alien',
+  'bebok',
+  'blobbert',
+  'mac',
+  'saucer',
+  'slippy',
+  'spike',
+  'star-face',
+  'tentacool',
+  'wooly',
+] as const;
 
 // Variable-spending categories for transactions (Week / Add Expense).
 export const TX_CATEGORIES = [

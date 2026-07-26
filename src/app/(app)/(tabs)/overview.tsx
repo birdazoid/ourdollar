@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { BarChart, type Bar } from '@/components/bar-chart';
 import { Card } from '@/components/card';
+import { CategoryGlyph } from '@/components/category-glyph';
 import { Donut } from '@/components/donut';
 import { MoneyRow } from '@/components/money-row';
 import { Screen } from '@/components/screen';
@@ -141,7 +142,13 @@ export default function OverviewScreen() {
             <MoneyRow label="Fixed expenses" value={`−${fmt(budget.totalFixed)}`} strong color={Palette.terracottaDeep} dot={Palette.ink} />
             <View style={styles.divider} />
             <MoneyRow label="Variable pool" value={fmt(budget.variablePool)} strong color={Palette.sageDeep} />
-            <MoneyRow label="Weekly allowance ×4" value={`−${fmt(budget.monthlyPool)}`} sub color={Palette.terracottaDeep} dot={Palette.sage} />
+            <MoneyRow
+              label={`Weekly allowance · ${fmt(budget.weeklyAllowance)}/wk ×4`}
+              value={`−${fmt(budget.monthlyPool)}`}
+              sub
+              color={Palette.terracottaDeep}
+              dot={Palette.sage}
+            />
             <MoneyRow label="Savings goals" value={`−${fmt(budget.goalsMonthly)}`} sub color={Palette.terracottaDeep} dot={Palette.terracotta} />
             <MoneyRow label="Fun money" value={`−${fmt(budget.funTotal)}`} sub color={Palette.terracottaDeep} dot={Palette.sandDeep} />
           </Card>
@@ -184,7 +191,7 @@ export default function OverviewScreen() {
                 {catTotals.map((c) => (
                   <View key={c.id} style={styles.catRow}>
                     <View style={[styles.catDot, { backgroundColor: c.color }]} />
-                    <ThemedText type="body">{c.emoji}</ThemedText>
+                    <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} size={21} />
                     <ThemedText type="bodyBold" style={styles.catName}>
                       {c.name}
                     </ThemedText>

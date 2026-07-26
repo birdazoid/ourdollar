@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { CategoryGlyph } from '@/components/category-glyph';
 import { FieldLabel, MoneyInput } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
@@ -59,7 +60,11 @@ export function EnvelopeSheet({
       {isEdit ? (
         <View style={styles.fixedCat}>
           <View style={styles.fixedTile}>
-            <ThemedText type="subtitle">{txCategoryById(envelope!.category).emoji}</ThemedText>
+            <CategoryGlyph
+              txId={envelope!.category}
+              emoji={txCategoryById(envelope!.category).emoji}
+              color={txCategoryById(envelope!.category).color}
+            />
           </View>
           <ThemedText type="bodyBold">{txCategoryById(envelope!.category).name}</ThemedText>
         </View>
@@ -74,7 +79,7 @@ export function EnvelopeSheet({
                   key={c.id}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
-                  <ThemedText type="subtitle">{c.emoji}</ThemedText>
+                  <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} />
                   <ThemedText
                     type="small"
                     themeColor={on ? 'text' : 'textSecondary'}
@@ -124,8 +129,6 @@ const styles = StyleSheet.create({
   fixedTile: {
     width: 44,
     height: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: 'rgba(129,178,154,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },

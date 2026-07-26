@@ -2,20 +2,22 @@ import { Check, ChevronRight, Plus } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import IconSave from '@/assets/icons/icon-save.svg';
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
 import { BillSheet } from '@/components/bill-sheet';
+import { CategoryGlyph } from '@/components/category-glyph';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { GoalDetailSheet } from '@/components/goal-detail-sheet';
+import { GoalGlyph } from '@/components/goal-glyph';
 import { GoalSheet } from '@/components/goal-sheet';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { MiniCard, TwoUp } from '@/components/mini-card';
-import { PaySheet } from '@/components/pay-sheet';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
-import { Palette, Spacing } from '@/constants/theme';
+import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
@@ -48,7 +50,6 @@ export default function BillsScreen() {
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
   const [billDetail, setBillDetail] = useState<Bill | null>(null);
   const [goalDetail, setGoalDetail] = useState<Goal | null>(null);
-  const [paySheet, setPaySheet] = useState<Bill | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const currentMemberId = useMemo(() => {
@@ -85,7 +86,9 @@ export default function BillsScreen() {
     billList.forEach((b) => {
       (byCat[b.category] = byCat[b.category] || []).push(b);
     });
-    Object.values(byCat).forEach((arr) => arr.sort((a, b) => (a.due_day ?? 0) - (b.due_day ?? 0)));
+    Object.values(byCat).forEach((arr) =>
+      arr.sort((a, b) => Number(a.paid) - Number(b.paid) || (a.due_day ?? 0) - (b.due_day ?? 0))
+    );
     return BILL_CATS.filter((c) => byCat[c]).map((c) => ({ cat: c, bills: byCat[c] }));
   }, [billList]);
 
@@ -108,10 +111,9 @@ export default function BillsScreen() {
       onConfirm: () => billMut.remove.mutate(id),
     });
   }
-  function confirmPay(amount: number) {
-    if (!paySheet) return;
-    billMut.markPaid.mutate({ id: paySheet.id, paidAmount: amount, paidByMemberId: currentMemberId });
-    setPaySheet(null);
+  function confirmPay(bill: Bill, amount: number) {
+    billMut.markPaid.mutate({ id: bill.id, paidAmount: amount, paidByMemberId: currentMemberId });
+    setBillDetail(null);
   }
 
   // ---- goal handlers ----
@@ -176,7 +178,7 @@ export default function BillsScreen() {
           <DashedAdd label="Add a bill" onPress={() => setBillSheet({ bill: null })} style={styles.addTop} />
 
           {/* Savings goals */}
-          <SectionHeader title="✨ Savings goals" />
+          <SectionHeader title="Savings goals" icon={<IconSave width={21} height={21} color={Palette.ink} />} />
           {(goals.data ?? []).map((g) => {
             const pct = Math.min(1, g.saved_amount / g.target_amount);
             const done = g.saved_amount >= g.target_amount;
@@ -184,8 +186,7 @@ export default function BillsScreen() {
             return (
               <ListRow
                 key={g.id}
-                emoji={g.emoji ?? '🎯'}
-                tileColor={settled ? '#E7E3D3' : 'rgba(242,204,143,0.3)'}
+                emoji={<GoalGlyph emoji={g.emoji} />}
                 title={g.name}
                 subtitle={`${fmt(g.saved_amount)} of ${fmt(g.target_amount)}${done ? ' · funded! 🎉' : g.paid_this_month ? " · this month's paid" : ''}`}
                 subColor={done ? Palette.sageDeep : undefined}
@@ -210,13 +211,15 @@ export default function BillsScreen() {
           {/* Bills grouped by category */}
           {grouped.map(({ cat, bills: catBills }) => (
             <View key={cat}>
-              <SectionHeader title={`${billEmoji(cat)} ${cat}`} />
+              <SectionHeader
+                title={cat}
+                icon={<CategoryGlyph billCategory={cat} emoji={billEmoji(cat)} size={21} />}
+              />
               {catBills.map((b) => {
                 const isOverdue = !b.paid && (b.due_day ?? 99) < TODAY_DAY;
                 const row = (
                   <ListRow
-                    emoji={billEmoji(cat)}
-                    tileColor={b.paid ? '#E7E3D3' : isOverdue ? 'rgba(224,122,95,0.14)' : 'rgba(129,178,154,0.14)'}
+                    emoji={<CategoryGlyph billCategory={cat} emoji={billEmoji(cat)} />}
                     title={b.name}
                     subtitle={
                       b.paid
@@ -227,10 +230,17 @@ export default function BillsScreen() {
                     onPress={() => setBillDetail(b)}
                     outline={isOverdue}
                     dim={b.paid}
+                    strikethrough={b.paid}
                     right={
                       <View style={styles.right}>
                         <ThemedText type="label">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>
-                        {b.paid ? <Check size={18} color={Palette.ink} /> : <ChevronRight size={16} color="#B7B8C4" />}
+                        {b.paid ? (
+                          <View style={styles.paidBadge}>
+                            <Check size={13} color={Palette.card} strokeWidth={3} />
+                          </View>
+                        ) : (
+                          <ChevronRight size={16} color="#B7B8C4" />
+                        )}
                       </View>
                     }
                   />
@@ -261,20 +271,12 @@ export default function BillsScreen() {
         bill={billDetail}
         paidByName={billDetail ? memberName(billDetail.paid_by_member_id) : null}
         onClose={() => setBillDetail(null)}
-        onPay={(b) => {
-          setBillDetail(null);
-          setPaySheet(b);
-        }}
+        onPay={confirmPay}
         onEdit={(b) => {
           setBillDetail(null);
           setBillSheet({ bill: b });
         }}
         onDelete={askDeleteBill}
-      />
-      <PaySheet
-        bill={paySheet}
-        onClose={() => setPaySheet(null)}
-        onConfirm={confirmPay}
         saving={billMut.markPaid.isPending}
       />
       <GoalSheet
@@ -314,6 +316,14 @@ function DashedAdd({ label, onPress, style }: { label: string; onPress: () => vo
 const styles = StyleSheet.create({
   loading: { marginTop: Spacing.six },
   right: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  paidBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.sageDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addTop: { marginTop: Spacing.three },
   goalTrack: {
     height: 8,

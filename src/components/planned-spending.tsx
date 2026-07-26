@@ -2,6 +2,7 @@ import { ChevronRight, Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { CategoryGlyph } from '@/components/category-glyph';
 import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { ListRow } from '@/components/list-row';
 import { ThemedText } from '@/components/themed-text';
@@ -43,8 +44,7 @@ export function PlannedSpending({ householdId }: { householdId: string | null })
         return (
           <ListRow
             key={e.id}
-            emoji={cat.emoji}
-            tileColor={cat.color + '26'}
+            emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />}
             title={cat.name}
             subtitle="Every week"
             onPress={() => setSheet({ envelope: e })}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { GoalGlyph } from '@/components/goal-glyph';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
@@ -36,7 +37,7 @@ export function RolloverPrompt({ visible, amount, goals, loading, onResolve }: P
       <Sheet visible={visible} title="Which goal?" onClose={() => setPickingGoal(false)}>
         {goals.map((g) => (
           <Pressable key={g.id} onPress={() => close('goal', g.id)} style={styles.goalRow}>
-            <ThemedText type="subtitle">{g.emoji ?? '🎯'}</ThemedText>
+            <GoalGlyph emoji={g.emoji} />
             <View style={styles.flex}>
               <ThemedText type="bodyBold">{g.name}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">

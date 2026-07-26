@@ -42,15 +42,19 @@ export function BarChart({ data, height = 150, highlightLast = true }: Props) {
               const color = highlightLast && isLast ? Palette.sage : '#E2DCC9';
               return (
                 <View key={d.label + i} style={[styles.barCol, { marginHorizontal: barGap / 2 }]}>
-                  <View style={styles.barTrack}>
-                    <View style={{ width: '70%', height: Math.max(2, h), backgroundColor: color, borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
-                  </View>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.barLabel}>
-                    {d.label}
-                  </ThemedText>
+                  <View style={{ width: '70%', height: Math.max(2, h), backgroundColor: color, borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
                 </View>
               );
             })}
+          </View>
+          <View style={styles.labelRow}>
+            {data.map((d, i) => (
+              <View key={d.label + i} style={[styles.barCol, { marginHorizontal: barGap / 2 }]}>
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                  {d.label}
+                </ThemedText>
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -64,6 +68,5 @@ const styles = StyleSheet.create({
   plot: { flex: 1 },
   bars: { flexDirection: 'row', alignItems: 'flex-end' },
   barCol: { flex: 1, alignItems: 'center' },
-  barTrack: { flex: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
-  barLabel: { marginTop: Spacing.one },
+  labelRow: { flexDirection: 'row', marginTop: Spacing.one },
 });

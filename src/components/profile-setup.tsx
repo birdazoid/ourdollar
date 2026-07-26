@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Button } from '@/components/button';
 import { FieldLabel, TextField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
@@ -38,7 +39,7 @@ export function ProfileSetup() {
       <SafeAreaView style={styles.fill}>
         <View style={styles.body}>
           <View style={styles.badge}>
-            <ThemedText type="display">{avatar}</ThemedText>
+            <AvatarGlyph value={avatar} size={96} />
           </View>
           <ThemedText type="title" style={styles.heading}>
             Set up your profile
@@ -62,7 +63,7 @@ export function ProfileSetup() {
                   accessibilityState={{ selected: a === avatar }}
                   onPress={() => setAvatar(a)}
                   style={[styles.avatarOption, a === avatar && styles.avatarSelected]}>
-                  <ThemedText type="subtitle">{a}</ThemedText>
+                  <AvatarGlyph value={a} size={44} />
                 </Pressable>
               ))}
             </View>
@@ -104,6 +105,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.two,
+    overflow: 'hidden',
   },
   heading: { textAlign: 'center' },
   sub: { textAlign: 'center' },
@@ -118,6 +120,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   avatarSelected: { borderColor: Palette.sageDeep, backgroundColor: 'rgba(129,178,154,0.16)' },
   err: { textAlign: 'center' },

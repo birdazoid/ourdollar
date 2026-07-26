@@ -15,7 +15,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "expo-env.d.ts",
+    "svg.d.ts"
   ],
   "exclude": [
     "supabase/functions"
