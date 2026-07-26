@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 /**
  * Progressive-enhancement motion layer. Pages stay server components and just
@@ -15,8 +16,17 @@ import { useEffect } from 'react';
  * by a scroll/mount finalizer so nothing can stay hidden after being scrolled
  * past (fast flings, anchor jumps, short viewports). Everything is disabled
  * under prefers-reduced-motion (also enforced in CSS).
+ *
+ * This component lives in the root layout, which the App Router does NOT
+ * remount on client-side <Link> navigation — only the page content under it
+ * changes. Without `pathname` as a dependency, the effect would scan the DOM
+ * exactly once (on the very first load) and every subsequent page's elements
+ * would never get observed, staying invisible until a hard reload. Re-running
+ * per pathname re-scans the fresh DOM after every route change.
  */
 export function SiteEffects() {
+  const pathname = usePathname();
+
   useEffect(() => {
     const reduce =
       typeof window.matchMedia === 'function' &&
@@ -143,7 +153,7 @@ export function SiteEffects() {
     }
 
     return () => cleanups.forEach((fn) => fn());
-  }, []);
+  }, [pathname]);
 
   return null;
 }
