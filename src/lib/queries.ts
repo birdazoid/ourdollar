@@ -5,12 +5,14 @@ import { supabase } from '@/lib/supabase';
 import type {
   Account,
   Bill,
+  BillCarryover,
   ExtraIncome,
   FunMoneyPerson,
   FunMoneySettings,
   Goal,
   HouseholdMember,
   IncomeSource,
+  MonthSnapshot,
   Transaction,
   WeeklyEnvelope,
 } from '@/lib/types';
@@ -274,6 +276,123 @@ export function useBillMutations(householdId: string | null) {
   });
 
   return { create, update, remove, markPaid };
+}
+
+// ---- End-of-month review ----
+
+/** Closed months' full budget-plan + bill snapshots, newest first. */
+export function useMonthSnapshots(householdId: string | null) {
+  return useQuery({
+    queryKey: ['month_snapshots', householdId],
+    enabled: !!householdId,
+    queryFn: async (): Promise<MonthSnapshot[]> => {
+      const { data, error } = await supabase
+        .from('month_snapshots')
+        .select('*')
+        .eq('household_id', householdId!)
+        .order('month', { ascending: false });
+      if (error) throw error;
+      return data as MonthSnapshot[];
+    },
+  });
+}
+
+/** Unresolved "unpaid from last month" reminders, for the Bills screen. */
+export function useBillCarryovers(householdId: string | null) {
+  return useQuery({
+    queryKey: ['bill_carryovers', householdId],
+    enabled: !!householdId,
+    queryFn: async (): Promise<BillCarryover[]> => {
+      const { data, error } = await supabase
+        .from('bill_carryovers')
+        .select('*')
+        .eq('household_id', householdId!)
+        .eq('resolved', false)
+        .order('from_month', { ascending: false });
+      if (error) throw error;
+      return data as BillCarryover[];
+    },
+  });
+}
+
+export type CloseMonthInput = {
+  month: string; // the month being closed, 'YYYY-MM-01'
+  totalIncome: number;
+  totalFixed: number;
+  goalsMonthly: number;
+  goalsSavedTotal: number;
+  funTotal: number;
+  weeklyAllowance: number;
+};
+
+/**
+ * Closes out a month in ONE atomic call (see the close_month migration): writes
+ * the plan+bill snapshot, auto-creates a carryover reminder for every bill still
+ * unpaid, resets every bill for the fresh cycle, and clears goals'
+ * paid_this_month. Either all of that lands or none of it does — a half-closed
+ * month would otherwise strand bills permanently, since the review month is
+ * considered done as soon as its snapshot exists.
+ *
+ * Bill figures and carryovers are derived server-side from the very rows being
+ * reset, so the snapshot can't disagree with the reset. Called automatically by
+ * MonthAutoClose the moment a new month is detected, which is what makes bills
+ * reset even if the household never opens the review wizard.
+ */
+export function useCloseMonth(householdId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CloseMonthInput): Promise<string> => {
+      const { data, error } = await supabase.rpc('close_month', {
+        p_household_id: householdId,
+        p_month: input.month,
+        p_total_income: input.totalIncome,
+        p_total_fixed: input.totalFixed,
+        p_goals_monthly: input.goalsMonthly,
+        p_goals_saved_total: input.goalsSavedTotal,
+        p_fun_total: input.funTotal,
+        p_weekly_allowance: input.weeklyAllowance,
+      });
+      if (error) throw error;
+      return (data as string) ?? 'closed';
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bills', householdId] });
+      qc.invalidateQueries({ queryKey: ['goals', householdId] });
+      qc.invalidateQueries({ queryKey: ['month_snapshots', householdId] });
+      qc.invalidateQueries({ queryKey: ['bill_carryovers', householdId] });
+    },
+  });
+}
+
+/**
+ * Resolves a carried-over bill as paid or dismissed. Paid-vs-dismissed is an
+ * explicit flag rather than "is the amount null?", so a varies-amount bill can
+ * still be marked genuinely paid (it credits the count; the unknown amount adds
+ * nothing). Paying retroactively credits the ORIGINAL month it was owed for,
+ * however much later it happens.
+ */
+export function useResolveCarryover(householdId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      markPaid: boolean;
+      paidAmount?: number | null;
+      settledByMemberId?: string | null;
+    }) => {
+      const { error } = await supabase.rpc('resolve_carryover', {
+        p_carryover_id: input.id,
+        p_mark_paid: input.markPaid,
+        p_paid_amount: input.markPaid ? (input.paidAmount ?? null) : null,
+        p_settled_by_member_id: input.settledByMemberId ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bill_carryovers', householdId] });
+      qc.invalidateQueries({ queryKey: ['month_snapshots', householdId] });
+    },
+  });
 }
 
 // ---- Goal mutations ----

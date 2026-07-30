@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { AvatarGlyph } from '@/components/avatar-glyph';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
@@ -20,7 +21,7 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
   const { householdId, household, households } = useHousehold();
   const members = useMembers(householdId);
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id);
-  const shownAvatar = avatar ?? me?.avatar ?? '🙂';
+  const shownAvatar = avatar ?? me?.avatar;
   const multi = households.length > 1;
   const color = household ? householdColor(household) : null;
   return (
@@ -50,9 +51,7 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
         accessibilityLabel="Open profile"
         onPress={() => router.push('/profile')}
         style={styles.avatar}>
-        <ThemedText type="subtitle" style={styles.avatarGlyph}>
-          {shownAvatar}
-        </ThemedText>
+        <AvatarGlyph value={shownAvatar} size={46} />
       </Pressable>
     </View>
   );
@@ -91,8 +90,6 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.sage,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarGlyph: {
-    color: Palette.card,
+    overflow: 'hidden',
   },
 });

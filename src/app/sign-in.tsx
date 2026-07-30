@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { useState } from 'react';
 import type { ComponentType } from 'react';
@@ -22,6 +23,7 @@ type Mode = 'signIn' | 'signUp';
 
 export default function SignInScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { signIn, signUp } = useSession();
   const [mode, setMode] = useState<Mode>('signIn');
   const [email, setEmail] = useState('');
@@ -151,6 +153,17 @@ export default function SignInScreen() {
                 returnKeyType="go"
               />
 
+              {isSignIn && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push('/forgot-password')}
+                  style={styles.forgotRow}>
+                  <ThemedText type="label" style={{ color: Palette.sageDeep }}>
+                    Forgot password?
+                  </ThemedText>
+                </Pressable>
+              )}
+
               {!isSignIn && (
                 <Pressable
                   accessibilityRole="checkbox"
@@ -244,6 +257,7 @@ const styles = StyleSheet.create({
   message: {
     textAlign: 'center',
   },
+  forgotRow: { alignSelf: 'flex-end' },
   optInRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   checkbox: {
     width: 22,

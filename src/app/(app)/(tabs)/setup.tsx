@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
+import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
@@ -104,9 +105,13 @@ export default function SetupScreen() {
               <Pressable key={s.id} onPress={() => setSheet({ source: s })}>
                 <Card style={styles.row}>
                   <View style={styles.avatar}>
-                    <ThemedText type="bodyBold" style={styles.avatarGlyph}>
-                      {m?.avatar || label[0]}
-                    </ThemedText>
+                    {m?.avatar ? (
+                      <AvatarGlyph value={m.avatar} size={40} />
+                    ) : (
+                      <ThemedText type="bodyBold" style={styles.avatarGlyph}>
+                        {label[0]}
+                      </ThemedText>
+                    )}
                   </View>
                   <View style={styles.rowBody}>
                     <ThemedText type="bodyBold">{label}</ThemedText>
@@ -276,6 +281,20 @@ export default function SetupScreen() {
               <ChevronRight size={16} color="#B7B8C4" />
             </Card>
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Preview month-end review"
+            onPress={() => router.push('/month-review?preview=1')}>
+            <Card style={styles.row}>
+              <View style={styles.rowBody}>
+                <ThemedText type="bodyBold">Preview month-end review</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  See the wizard anytime — nothing is saved
+                </ThemedText>
+              </View>
+              <ChevronRight size={16} color="#B7B8C4" />
+            </Card>
+          </Pressable>
         </>
       )}
 
@@ -321,6 +340,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.sage,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   extraAvatar: {
     borderRadius: Radius.medium,

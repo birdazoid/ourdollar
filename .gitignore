@@ -54,3 +54,6 @@ example
 
 # Local TestFlight feedback screenshots (may contain personal data)
 feedback/
+
+.vercel
+.env*

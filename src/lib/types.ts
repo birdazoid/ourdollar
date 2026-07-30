@@ -113,6 +113,45 @@ export type WeeklyEnvelope = {
   created_at: string;
 };
 
+// A closed month's full budget plan + bill outcome — the only durable record of
+// "what the plan was" for a past month, since bills reset and computeBudget()
+// only ever reflects today's live settings. bills_paid_amount/count can be
+// credited retroactively (see resolve_carryover) when a carried-over bill from
+// this month finally gets paid, however much later that happens.
+export type MonthSnapshot = {
+  id: string;
+  household_id: string;
+  month: string; // YYYY-MM-01, the closed month
+  total_income: number;
+  total_fixed: number;
+  goals_monthly: number;
+  goals_saved_total: number; // point-in-time sum of goals.saved_amount at close
+  fun_total: number;
+  weekly_allowance: number;
+  bills_paid_amount: number;
+  bills_total_amount: number;
+  bills_paid_count: number;
+  bills_total_count: number;
+  created_at: string;
+};
+
+// A bill still unpaid when its month closed, carried forward as its own
+// reminder — separate from the bill's fresh (reset) new-month cycle.
+export type BillCarryover = {
+  id: string;
+  household_id: string;
+  bill_id: string | null;
+  name: string;
+  category: string;
+  amount: number | null;
+  from_month: string; // YYYY-MM-01
+  resolved: boolean;
+  resolved_amount: number | null;
+  resolved_by_member_id: string | null;
+  resolved_on: string | null;
+  created_at: string;
+};
+
 export type Transaction = {
   id: string;
   household_id: string;

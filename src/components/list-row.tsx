@@ -74,6 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   body: { flex: 1, gap: 2 },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },

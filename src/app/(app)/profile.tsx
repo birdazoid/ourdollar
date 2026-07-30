@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronUp,
+  Fingerprint,
+  KeyRound,
   Mail,
   MoreHorizontal,
   Pencil,
@@ -11,7 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,6 +34,12 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
+import {
+  authenticateWithBiometrics,
+  isBiometricLockEnabled,
+  isBiometricSupported,
+  setBiometricLockEnabled,
+} from '@/lib/biometrics';
 import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { householdColor, HOUSEHOLD_COLORS } from '@/lib/household-color';
@@ -63,7 +71,7 @@ function roleLabelFor(m: HouseholdMember, h: Household | null | undefined) {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { session, signOut } = useSession();
+  const { session, signOut, updatePassword, updateEmail, reauthenticate } = useSession();
   const { householdId, household, households, setActiveHousehold } = useHousehold();
   const account = useAccount(session?.user.id ?? null);
   const marketingMut = useSetMarketingOptIn(session?.user.id ?? null);
@@ -96,6 +104,109 @@ export default function ProfileScreen() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [reminders, setReminders] = useState({ due: true, overdue: true, weekClose: false });
   const [expanded, setExpanded] = useState<string[]>([]);
+
+  // Security: change password, change email, biometric app-lock toggle.
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [currentPasswordForPw, setCurrentPasswordForPw] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [changingEmail, setChangingEmail] = useState(false);
+  const [currentPasswordForEmail, setCurrentPasswordForEmail] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    isBiometricSupported().then(setBiometricSupported);
+    isBiometricLockEnabled(session.user.id).then(setBiometricEnabled);
+  }, [session]);
+
+  async function toggleBiometric() {
+    if (!session) return;
+    if (biometricEnabled) {
+      await setBiometricLockEnabled(session.user.id, false);
+      setBiometricEnabled(false);
+      return;
+    }
+    const supported = await isBiometricSupported();
+    setBiometricSupported(supported);
+    if (!supported) {
+      Alert.alert('Not available', 'Face ID or Touch ID isn’t set up on this device.');
+      return;
+    }
+    const ok = await authenticateWithBiometrics('Confirm to enable Face ID unlock');
+    if (!ok) return;
+    await setBiometricLockEnabled(session.user.id, true);
+    setBiometricEnabled(true);
+  }
+
+  function openChangePassword() {
+    setCurrentPasswordForPw('');
+    setNewPassword('');
+    setNewPasswordConfirm('');
+    setPasswordError(null);
+    setChangingPassword(true);
+  }
+  async function saveNewPassword() {
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('New passwords don’t match.');
+      return;
+    }
+    setSavingPassword(true);
+    const reauth = await reauthenticate(currentPasswordForPw);
+    if (reauth.error) {
+      setSavingPassword(false);
+      setPasswordError('Current password is incorrect.');
+      return;
+    }
+    const { error } = await updatePassword(newPassword);
+    setSavingPassword(false);
+    if (error) {
+      setPasswordError(error.message);
+      return;
+    }
+    setChangingPassword(false);
+  }
+
+  function openChangeEmail() {
+    setCurrentPasswordForEmail('');
+    setNewEmail('');
+    setEmailError(null);
+    setEmailSent(false);
+    setChangingEmail(true);
+  }
+  async function saveNewEmail() {
+    setEmailError(null);
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    setSavingEmail(true);
+    const reauth = await reauthenticate(currentPasswordForEmail);
+    if (reauth.error) {
+      setSavingEmail(false);
+      setEmailError('Current password is incorrect.');
+      return;
+    }
+    const { error } = await updateEmail(newEmail.trim());
+    setSavingEmail(false);
+    if (error) {
+      setEmailError(error.message);
+      return;
+    }
+    setEmailSent(true);
+  }
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -474,6 +585,29 @@ export default function ProfileScreen() {
               onPress={shareApp}
             />
 
+            {/* Security — flat rows, no cards */}
+            <Eyebrow>Security</Eyebrow>
+            <SettingRow
+              icon={<KeyRound size={18} color={Palette.ink} />}
+              title="Change password"
+              onPress={openChangePassword}
+            />
+            <SettingRow
+              icon={<Mail size={18} color={Palette.ink} />}
+              title="Change email"
+              subtitle={session?.user.email ?? undefined}
+              onPress={openChangeEmail}
+            />
+            {biometricSupported && (
+              <ToggleRow
+                icon={<Fingerprint size={21} color={Palette.ink} />}
+                title="Unlock with Face ID"
+                subtitle="Require Face ID or Touch ID to open the app"
+                value={biometricEnabled}
+                onToggle={toggleBiometric}
+              />
+            )}
+
             {/* Account — flat rows, no cards */}
             <Eyebrow>Account</Eyebrow>
             <SettingRow
@@ -571,6 +705,84 @@ export default function ProfileScreen() {
             );
           })()}
       </Sheet>
+      <Sheet visible={changingPassword} title="Change password" onClose={() => setChangingPassword(false)}>
+        <FieldLabel>Current password</FieldLabel>
+        <TextField
+          placeholder="Current password"
+          value={currentPasswordForPw}
+          onChangeText={setCurrentPasswordForPw}
+          secureTextEntry
+          autoFocus
+        />
+        <FieldLabel>New password</FieldLabel>
+        <TextField
+          placeholder="New password"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          secureTextEntry
+        />
+        <FieldLabel>Confirm new password</FieldLabel>
+        <TextField
+          placeholder="Confirm new password"
+          value={newPasswordConfirm}
+          onChangeText={setNewPasswordConfirm}
+          secureTextEntry
+        />
+        {passwordError && (
+          <ThemedText type="small" themeColor="warningDeep" style={styles.sheetError}>
+            {passwordError}
+          </ThemedText>
+        )}
+        <Button
+          title="Save new password"
+          onPress={saveNewPassword}
+          loading={savingPassword}
+          style={styles.sheetSave}
+        />
+      </Sheet>
+
+      <Sheet visible={changingEmail} title="Change email" onClose={() => setChangingEmail(false)}>
+        {emailSent ? (
+          <View style={styles.emailSentWrap}>
+            <ThemedText type="body">
+              We sent a confirmation link to <ThemedText type="bodyBold">{newEmail.trim()}</ThemedText>.
+              Tap it to finish changing your email.
+            </ThemedText>
+            <Button title="Done" onPress={() => setChangingEmail(false)} style={styles.sheetSave} />
+          </View>
+        ) : (
+          <>
+            <FieldLabel>Current password</FieldLabel>
+            <TextField
+              placeholder="Current password"
+              value={currentPasswordForEmail}
+              onChangeText={setCurrentPasswordForEmail}
+              secureTextEntry
+              autoFocus
+            />
+            <FieldLabel>New email</FieldLabel>
+            <TextField
+              placeholder="New email"
+              value={newEmail}
+              onChangeText={setNewEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            {emailError && (
+              <ThemedText type="small" themeColor="warningDeep" style={styles.sheetError}>
+                {emailError}
+              </ThemedText>
+            )}
+            <Button
+              title="Send confirmation link"
+              onPress={saveNewEmail}
+              loading={savingEmail}
+              style={styles.sheetSave}
+            />
+          </>
+        )}
+      </Sheet>
+
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
 
       {deletingAccount && (
@@ -926,6 +1138,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   renameSaveDisabled: { opacity: 0.5 },
+  sheetError: { textAlign: 'center', marginTop: Spacing.two },
+  sheetSave: { marginTop: Spacing.four },
+  emailSentWrap: { gap: Spacing.three },
 
   deletingOverlay: {
     position: 'absolute',

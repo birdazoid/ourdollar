@@ -21,13 +21,16 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { fmt } from '@/lib/money';
+import { billMonthlyCost, fmt } from '@/lib/money';
+import { monthLabel } from '@/lib/month-review';
 import {
+  useBillCarryovers,
   useBillMutations,
   useBills,
   useGoalMutations,
   useGoals,
   useMembers,
+  useResolveCarryover,
   type BillInput,
   type GoalInput,
 } from '@/lib/queries';
@@ -43,8 +46,10 @@ export default function BillsScreen() {
   const bills = useBills(householdId);
   const goals = useGoals(householdId);
   const members = useMembers(householdId);
+  const carryovers = useBillCarryovers(householdId);
   const billMut = useBillMutations(householdId);
   const goalMut = useGoalMutations(householdId);
+  const resolveCarryover = useResolveCarryover(householdId);
 
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
@@ -80,6 +85,8 @@ export default function BillsScreen() {
     (b) => !b.paid && (b.due_day ?? 99) >= TODAY_DAY && (b.due_day ?? 99) <= TODAY_DAY + 7
   );
   const frac = billList.length ? paid.length / billList.length : 0;
+  const paidTotal = paid.reduce((a, b) => a + billMonthlyCost(b), 0);
+  const billsTotal = billList.reduce((a, b) => a + billMonthlyCost(b), 0);
 
   const grouped = useMemo(() => {
     const byCat: Record<string, Bill[]> = {};
@@ -114,6 +121,16 @@ export default function BillsScreen() {
   function confirmPay(bill: Bill, amount: number) {
     billMut.markPaid.mutate({ id: bill.id, paidAmount: amount, paidByMemberId: currentMemberId });
     setBillDetail(null);
+  }
+
+  // ---- carryover handlers (bills unpaid when a prior month closed) ----
+  function markCarryoverPaid(id: string, amount: number | null) {
+    // markPaid is explicit — a varies-amount bill (amount null) still counts as
+    // genuinely paid rather than being mistaken for a dismissal.
+    resolveCarryover.mutate({ id, markPaid: true, paidAmount: amount, settledByMemberId: currentMemberId });
+  }
+  function dismissCarryover(id: string) {
+    resolveCarryover.mutate({ id, markPaid: false, settledByMemberId: currentMemberId });
   }
 
   // ---- goal handlers ----
@@ -155,6 +172,7 @@ export default function BillsScreen() {
             eyebrow="Bills paid this month"
             big={`${paid.length} of ${billList.length}`}
             sub="paid"
+            sub2={`${fmt(paidTotal)} paid of ${fmt(billsTotal)}`}
             ringValue={frac}
             ringLabel="done"
           />
@@ -173,6 +191,46 @@ export default function BillsScreen() {
                 <ThemedText type="title">{dueSoon.length}</ThemedText>
               </MiniCard>
             </TwoUp>
+          )}
+
+          {/* Bills still unpaid when a prior month closed — separate from this
+              month's fresh bills below, so the two never get confused. */}
+          {(carryovers.data ?? []).length > 0 && (
+            <>
+              <SectionHeader title="Unpaid from last month" />
+              {(carryovers.data ?? []).map((c) => (
+                <ListRow
+                  key={c.id}
+                  emoji={<CategoryGlyph billCategory={c.category} emoji={billEmoji(c.category)} />}
+                  title={c.name}
+                  subtitle={`Unpaid since ${monthLabel(c.from_month)}`}
+                  subColor={Palette.terracotta}
+                  outline
+                  right={
+                    <View style={styles.right}>
+                      <ThemedText type="label">{c.amount != null ? fmt(c.amount) : '—'}</ThemedText>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark ${c.name} paid`}
+                        onPress={() => markCarryoverPaid(c.id, c.amount)}
+                        style={styles.paidBadge}>
+                        <Check size={13} color={Palette.card} strokeWidth={3} />
+                      </Pressable>
+                    </View>
+                  }
+                  footer={
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => dismissCarryover(c.id)}
+                      style={styles.dismissRow}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Dismiss without paying
+                      </ThemedText>
+                    </Pressable>
+                  }
+                />
+              ))}
+            </>
           )}
 
           <DashedAdd label="Add a bill" onPress={() => setBillSheet({ bill: null })} style={styles.addTop} />
@@ -324,6 +382,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dismissRow: { marginTop: Spacing.two },
   addTop: { marginTop: Spacing.three },
   goalTrack: {
     height: 8,

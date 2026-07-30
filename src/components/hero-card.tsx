@@ -10,6 +10,8 @@ type Props = {
   bigColor?: string;
   sub: string;
   subColor?: string;
+  /** Optional second line below `sub` — e.g. a dollar-amount detail. */
+  sub2?: string;
   ringValue: number;
   ringColor?: string;
   ringLabel?: string;
@@ -23,6 +25,7 @@ export function HeroCard({
   bigColor,
   sub,
   subColor,
+  sub2,
   ringValue,
   ringColor,
   ringLabel,
@@ -40,6 +43,11 @@ export function HeroCard({
         <ThemedText type="label" style={{ color: subColor ?? Palette.sageDeep }}>
           {sub}
         </ThemedText>
+        {sub2 && (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sub2}>
+            {sub2}
+          </ThemedText>
+        )}
       </View>
       <Ring value={ringValue} color={ringColor}>
         {(ringCenter ?? `${Math.round(ringValue * 100)}%`) !== '' && (
@@ -66,4 +74,5 @@ const styles = StyleSheet.create({
   },
   left: { flex: 1, gap: Spacing.one },
   big: { marginVertical: 2 },
+  sub2: { marginTop: -2 },
 });

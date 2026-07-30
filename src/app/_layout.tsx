@@ -5,8 +5,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { BiometricLockScreen } from '@/components/biometric-lock-screen';
 import { FontsToLoad } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/lib/auth';
+import { useBiometricLock } from '@/lib/use-biometric-lock';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -41,7 +43,10 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, isLoading } = useSession();
+  const { session, isLoading, isRecovery } = useSession();
+  // Don't gate a password-recovery session behind Face ID — the user just
+  // proved identity via the emailed link, and still needs to set a password.
+  const { locked, retry } = useBiometricLock(isRecovery ? null : session);
 
   useEffect(() => {
     if (!isLoading) {
@@ -54,14 +59,25 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* A password-recovery deep link sets a session, but the user must set
+            a new password before doing anything else — this branch takes over
+            regardless of session state until clearRecovery() runs. */}
+        <Stack.Protected guard={isRecovery}>
+          <Stack.Screen name="reset-password" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={!session}>
-        <Stack.Screen name="sign-in" />
-      </Stack.Protected>
-    </Stack>
+        <Stack.Protected guard={!isRecovery && !!session}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={!isRecovery && !session}>
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="forgot-password" />
+        </Stack.Protected>
+      </Stack>
+      {locked && <BiometricLockScreen onRetry={retry} />}
+    </>
   );
 }

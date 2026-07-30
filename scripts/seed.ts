@@ -45,8 +45,8 @@ const USER_B = 'ourdollar-seed+other@example.com';
 const SEED = {
   householdName: 'Test Household',
   members: [
-    { key: 'owner', name: 'Primary', avatar: '🧑', isAdmin: true, hasAccount: true, funMoney: 100 },
-    { key: 'partner', name: 'Partner', avatar: '👩', isAdmin: false, hasAccount: false, funMoney: 80 },
+    { key: 'owner', name: 'Primary', avatar: 'alien', isAdmin: true, hasAccount: true, funMoney: 100 },
+    { key: 'partner', name: 'Partner', avatar: 'saucer', isAdmin: false, hasAccount: false, funMoney: 80 },
   ],
   income: [
     { memberKey: 'owner', amount: 3300, frequency: 'semimonthly' as const },
@@ -59,8 +59,8 @@ const SEED = {
     { name: 'Streaming', category: 'Subscriptions', amount: 15, due_day: 3, paidByKey: 'owner' },
   ],
   goals: [
-    { name: 'Emergency Fund', emoji: '🛟', target_amount: 3000, monthly_amount: 200, saved_amount: 600 },
-    { name: 'Vacation', emoji: '🏝️', target_amount: 1500, monthly_amount: 100, saved_amount: 300 },
+    { name: 'Emergency Fund', emoji: null, target_amount: 3000, monthly_amount: 200, saved_amount: 600 },
+    { name: 'Vacation', emoji: '✈️', target_amount: 1500, monthly_amount: 100, saved_amount: 300 },
   ],
   transactions: [
     { label: 'Groceries', amount: 62.5, memberKey: 'owner', category: 'groceries', is_fun_money: false },

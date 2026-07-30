@@ -109,13 +109,17 @@ export function BillSheet({ visible, bill, onClose, onSave, onDelete, saving }: 
             style={styles.inlineInput}
           />
         </Card>
-        <Card style={[styles.inlineField, styles.dueField, showErrors && dueDayMissing && styles.fieldErrorCard]}>
+        <Card style={[styles.dueField, showErrors && dueDayMissing && styles.fieldErrorCard]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Due day"
             onPress={() => setPickingDay((v) => !v)}
             style={styles.dueTouchable}>
-            <ThemedText type="body" themeColor={dueDay ? 'text' : 'textSecondary'}>
+            <ThemedText
+              type="body"
+              themeColor={dueDay ? 'text' : 'textSecondary'}
+              numberOfLines={1}
+              style={styles.dueText}>
               {dueDay ? `Due the ${ordinal(dayNum)}` : 'Due day'}
             </ThemedText>
           </Pressable>
@@ -217,8 +221,16 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   row: { flexDirection: 'row', gap: Spacing.two, marginBottom: Spacing.two },
   inlineField: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 0, paddingHorizontal: Spacing.three },
-  dueField: { flex: 0, width: 150 },
-  dueTouchable: { flex: 1, justifyContent: 'center' },
+  dueField: {
+    flexGrow: 0,
+    flexShrink: 0,
+    width: 170,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
+  },
+  dueTouchable: { flex: 1 },
+  dueText: { flexShrink: 0 },
   inlineInput: { flex: 1, backgroundColor: 'transparent', height: 52 },
   fieldError: { borderWidth: 1.5, borderColor: Palette.terracotta },
   fieldErrorCard: { borderWidth: 1.5, borderColor: Palette.terracotta },

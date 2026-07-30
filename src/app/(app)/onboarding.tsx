@@ -14,6 +14,7 @@ import IllustrationReview from '@/assets/illustrations/onboarding-review.svg';
 import IllustrationSavingsGoals from '@/assets/illustrations/onboarding-savings-goals.svg';
 import IllustrationWelcome from '@/assets/illustrations/onboarding-welcome.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
+import { AvatarGlyph } from '@/components/avatar-glyph';
 import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -194,7 +195,7 @@ export default function OnboardingScreen() {
               {(members.data ?? []).map((m) => (
                 <ListRow
                   key={m.id}
-                  emoji={m.avatar ?? '🙂'}
+                  emoji={<AvatarGlyph value={m.avatar} size={44} />}
                   title={m.account_id === session?.user.id ? `${m.name} (you)` : m.name}
                   subtitle={m.is_admin ? 'Admin' : m.invite_pending ? `Invite sent · ${m.invite_email ?? ''}` : m.has_account ? 'Member' : 'Fun money only'}
                 />
@@ -227,7 +228,7 @@ export default function OnboardingScreen() {
                 return (
                   <ListRow
                     key={s.id}
-                    emoji={m?.avatar ?? '💵'}
+                    emoji={m ? <AvatarGlyph value={m.avatar} size={44} /> : '💵'}
                     title={m?.name ?? 'Household'}
                     subtitle={`${fmt(s.amount)} · ${s.frequency === 'semimonthly' ? 'Twice a month' : 'Monthly'}`}
                     onPress={() => setIncomeSheet({ source: s })}

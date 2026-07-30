@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { FirstHousehold } from '@/components/first-household';
 import { InviteInbox, InviteWelcome } from '@/components/invites';
+import { MonthAutoClose } from '@/components/month-auto-close';
 import { ProfileSetup } from '@/components/profile-setup';
 import { RetryScreen } from '@/components/retry-screen';
 import { ThemedView } from '@/components/themed-view';
@@ -92,8 +93,10 @@ function HouseholdGate() {
         <Stack.Screen name="profile" options={{ presentation: 'card' }} />
         <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+        <Stack.Screen name="month-review" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       </Stack>
       <InviteInbox />
+      <MonthAutoClose />
     </>
   );
 }
