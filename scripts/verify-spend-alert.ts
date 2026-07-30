@@ -17,10 +17,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
 
+import { computeEnvelopes } from '../src/lib/money';
 import {
   buildSpendAlertBody,
   currentWeekBounds,
-  weekRemaining,
+  weekFreeToSpend,
   weeklyAllowanceFrom,
 } from '../supabase/functions/spend-alert/logic';
 
@@ -87,13 +88,14 @@ async function main() {
     const pushTokens = (tokens ?? []).map((t) => t.expo_push_token as string);
     console.log(`Push tokens for those recipients: ${pushTokens.length}`);
 
-    const [inc, extra, bills, goals, funSettings, funPeople] = await Promise.all([
+    const [inc, extra, bills, goals, funSettings, funPeople, household] = await Promise.all([
       admin.from('income_sources').select('amount, frequency').eq('household_id', householdId),
       admin.from('extra_income').select('amount').eq('household_id', householdId),
       admin.from('bills').select('paid, paid_amount, amount').eq('household_id', householdId),
       admin.from('goals').select('monthly_amount').eq('household_id', householdId),
       admin.from('fun_money_settings').select('enabled').eq('household_id', householdId).maybeSingle(),
       admin.from('fun_money_people').select('monthly_amount').eq('household_id', householdId),
+      admin.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
     const allowance = weeklyAllowanceFrom({
@@ -105,15 +107,27 @@ async function main() {
       funPeople: funPeople.data ?? [],
     });
 
-    const { start, end } = currentWeekBounds();
-    const { data: weekTxns } = await admin
-      .from('transactions')
-      .select('amount, type, is_fun_money')
-      .eq('household_id', householdId)
-      .gte('occurred_on', start)
-      .lte('occurred_on', end);
+    const weekStartDay = household.data?.week_start_day ?? 0;
+    const { start, end } = currentWeekBounds(weekStartDay);
+    const [weekTxns, envelopes] = await Promise.all([
+      admin
+        .from('transactions')
+        .select('amount, type, is_fun_money, category')
+        .eq('household_id', householdId)
+        .gte('occurred_on', start)
+        .lte('occurred_on', end),
+      admin.from('weekly_envelopes').select('category, weekly_amount, skipped_week_start').eq('household_id', householdId),
+    ]);
 
-    const remaining = weekRemaining(allowance, weekTxns ?? []);
+    const remaining = weekFreeToSpend({
+      weeklyAllowance: allowance,
+      weekTxns: weekTxns.data ?? [],
+      envelopes: (envelopes.data ?? []).map((e) => ({
+        category: e.category,
+        weekly_amount: Number(e.weekly_amount),
+        skipped: e.skipped_week_start === start,
+      })),
+    });
     const body = buildSpendAlertBody({
       spenderName: spender.name,
       amount: 18.5,
@@ -143,6 +157,63 @@ async function main() {
     console.log('\nCleaned up the test transaction.');
   }
 }
+
+/**
+ * Regression guard: the edge function's weekFreeToSpend must always agree with
+ * the client's computeEnvelopes(...).freeToSpend for the same inputs — that
+ * was exactly the bug (a real one, found in review): the push notification's
+ * "$X left this week" was computed with pre-envelope math, so it disagreed
+ * with the app's own free-to-spend figure (reported: push said "$203 left",
+ * app said "-$155"). Reconstructs a similar scenario — spent past an
+ * envelope's own budget, plus other spending, on a non-Sunday week start.
+ */
+function pureEquivalenceCheck() {
+  console.log('Pure check: edge-function math must match the client’s computeEnvelopes\n');
+
+  const weeklyAllowance = 500;
+  const weekStartDay = 1; // Monday, like the reported scenario likely used
+  const envelopes = [
+    { category: 'fuel', weekly_amount: 80, skipped: false },
+    { category: 'groceries', weekly_amount: 250, skipped: false },
+  ];
+  // Fuel: $47 of $80 (under). Groceries: not touched. "Other" (dining, kids…)
+  // spending well past what's left — the scenario that produced the confusing
+  // "$33 left" (Fuel, individually fine) vs "-$155" (household, overall not).
+  const weekTxns = [
+    { amount: 47, type: 'expense', is_fun_money: false, category: 'fuel' },
+    { amount: 27, type: 'expense', is_fun_money: false, category: 'kids' },
+    { amount: 568, type: 'expense', is_fun_money: false, category: 'dining' },
+  ];
+
+  const edgeResult = weekFreeToSpend({ weeklyAllowance, weekTxns, envelopes });
+
+  const spentByCategory: Record<string, number> = {};
+  for (const t of weekTxns) spentByCategory[t.category] = (spentByCategory[t.category] ?? 0) + t.amount;
+  const clientResult = computeEnvelopes({
+    weeklyAllowance,
+    incomeBack: 0,
+    totalNonFunExpense: weekTxns.reduce((a, t) => a + t.amount, 0),
+    spentByCategory,
+    envelopes: envelopes.map((e) => ({ id: e.category, ...e })),
+  }).freeToSpend;
+
+  const ok = edgeResult === clientResult;
+  console.log(`  ${ok ? '✅' : '❌'} edge weekFreeToSpend (${edgeResult}) === client computeEnvelopes.freeToSpend (${clientResult})`);
+  console.log(`  ${ok ? '✅' : '❌'} matches the reported bug shape (household over, one envelope still fine): ${edgeResult < 0}`);
+
+  // The week-start-day fix, independently: Monday-start bounds must actually
+  // start on a Monday, not silently fall back to Sunday.
+  const { start } = currentWeekBounds(weekStartDay, new Date('2026-07-30T12:00:00Z')); // a Thursday
+  const startsOnMonday = new Date(`${start}T00:00:00Z`).getUTCDay() === 1;
+  console.log(`  ${startsOnMonday ? '✅' : '❌'} currentWeekBounds(1, …) actually starts on a Monday — got ${start}`);
+
+  if (!ok || !startsOnMonday) {
+    throw new Error('spend-alert pure equivalence check failed');
+  }
+  console.log('');
+}
+
+pureEquivalenceCheck();
 
 main().catch((err) => {
   console.error('verify-spend-alert failed:', err.message ?? err);

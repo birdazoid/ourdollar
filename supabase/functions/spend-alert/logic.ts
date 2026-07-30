@@ -28,16 +28,21 @@ export function fmt(n: number): string {
   );
 }
 
-/** Sunday-start week bounds containing today, as YYYY-MM-DD (UTC). */
-export function currentWeekBounds(now = new Date()) {
+/**
+ * Week bounds containing today, as YYYY-MM-DD (UTC), starting on `weekStartDay`
+ * (0 = Sunday … 6 = Saturday — matches households.week_start_day). Defaults to
+ * Sunday for callers that don't have a household's setting on hand.
+ */
+export function currentWeekBounds(weekStartDay = 0, now = new Date()) {
   const base = new Date(now);
   base.setUTCHours(0, 0, 0, 0);
-  const sunday = new Date(base);
-  sunday.setUTCDate(base.getUTCDate() - base.getUTCDay());
-  const saturday = new Date(sunday);
-  saturday.setUTCDate(sunday.getUTCDate() + 6);
+  const sinceStart = (base.getUTCDay() - weekStartDay + 7) % 7;
+  const start = new Date(base);
+  start.setUTCDate(base.getUTCDate() - sinceStart);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: iso(sunday), end: iso(saturday) };
+  return { start: iso(start), end: iso(end) };
 }
 
 export type BudgetRows = {
@@ -62,15 +67,46 @@ export function weeklyAllowanceFrom(r: BudgetRows): number {
   return Math.max(0, Math.round(((totalIncome - totalFixed - goalsMonthly - funTotal) / 4) * 100) / 100);
 }
 
-export function weekRemaining(
-  weeklyAllowance: number,
-  weekTxns: { amount: number; type: string; is_fun_money: boolean }[]
-): number {
-  const weekSpent = weekTxns
-    .filter((t) => t.type === 'expense' && !t.is_fun_money)
-    .reduce((a, t) => a + Number(t.amount), 0);
+export type EnvelopeInput = { category: string; weekly_amount: number; skipped: boolean };
+
+/**
+ * The household's actual free-to-spend for the week — mirrors
+ * src/lib/money.ts's computeEnvelopes(...).freeToSpend exactly (planned
+ * category budgets are reserved out of the allowance, not just raw spend
+ * subtracted), so the push notification always agrees with what the app shows.
+ * With no envelopes this reduces to the same plain "allowance − spent + income
+ * back" math it replaces — the envelope terms all zero out.
+ */
+export function weekFreeToSpend(args: {
+  weeklyAllowance: number;
+  weekTxns: { amount: number; type: string; is_fun_money: boolean; category: string | null }[];
+  envelopes: EnvelopeInput[];
+}): number {
+  const { weeklyAllowance, weekTxns, envelopes } = args;
+  const expenses = weekTxns.filter((t) => t.type === 'expense' && !t.is_fun_money);
+  const totalNonFunExpense = expenses.reduce((a, t) => a + Number(t.amount), 0);
   const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0);
-  return weeklyAllowance - weekSpent + incomeBack;
+
+  const spentByCategory: Record<string, number> = {};
+  for (const t of expenses) {
+    const key = t.category ?? 'other';
+    spentByCategory[key] = (spentByCategory[key] ?? 0) + Number(t.amount);
+  }
+
+  const effAllowance = weeklyAllowance + incomeBack;
+  let plannedTotal = 0;
+  let overageTotal = 0;
+  let activeEnvelopeSpent = 0;
+  for (const e of envelopes) {
+    if (e.skipped) continue;
+    const spent = spentByCategory[e.category] ?? 0;
+    plannedTotal += Number(e.weekly_amount);
+    overageTotal += Math.max(spent - Number(e.weekly_amount), 0);
+    activeEnvelopeSpent += spent;
+  }
+  const otherSpent = totalNonFunExpense - activeEnvelopeSpent;
+
+  return Math.round((effAllowance - plannedTotal - otherSpent - overageTotal) * 100) / 100;
 }
 
 export function buildSpendAlertBody(args: {

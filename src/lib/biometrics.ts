@@ -37,10 +37,30 @@ export async function setBiometricLockEnabled(userId: string, enabled: boolean) 
   }
 }
 
+// The native Face ID/Touch ID sheet backgrounds and re-foregrounds the app as
+// it shows and dismisses — a normal OS transition, not the user switching
+// apps. Anything that treats "app became active" as "try to unlock" (the
+// global lock listener) needs to ignore transitions caused by a prompt that
+// just ran, or it retriggers itself into a loop. Track that with a short
+// cooldown rather than a same-tick flag, since the prompt's promise resolving
+// and the AppState transition firing aren't strictly ordered relative to each
+// other — a flag cleared "immediately after" can still lose that race.
+let lastPromptAt = 0;
+const PROMPT_COOLDOWN_MS = 2000;
+
+export function isBiometricPromptRecent() {
+  return Date.now() - lastPromptAt < PROMPT_COOLDOWN_MS;
+}
+
 export async function authenticateWithBiometrics(promptMessage: string) {
-  const result = await LocalAuthentication.authenticateAsync({
-    promptMessage,
-    disableDeviceFallback: false,
-  });
-  return result.success;
+  lastPromptAt = Date.now();
+  try {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage,
+      disableDeviceFallback: false,
+    });
+    return result.success;
+  } finally {
+    lastPromptAt = Date.now();
+  }
 }

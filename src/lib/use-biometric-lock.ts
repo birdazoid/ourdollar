@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { authenticateWithBiometrics, isBiometricLockEnabled } from '@/lib/biometrics';
+import { authenticateWithBiometrics, isBiometricLockEnabled, isBiometricPromptRecent } from '@/lib/biometrics';
 
 // Gates the app behind Face ID / Touch ID on cold launch and whenever the
 // app returns to the foreground, but only for a signed-in user who has
@@ -15,6 +15,13 @@ export function useBiometricLock(session: Session | null) {
       setLocked(false);
       return;
     }
+    // The native Face ID/Touch ID sheet itself backgrounds and re-foregrounds
+    // the app as it shows and dismisses — including for a prompt fired from
+    // elsewhere (e.g. Profile's "confirm to enable" flow). Without this guard,
+    // that transition re-triggers this same effect, which fires ANOTHER
+    // prompt, which triggers another transition — a loop that only stops when
+    // the user gives up and disables the setting.
+    if (isBiometricPromptRecent()) return;
     const enabled = await isBiometricLockEnabled(session.user.id);
     if (!enabled) {
       setLocked(false);

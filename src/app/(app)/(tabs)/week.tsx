@@ -281,6 +281,7 @@ export default function WeekScreen() {
                 <EnvelopeRow
                   key={env.id}
                   env={env}
+                  householdOver={envFree < 0}
                   onPress={() => setEnvSheet({ envelope: rawEnvelope(env.id) })}
                   onSkipToggle={() => toggleSkip(env)}
                 />
@@ -474,17 +475,24 @@ function Legend({ color, label, value }: { color: string; label: string; value: 
 
 function EnvelopeRow({
   env,
+  householdOver,
   onPress,
   onSkipToggle,
 }: {
   env: EnvelopeStatus;
+  // The household's OVERALL free-to-spend has gone negative. An envelope that
+  // hasn't individually gone over its own budget still has "room left" on
+  // paper — but that room isn't really free money once the household as a
+  // whole is spent past what it has, so don't paint it green/reassuring here.
+  householdOver: boolean;
   onPress: () => void;
   onSkipToggle: () => void;
 }) {
   const cat = txCategoryById(env.category);
   const frac = env.budget > 0 ? Math.max(0, Math.min(1, env.spent / env.budget)) : 0;
+  const atRisk = householdOver && (env.state === 'on-track' || env.state === 'untouched');
   const barColor =
-    env.state === 'over' ? Palette.terracotta : env.state === 'skipped' ? '#C7C4B8' : Palette.sage;
+    env.state === 'over' ? Palette.terracotta : env.state === 'skipped' ? '#C7C4B8' : atRisk ? Palette.sand : Palette.sage;
 
   let subtitle: string;
   let rightText: string;
@@ -493,15 +501,19 @@ function EnvelopeRow({
     subtitle = 'Skipped this week';
     rightText = '—';
   } else if (env.state === 'untouched') {
-    subtitle = 'Not spent yet · still to come';
+    subtitle = atRisk ? 'Not spent yet · household is over budget' : 'Not spent yet · still to come';
     rightText = `${fmt(env.remaining)} left`;
+    rightColor = atRisk ? Palette.sandDeep : undefined;
   } else if (env.state === 'over') {
     subtitle = `${fmt(env.spent)} of ${fmt(env.budget)}`;
     rightText = `${fmt(env.over)} over`;
     rightColor = Palette.terracottaDeep;
   } else {
-    subtitle = `${fmt(env.spent)} of ${fmt(env.budget)}`;
+    subtitle = atRisk
+      ? `${fmt(env.spent)} of ${fmt(env.budget)} · household is over budget`
+      : `${fmt(env.spent)} of ${fmt(env.budget)}`;
     rightText = `${fmt(env.remaining)} left`;
+    rightColor = atRisk ? Palette.sandDeep : undefined;
   }
 
   return (

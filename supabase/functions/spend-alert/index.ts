@@ -15,7 +15,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   buildSpendAlertBody,
   currentWeekBounds,
-  weekRemaining,
+  weekFreeToSpend,
   weeklyAllowanceFrom,
 } from './logic.ts';
 
@@ -82,14 +82,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: 'no push tokens' }), { status: 200 });
     }
 
-    // Weekly balance remaining.
-    const [inc, extra, bills, goals, funSettings, funPeople] = await Promise.all([
+    // Weekly balance remaining — must match the app's own "free to spend"
+    // figure exactly, including planned-category (envelope) reservations and
+    // the household's own week-start day, or the push disagrees with the app.
+    const [inc, extra, bills, goals, funSettings, funPeople, household] = await Promise.all([
       supabase.from('income_sources').select('amount, frequency').eq('household_id', householdId),
       supabase.from('extra_income').select('amount').eq('household_id', householdId),
       supabase.from('bills').select('paid, paid_amount, amount').eq('household_id', householdId),
       supabase.from('goals').select('monthly_amount').eq('household_id', householdId),
       supabase.from('fun_money_settings').select('enabled').eq('household_id', householdId).maybeSingle(),
       supabase.from('fun_money_people').select('monthly_amount').eq('household_id', householdId),
+      supabase.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
     const allowance = weeklyAllowanceFrom({
@@ -101,15 +104,27 @@ Deno.serve(async (req) => {
       funPeople: funPeople.data ?? [],
     });
 
-    const { start, end } = currentWeekBounds();
-    const { data: weekTxns } = await supabase
-      .from('transactions')
-      .select('amount, type, is_fun_money')
-      .eq('household_id', householdId)
-      .gte('occurred_on', start)
-      .lte('occurred_on', end);
+    const weekStartDay = household.data?.week_start_day ?? 0;
+    const { start, end } = currentWeekBounds(weekStartDay);
+    const [weekTxns, envelopes] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('amount, type, is_fun_money, category')
+        .eq('household_id', householdId)
+        .gte('occurred_on', start)
+        .lte('occurred_on', end),
+      supabase.from('weekly_envelopes').select('category, weekly_amount, skipped_week_start').eq('household_id', householdId),
+    ]);
 
-    const remaining = weekRemaining(allowance, weekTxns ?? []);
+    const remaining = weekFreeToSpend({
+      weeklyAllowance: allowance,
+      weekTxns: weekTxns.data ?? [],
+      envelopes: (envelopes.data ?? []).map((e) => ({
+        category: e.category,
+        weekly_amount: Number(e.weekly_amount),
+        skipped: e.skipped_week_start === start,
+      })),
+    });
     const body = buildSpendAlertBody({
       spenderName,
       amount: Number(record.amount),
