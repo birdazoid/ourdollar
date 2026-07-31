@@ -37,23 +37,25 @@ export async function setBiometricLockEnabled(userId: string, enabled: boolean) 
   }
 }
 
-// The native Face ID/Touch ID sheet backgrounds and re-foregrounds the app as
-// it shows and dismisses — a normal OS transition, not the user switching
-// apps. Anything that treats "app became active" as "try to unlock" (the
-// global lock listener) needs to ignore transitions caused by a prompt that
-// just ran, or it retriggers itself into a loop. Track that with a short
-// cooldown rather than a same-tick flag, since the prompt's promise resolving
-// and the AppState transition firing aren't strictly ordered relative to each
-// other — a flag cleared "immediately after" can still lose that race.
-let lastPromptAt = 0;
-const PROMPT_COOLDOWN_MS = 2000;
+// Showing the native Face ID/Touch ID sheet drives the app through its own
+// foreground/background transitions. Callers that react to those transitions
+// must never stack a second prompt on top of a live one, or each prompt's own
+// dismissal triggers the next and the user is stuck re-scanning forever.
+//
+// This is an in-flight flag, not a time window: a cooldown is a race against
+// however long the OS takes to deliver the transition, and loses whenever the
+// dismissal event lands after the window closes. `settleUntil` only covers the
+// brief gap between the promise resolving and that final event arriving.
+let promptInFlight = false;
+let settleUntil = 0;
+const SETTLE_MS = 1500;
 
-export function isBiometricPromptRecent() {
-  return Date.now() - lastPromptAt < PROMPT_COOLDOWN_MS;
+export function isBiometricPromptActive() {
+  return promptInFlight || Date.now() < settleUntil;
 }
 
 export async function authenticateWithBiometrics(promptMessage: string) {
-  lastPromptAt = Date.now();
+  promptInFlight = true;
   try {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,
@@ -61,6 +63,7 @@ export async function authenticateWithBiometrics(promptMessage: string) {
     });
     return result.success;
   } finally {
-    lastPromptAt = Date.now();
+    promptInFlight = false;
+    settleUntil = Date.now() + SETTLE_MS;
   }
 }
