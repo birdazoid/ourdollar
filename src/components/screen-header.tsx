@@ -40,7 +40,9 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
           <ThemedText type="small" style={styles.hhName} numberOfLines={1}>
             {household.name}
           </ThemedText>
-          <AvatarGlyph value={shownAvatar} size={38} />
+          <View style={styles.avatar}>
+            <AvatarGlyph value={shownAvatar} size={38} />
+          </View>
         </Pressable>
       )}
     </View>
@@ -75,4 +77,13 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.one,
   },
   hhName: { flexShrink: 1, fontWeight: '500' },
+  // The avatar art is a square SVG, so it needs clipping to read as a circle.
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.pill,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

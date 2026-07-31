@@ -146,10 +146,14 @@ export default function WeekScreen() {
   });
   const showEnvelopes = isCurrent && envSummary.hasEnvelopes;
   const envFree = envSummary.freeToSpend;
+  // Over budget fills the whole ring (in red) rather than emptying it — an
+  // empty ring reads as "nothing spent", the opposite of what's happening.
   const envFreeFrac =
-    envSummary.effAllowance > 0
-      ? Math.max(0, Math.min(1, Math.max(envFree, 0) / envSummary.effAllowance))
-      : 0;
+    envFree < 0
+      ? 1
+      : envSummary.effAllowance > 0
+        ? Math.max(0, Math.min(1, envFree / envSummary.effAllowance))
+        : 0;
 
   function toggleSkip(env: EnvelopeStatus) {
     envMut.setSkip.mutate({ id: env.id, weekStart: env.skipped ? null : week.start });
