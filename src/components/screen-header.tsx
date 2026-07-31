@@ -3,27 +3,24 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AvatarGlyph } from '@/components/avatar-glyph';
 import { ThemedText } from '@/components/themed-text';
-import { Palette, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
-import { householdColor } from '@/lib/household-color';
 import { useMembers } from '@/lib/queries';
 
 type Props = { eyebrow?: string; title: string; avatar?: string | null };
 
-/** Shared top bar: eyebrow + title on the left, tappable profile avatar right.
- *  The avatar defaults to the current member's chosen avatar (matches setup).
- *  With more than one household, a color-coded household pill sits on top so the
- *  active household is always visible and switching is obvious. */
+/** Shared top bar: eyebrow + title on the left, a single tappable pill on the
+ *  right combining the household name and the current member's avatar — one
+ *  target that opens the profile screen (which is also where you switch
+ *  households when there's more than one). */
 export function ScreenHeader({ eyebrow, title, avatar }: Props) {
   const router = useRouter();
   const { session } = useSession();
-  const { householdId, household, households } = useHousehold();
+  const { householdId, household } = useHousehold();
   const members = useMembers(householdId);
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id);
   const shownAvatar = avatar ?? me?.avatar;
-  const multi = households.length > 1;
-  const color = household ? householdColor(household) : null;
   return (
     <View style={styles.row}>
       <View style={styles.titles}>
@@ -34,25 +31,18 @@ export function ScreenHeader({ eyebrow, title, avatar }: Props) {
         )}
         <ThemedText type="title">{title}</ThemedText>
       </View>
-      {multi && household && color && (
+      {household && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Household: ${household.name}. Switch household`}
+          accessibilityLabel={`Household: ${household.name}. Open profile`}
           onPress={() => router.push('/profile')}
           style={styles.hhPill}>
-          <View style={[styles.hhDot, { backgroundColor: color.dot }]} />
           <ThemedText type="small" style={styles.hhName} numberOfLines={1}>
             {household.name}
           </ThemedText>
+          <AvatarGlyph value={shownAvatar} size={38} />
         </Pressable>
       )}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open profile"
-        onPress={() => router.push('/profile')}
-        style={styles.avatar}>
-        <AvatarGlyph value={shownAvatar} size={46} />
-      </Pressable>
     </View>
   );
 }
@@ -75,21 +65,14 @@ const styles = StyleSheet.create({
   hhPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one + 2,
-    maxWidth: 150,
+    gap: Spacing.two,
+    maxWidth: 190,
     borderRadius: Radius.pill,
-    paddingVertical: Spacing.one + 2,
-    paddingHorizontal: Spacing.two + 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(61,64,91,0.25)',
+    paddingVertical: Spacing.one,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.one,
   },
-  hhDot: { width: 9, height: 9, borderRadius: Radius.pill },
   hhName: { flexShrink: 1, fontWeight: '500' },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.sage,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
 });
