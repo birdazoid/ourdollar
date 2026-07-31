@@ -38,7 +38,13 @@
           "imageWidth": 120
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#8db19c"
+        }
+      ],
       "expo-secure-store",
       [
         "expo-local-authentication",

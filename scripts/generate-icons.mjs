@@ -54,4 +54,8 @@ await transparentMark(1024, WHITE, 0.72, 'splash-icon.png'); // splash (on sage 
 await transparentMark(1024, WHITE, 0.5, 'android-icon-foreground.png'); // safe-zone padding
 await transparentMark(1024, WHITE, 0.5, 'android-icon-monochrome.png');
 await solid(1024, SAGE, 'android-icon-background.png');
+// Android status-bar notification icon: OS renders only the alpha channel as a
+// white silhouette (any color here is ignored), tightly cropped — no safe-zone
+// padding needed like the adaptive icon.
+await transparentMark(256, WHITE, 0.75, 'notification-icon.png');
 console.log('done');

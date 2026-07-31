@@ -198,7 +198,7 @@ export default function WeekScreen() {
               sub={`${fmt(envSummary.spent)} spent · ${fmt(envSummary.reserved)} still planned`}
               subColor={envFree < 0 ? Palette.terracottaDeep : undefined}
               ringValue={envFreeFrac}
-              ringColor={envFree < 0 ? Palette.terracotta : Palette.sage}
+              ringColor={envFree < 0 ? Palette.terracottaDeep : Palette.sage}
               ringLabel={envFree < 0 ? 'over' : 'free'}
               ringCenter=""
             />
@@ -210,7 +210,7 @@ export default function WeekScreen() {
               sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
               subColor={over ? Palette.terracottaDeep : undefined}
               ringValue={frac}
-              ringColor={over ? Palette.terracotta : Palette.sage}
+              ringColor={over ? Palette.terracottaDeep : Palette.sage}
               ringLabel={over ? 'over' : 'left'}
               ringCenter=""
             />
