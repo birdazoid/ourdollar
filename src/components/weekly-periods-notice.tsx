@@ -10,11 +10,15 @@ import { useHousehold } from '@/lib/household';
 import { NOTICE_WEEKLY_PERIODS, useOneTimeNotice } from '@/lib/notices';
 
 /**
- * When the weekly amount started being split by the real week count. Only
- * households created before this ever saw the old figure, so only they get the
- * notice. Compared against households.created_at, which is an ISO timestamp.
+ * When the weekly amount started being split by the real week count, set to the
+ * build that shipped it (2026-08-02). Only households created before this ever
+ * saw the old figure, so only they get the notice. Compared against
+ * households.created_at, an ISO timestamp.
+ *
+ * Deliberately set to the END of ship day: a household created that morning was
+ * still running the old build, so it should be told the number changed.
  */
-const WEEKLY_PERIODS_RELEASED_AT = '2026-08-01T00:00:00Z';
+const WEEKLY_PERIODS_RELEASED_AT = '2026-08-03T00:00:00Z';
 
 /** The detail behind "Why this matters", shared with the Setup screen's ⓘ. */
 export const WEEKLY_PERIODS_INFO = {
