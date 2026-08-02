@@ -4,17 +4,22 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
+import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
-import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
+import { InfoSheet, InfoTap } from '@/components/info-sheet';
+import { WEEKLY_PERIODS_INFO } from '@/components/weekly-periods-notice';
+import { IncomeSheet, type IncomeDraft, type IncomeTarget } from '@/components/income-sheet';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
-import { FREQ, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
+import { FREQ, adjustedWeeklyAllowance, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
+import { monthOf, periodFor, periodRangeLabel, weeksRemainingInPeriod } from '@/lib/period';
+import { todayISO } from '@/lib/week';
 import {
   useBills,
   useExtraIncome,
@@ -24,12 +29,12 @@ import {
   useGoals,
   useHouseholdMutations,
   useIncome,
+  useExtraIncomeMutations,
   useIncomeMutations,
   useMembers,
 } from '@/lib/queries';
 import { WeekStartPicker } from '@/components/week-start-picker';
 import { weekdayName } from '@/lib/week';
-import type { IncomeSource } from '@/lib/types';
 
 export default function SetupScreen() {
   const router = useRouter();
@@ -45,10 +50,24 @@ export default function SetupScreen() {
   const funSettings = useFunSettings(householdId);
 
   const incomeMut = useIncomeMutations(householdId);
+  const extraMut = useExtraIncomeMutations(householdId);
   const funMut = useFunMoneyMutations(householdId);
 
-  const [sheet, setSheet] = useState<{ source: IncomeSource | null } | null>(null);
+  // One sheet for both recurring and one-off income. `sheetOpen` is separate
+  // from `target` because adding has no target but still opens the sheet.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [target, setTarget] = useState<IncomeTarget>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [weeklyInfo, setWeeklyInfo] = useState(false);
+
+  function openSheet(next: IncomeTarget) {
+    setTarget(next);
+    setSheetOpen(true);
+  }
+  function closeSheet() {
+    setSheetOpen(false);
+    setTarget(null);
+  }
 
   const memberName = useMemo(() => {
     const map = new Map((members.data ?? []).map((m) => [m.id, m]));
@@ -56,6 +75,9 @@ export default function SetupScreen() {
   }, [members.data]);
 
   const funEnabled = funSettings.data?.enabled ?? false;
+  const weekStartDay = household?.week_start_day ?? 0;
+  // Setup edits the CURRENT month's plan, so it's that month's period.
+  const period = periodFor(monthOf(todayISO()), weekStartDay);
   const budget = computeBudget({
     incomeSources: income.data ?? [],
     extraIncome: extraIncome.data ?? [],
@@ -63,20 +85,41 @@ export default function SetupScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    weeksInPeriod: period.weeks,
   });
+  const weeksLeft = weeksRemainingInPeriod(weekStartDay);
 
   const loading = !householdId || income.isLoading || members.isLoading;
 
+  // The sheet reports which kind it saved, so a one-off routes to extra_income
+  // and a recurring source to income_sources. Switching cadence to or from
+  // one-off while EDITING isn't supported: those are different rows in
+  // different tables, so it would be a delete plus an insert, not an update.
   function handleSave(draft: IncomeDraft, id?: string) {
-    if (id) incomeMut.update.mutate({ id, ...draft });
-    else incomeMut.create.mutate(draft);
-    setSheet(null);
+    if (draft.kind === 'one-off') {
+      const { kind, ...input } = draft;
+      if (id) extraMut.update.mutate({ id, ...input });
+      else extraMut.create.mutate(input);
+    } else {
+      const { kind, ...input } = draft;
+      if (id) incomeMut.update.mutate({ id, ...input });
+      else incomeMut.create.mutate(input);
+    }
+    closeSheet();
   }
 
-  function handleDelete(id: string) {
+  function handleDelete(id: string, kind: 'recurring' | 'one-off') {
+    closeSheet();
+    if (kind === 'one-off') {
+      setConfirm({
+        title: 'Delete this one-off income?',
+        message: 'It will stop counting toward this month’s pool.',
+        onConfirm: () => extraMut.remove.mutate(id),
+      });
+      return;
+    }
     const src = (income.data ?? []).find((s) => s.id === id);
     const who = memberName(src?.member_id ?? null)?.name;
-    setSheet(null);
     setConfirm({
       title: 'Delete this income source?',
       message: `This removes ${who ? who + "'s " : ''}income from your monthly total.`,
@@ -102,7 +145,7 @@ export default function SetupScreen() {
             const m = memberName(s.member_id);
             const label = m?.name ?? 'Household';
             return (
-              <Pressable key={s.id} onPress={() => setSheet({ source: s })}>
+              <Pressable key={s.id} onPress={() => openSheet({ kind: 'recurring', source: s })}>
                 <Card style={styles.row}>
                   <View style={styles.avatar}>
                     {m?.avatar ? (
@@ -134,24 +177,26 @@ export default function SetupScreen() {
           {(extraIncome.data ?? []).map((x) => {
             const m = memberName(x.member_id);
             return (
-              <Card key={x.id} style={styles.row}>
-                <View style={[styles.avatar, styles.extraAvatar]}>
-                  <ThemedText type="body">💸</ThemedText>
-                </View>
-                <View style={styles.rowBody}>
-                  <ThemedText type="bodyBold">{x.source}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    one-off{m ? ` · ${m.name}` : ''}
+              <Pressable key={x.id} onPress={() => openSheet({ kind: 'one-off', entry: x })}>
+                <Card style={styles.row}>
+                  <View style={[styles.avatar, styles.extraAvatar]}>
+                    <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
+                  </View>
+                  <View style={styles.rowBody}>
+                    <ThemedText type="bodyBold">{x.source}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      one-off{m ? ` · ${m.name}` : ''}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="subtitle" themeColor="positiveDeep">
+                    {fmt(x.amount)}
                   </ThemedText>
-                </View>
-                <ThemedText type="subtitle" themeColor="positiveDeep">
-                  {fmt(x.amount)}
-                </ThemedText>
-              </Card>
+                </Card>
+              </Pressable>
             );
           })}
 
-          <DashedAdd label="Add income" onPress={() => setSheet({ source: null })} />
+          <DashedAdd label="Add income" onPress={() => openSheet(null)} />
 
           {/* FIXED EXPENSES context */}
           <SectionHeader title="Fixed expenses" action="from your bills" />
@@ -189,13 +234,44 @@ export default function SetupScreen() {
             </View>
             <View style={[styles.spread, styles.divider]}>
               <View style={styles.flex}>
-                <ThemedText type="bodyBold">Per week</ThemedText>
+                <View style={styles.labelRow}>
+                  <ThemedText type="bodyBold">Per week</ThemedText>
+                  <InfoTap
+                    label="How your weekly amount works"
+                    onPress={() => setWeeklyInfo(true)}
+                  />
+                </View>
                 <ThemedText type="small" themeColor="textSecondary">
-                  The pool above, split 4 ways
+                  Split across {period.weeks} weeks ({periodRangeLabel(period)})
                 </ThemedText>
               </View>
               <ThemedText type="title">{fmt(budget.weeklyAllowance)}</ThemedText>
             </View>
+            {budget.billVariance !== 0 && (
+              <View style={[styles.spread, styles.divider]}>
+                <View style={styles.flex}>
+                  <ThemedText type="bodyBold">
+                    {budget.billVariance > 0 ? 'Bills came in over' : 'Bills came in under'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Spread across the {weeksLeft} week{weeksLeft === 1 ? '' : 's'} left
+                  </ThemedText>
+                </View>
+                <ThemedText
+                  type="title"
+                  style={{
+                    color: budget.billVariance > 0 ? Palette.terracottaDeep : Palette.sageDeep,
+                  }}>
+                  {fmt(
+                    adjustedWeeklyAllowance({
+                      plannedWeekly: budget.weeklyAllowance,
+                      billVariance: budget.billVariance,
+                      weeksRemaining: weeksLeft,
+                    })
+                  )}
+                </ThemedText>
+              </View>
+            )}
             <ThemedText type="small" themeColor="textSecondary" style={styles.footnote}>
               Adjusts automatically when income, savings goals, or fun money change.
             </ThemedText>
@@ -299,15 +375,26 @@ export default function SetupScreen() {
       )}
 
       <IncomeSheet
-        visible={!!sheet}
-        source={sheet?.source ?? null}
+        visible={sheetOpen}
+        target={target}
         members={members.data ?? []}
-        onClose={() => setSheet(null)}
+        onClose={closeSheet}
         onSave={handleSave}
         onDelete={handleDelete}
-        saving={incomeMut.create.isPending || incomeMut.update.isPending}
+        saving={
+          incomeMut.create.isPending ||
+          incomeMut.update.isPending ||
+          extraMut.create.isPending ||
+          extraMut.update.isPending
+        }
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+      <InfoSheet
+        visible={weeklyInfo}
+        title={WEEKLY_PERIODS_INFO.title}
+        paragraphs={WEEKLY_PERIODS_INFO.paragraphs}
+        onClose={() => setWeeklyInfo(false)}
+      />
     </Screen>
   );
 }
@@ -333,6 +420,7 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, gap: 2 },
   flex: { flex: 1 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one + 2 },
   avatar: {
     width: 40,
     height: 40,

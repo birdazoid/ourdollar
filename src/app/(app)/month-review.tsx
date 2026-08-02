@@ -21,6 +21,7 @@ import { billEmoji } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { useEnsureMonthClosed } from '@/lib/month-close';
 import { billMonthlyCost, computeBudget, fmt } from '@/lib/money';
+import { weeksInPeriod } from '@/lib/period';
 import {
   lastCompletedMonthStart,
   monthLabel,
@@ -123,6 +124,9 @@ export default function MonthReviewScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    // The month under review, not today's, so a reopened review still shows
+    // the week count that month was actually planned against.
+    weeksInPeriod: weeksInPeriod(targetMonth, weekStart),
   });
   const weeklyAllowanceForCharts = hasClosed ? targetSnapshot!.weekly_allowance : budget.weeklyAllowance;
 

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useHousehold } from '@/lib/household';
 import { computeBudget } from '@/lib/money';
 import { pendingReviewMonth } from '@/lib/month-review';
+import { weeksInPeriod } from '@/lib/period';
 import {
   useBills,
   useCloseMonth,
@@ -69,6 +70,9 @@ export function useEnsureMonthClosed(enabled: boolean) {
       goals: goals.data ?? [],
       funMoneyEnabled: funEnabled,
       funPeople: funPeople.data ?? [],
+      // The month being closed, so the snapshot records the weekly figure that
+      // month was actually planned against.
+      weeksInPeriod: weeksInPeriod(target, household.week_start_day ?? 0),
     });
 
     closeMonth.mutate({

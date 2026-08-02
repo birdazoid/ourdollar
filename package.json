@@ -65,7 +65,8 @@
     "verify:account-profile": "tsx scripts/verify-account-profile.ts",
     "verify:household-roles": "tsx scripts/verify-household-roles.ts",
     "verify:week-rollovers": "tsx scripts/verify-week-rollovers.ts",
-    "verify:month-review": "tsx scripts/verify-month-review.ts"
+    "verify:month-review": "tsx scripts/verify-month-review.ts",
+    "verify:periods": "tsx scripts/verify-periods.ts"
   },
   "private": true
 }

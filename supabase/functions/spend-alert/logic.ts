@@ -54,17 +54,90 @@ export type BudgetRows = {
   funPeople: { monthly_amount: number }[];
 };
 
-export function weeklyAllowanceFrom(r: BudgetRows): number {
+// ---- Budget periods (mirrors src/lib/period.ts) ----
+//
+// A month's pool is split across the WHOLE WEEKS assigned to it, not a fixed 4.
+// The period for month M starts on the first week-start day on or after the 1st
+// and runs to the day before M+1's period, so every period is 4 or 5 whole
+// weeks and no week is ever split across two months.
+
+const MS_PER_WEEK = 7 * 86400000;
+
+/** First day of a month's period, as YYYY-MM-DD (UTC). */
+export function periodStart(year: number, monthIndex: number, weekStartDay: number): Date {
+  const first = new Date(Date.UTC(year, monthIndex, 1));
+  const forward = (weekStartDay - first.getUTCDay() + 7) % 7;
+  const start = new Date(first);
+  start.setUTCDate(1 + forward);
+  return start;
+}
+
+/** Whole weeks a month's pool is split across. Always 4 or 5. */
+export function weeksInPeriod(year: number, monthIndex: number, weekStartDay: number): number {
+  const a = periodStart(year, monthIndex, weekStartDay);
+  const b = periodStart(year, monthIndex + 1, weekStartDay);
+  return Math.round((b.getTime() - a.getTime()) / MS_PER_WEEK);
+}
+
+/**
+ * The period funding "now", and how many of its weeks are left counting the
+ * current one. A week belongs to the month its START date falls in, which is
+ * what keeps a boundary-spanning week from being funded twice.
+ */
+export function currentPeriod(weekStartDay: number, now = new Date()) {
+  const base = new Date(now);
+  base.setUTCHours(0, 0, 0, 0);
+  const back = (base.getUTCDay() - weekStartDay + 7) % 7;
+  const weekStart = new Date(base);
+  weekStart.setUTCDate(base.getUTCDate() - back);
+
+  const year = weekStart.getUTCFullYear();
+  const monthIndex = weekStart.getUTCMonth();
+  const nextStart = periodStart(year, monthIndex + 1, weekStartDay);
+  const weeksRemaining = Math.max(
+    1,
+    Math.round((nextStart.getTime() - weekStart.getTime()) / MS_PER_WEEK)
+  );
+  return { weeks: weeksInPeriod(year, monthIndex, weekStartDay), weeksRemaining };
+}
+
+/**
+ * The PLANNED weekly allowance, derived from bill estimates and split across
+ * the period's real week count. Mirrors src/lib/money.ts's
+ * computeBudget(...).weeklyAllowance. Bills that came in different from their
+ * estimate are applied separately, in adjustedWeeklyAllowance(), so the figure
+ * doesn't shift retroactively.
+ */
+export function weeklyAllowanceFrom(r: BudgetRows, weeksInPeriod: number): number {
   const totalIncome =
     r.income.reduce((a, s) => a + Number(s.amount) * (FREQ_MULT[s.frequency] ?? 1), 0) +
     r.extra.reduce((a, x) => a + Number(x.amount), 0);
+  const plannedFixed = r.bills.reduce((a, b) => a + Number(b.amount ?? 0), 0);
+  const goalsMonthly = r.goals.reduce((a, g) => a + Number(g.monthly_amount), 0);
+  const funTotal = r.funEnabled ? r.funPeople.reduce((a, p) => a + Number(p.monthly_amount), 0) : 0;
+  const plannedForWeeks = Math.max(0, totalIncome - plannedFixed - goalsMonthly - funTotal);
+  return Math.round((plannedForWeeks / Math.max(1, weeksInPeriod)) * 100) / 100;
+}
+
+/** Σ(actual − estimate) over paid bills — mirrors computeBudget's billVariance. */
+export function billVarianceFrom(r: Pick<BudgetRows, 'bills'>): number {
   const totalFixed = r.bills.reduce(
     (a, b) => a + (b.paid ? Number(b.paid_amount ?? b.amount ?? 0) : Number(b.amount ?? 0)),
     0
   );
-  const goalsMonthly = r.goals.reduce((a, g) => a + Number(g.monthly_amount), 0);
-  const funTotal = r.funEnabled ? r.funPeople.reduce((a, p) => a + Number(p.monthly_amount), 0) : 0;
-  return Math.max(0, Math.round(((totalIncome - totalFixed - goalsMonthly - funTotal) / 4) * 100) / 100);
+  const plannedFixed = r.bills.reduce((a, b) => a + Number(b.amount ?? 0), 0);
+  return Math.round((totalFixed - plannedFixed) * 100) / 100;
+}
+
+/** Mirrors src/lib/money.ts's adjustedWeeklyAllowance(). */
+export function adjustedWeeklyAllowance(args: {
+  plannedWeekly: number;
+  billVariance: number;
+  weeksRemaining: number;
+}): number {
+  const { plannedWeekly, billVariance, weeksRemaining } = args;
+  if (billVariance === 0 || weeksRemaining <= 0) return plannedWeekly;
+  return Math.round((plannedWeekly - billVariance / weeksRemaining) * 100) / 100;
 }
 
 export type EnvelopeInput = { category: string; weekly_amount: number; skipped: boolean };

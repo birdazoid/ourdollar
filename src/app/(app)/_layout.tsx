@@ -8,6 +8,7 @@ import { MonthAutoClose } from '@/components/month-auto-close';
 import { ProfileSetup } from '@/components/profile-setup';
 import { RetryScreen } from '@/components/retry-screen';
 import { ThemedView } from '@/components/themed-view';
+import { WeeklyPeriodsNotice } from '@/components/weekly-periods-notice';
 import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { HouseholdProvider, useHousehold } from '@/lib/household';
@@ -97,6 +98,7 @@ function HouseholdGate() {
       </Stack>
       <InviteInbox />
       <MonthAutoClose />
+      <WeeklyPeriodsNotice />
     </>
   );
 }

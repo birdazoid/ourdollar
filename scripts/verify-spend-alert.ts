@@ -17,12 +17,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
 
-import { computeEnvelopes } from '../src/lib/money';
+import { computeBudget, computeEnvelopes, adjustedWeeklyAllowance as clientAdjusted } from '../src/lib/money';
+import { weeksInPeriod, weeksRemainingInPeriod } from '../src/lib/period';
 import {
+  adjustedWeeklyAllowance,
+  billVarianceFrom,
   buildSpendAlertBody,
+  currentPeriod,
   currentWeekBounds,
   weekFreeToSpend,
   weeklyAllowanceFrom,
+  weeksInPeriod as edgeWeeksInPeriod,
 } from '../supabase/functions/spend-alert/logic';
 
 loadEnv({ path: '.env.seed' });
@@ -98,16 +103,25 @@ async function main() {
       admin.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
-    const allowance = weeklyAllowanceFrom({
-      income: inc.data ?? [],
-      extra: extra.data ?? [],
-      bills: bills.data ?? [],
-      goals: goals.data ?? [],
-      funEnabled: !!funSettings.data?.enabled,
-      funPeople: funPeople.data ?? [],
+    const weekStartDay = household.data?.week_start_day ?? 0;
+    const billRows = bills.data ?? [];
+    const period = currentPeriod(weekStartDay);
+    const allowance = adjustedWeeklyAllowance({
+      plannedWeekly: weeklyAllowanceFrom(
+        {
+          income: inc.data ?? [],
+          extra: extra.data ?? [],
+          bills: billRows,
+          goals: goals.data ?? [],
+          funEnabled: !!funSettings.data?.enabled,
+          funPeople: funPeople.data ?? [],
+        },
+        period.weeks
+      ),
+      billVariance: billVarianceFrom({ bills: billRows }),
+      weeksRemaining: period.weeksRemaining,
     });
 
-    const weekStartDay = household.data?.week_start_day ?? 0;
     const { start, end } = currentWeekBounds(weekStartDay);
     const [weekTxns, envelopes] = await Promise.all([
       admin
@@ -213,7 +227,154 @@ function pureEquivalenceCheck() {
   console.log('');
 }
 
+/**
+ * Regression guard for bill-estimate variance: a bill paid for more than it was
+ * estimated at must reduce only the weeks LEFT in the month, and the edge
+ * function must land on the same number as the client. Uses the reported
+ * scenario verbatim — OG&E estimated $421, actually $483, halfway through the
+ * month — so the $62 gap should cost the two remaining weeks $31 each.
+ */
+function billVarianceCheck() {
+  console.log('Pure check: bill variance lands on the remaining weeks only\n');
+
+  const bills = [
+    { name: 'OG&E', paid: true, paid_amount: 483, amount: 421 },
+    { name: 'AT&T Phone', paid: true, paid_amount: 272, amount: 272 },
+    { name: 'Rent', paid: false, paid_amount: null, amount: 1200 },
+  ];
+  const income = [{ amount: 4000, frequency: 'monthly' as const }];
+
+  const client = computeBudget({
+    incomeSources: income,
+    extraIncome: [],
+    bills,
+    goals: [],
+    funMoneyEnabled: false,
+    funPeople: [],
+    weeksInPeriod: 4, // a 4-week period; the variance math is independent of this
+  });
+
+  // Planned: (4000 − (421 + 272 + 1200)) / 4 = 2107 / 4 = 526.75
+  const plannedOk = client.weeklyAllowance === 526.75;
+  console.log(`  ${plannedOk ? '✅' : '❌'} planned weekly is unchanged by the overage — ${client.weeklyAllowance}`);
+
+  const varianceOk = client.billVariance === 62;
+  console.log(`  ${varianceOk ? '✅' : '❌'} variance is the $62 gap — ${client.billVariance}`);
+
+  // Halfway through the month → 2 weeks left → 62/2 = 31 off each.
+  const weeksRemaining = 2;
+  const adjusted = clientAdjusted({
+    plannedWeekly: client.weeklyAllowance,
+    billVariance: client.billVariance,
+    weeksRemaining,
+  });
+  const adjustedOk = adjusted === 495.75;
+  console.log(`  ${adjustedOk ? '✅' : '❌'} remaining weeks drop by $31 — ${adjusted}`);
+
+  // The edge function must agree, or the push quotes a different number again.
+  const edgePlanned = weeklyAllowanceFrom(
+    { income, extra: [], bills, goals: [], funEnabled: false, funPeople: [] },
+    4 // same 4-week period the client side of this scenario uses
+  );
+  const edgeAdjusted = adjustedWeeklyAllowance({
+    plannedWeekly: edgePlanned,
+    billVariance: billVarianceFrom({ bills }),
+    weeksRemaining,
+  });
+  const edgeOk = edgeAdjusted === adjusted;
+  console.log(`  ${edgeOk ? '✅' : '❌'} edge function agrees with the client — ${edgeAdjusted} vs ${adjusted}`);
+
+  // Weeks-remaining now comes from the period math, which counts real weeks
+  // rather than the uneven day-of-month buckets this used to assert (days 22
+  // through 31 were all called "1 week"). verify:periods covers that countdown
+  // day by day, and periodEquivalenceCheck below pins the edge function to it.
+
+  // Over the whole month the variance is absorbed exactly once: spending the
+  // planned figure for the first two weeks and the adjusted one for the last
+  // two must equal the plan minus the overage.
+  const monthTotal = client.weeklyAllowance * 2 + adjusted * 2;
+  const totalOk = Math.round(monthTotal * 100) / 100 === Math.round((client.weeklyAllowance * 4 - 62) * 100) / 100;
+  console.log(`  ${totalOk ? '✅' : '❌'} month absorbs the $62 exactly once — ${monthTotal}`);
+
+  if (!plannedOk || !varianceOk || !adjustedOk || !edgeOk || !totalOk) {
+    throw new Error('bill variance check failed');
+  }
+  console.log('');
+}
+
+/**
+ * Regression guard for budget periods: the edge function derives its own period
+ * math (Deno can't import the client's), so the two must agree on every week
+ * count and every remaining-weeks count, or the push quotes a weekly figure the
+ * Week screen disagrees with. That exact drift has already shipped twice.
+ */
+function periodEquivalenceCheck() {
+  console.log('Pure check: edge-function periods must match the client’s\n');
+
+  let weekMismatch = 0;
+  let remainingMismatch = 0;
+  const samples: string[] = [];
+
+  for (let ws = 0; ws < 7; ws++) {
+    for (const y of [2025, 2026, 2027]) {
+      for (let m = 0; m < 12; m++) {
+        const clientWeeks = weeksInPeriod(`${y}-${String(m + 1).padStart(2, '0')}-01`, ws);
+        const edgeWeeks = edgeWeeksInPeriod(y, m, ws);
+        if (clientWeeks !== edgeWeeks) weekMismatch++;
+        if (ws === 1 && y === 2026 && m === 7) samples.push(`Aug2026=${edgeWeeks}w`);
+      }
+    }
+  }
+  check2('week counts agree across 3 years and all 7 start days', weekMismatch === 0, samples.join(' '));
+
+  // Remaining-weeks, day by day through a year.
+  for (let ws = 0; ws < 7; ws++) {
+    const cursor = new Date(Date.UTC(2026, 0, 1));
+    for (let i = 0; i < 365; i++) {
+      const iso = cursor.toISOString().slice(0, 10);
+      const clientLeft = weeksRemainingInPeriod(ws, iso);
+      const edgeLeft = currentPeriod(ws, new Date(`${iso}T12:00:00Z`)).weeksRemaining;
+      if (clientLeft !== edgeLeft) remainingMismatch++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+  check2('weeks-remaining agrees on all 365 days x 7 start days', remainingMismatch === 0, `${remainingMismatch} mismatches`);
+
+  // And the resulting allowance, end to end, on the five-week August case.
+  const bills = [{ paid: false, paid_amount: null, amount: 2000 }];
+  const income = [{ amount: 4000, frequency: 'monthly' as const }];
+  const clientWeekly = computeBudget({
+    incomeSources: income,
+    extraIncome: [],
+    bills,
+    goals: [],
+    funMoneyEnabled: false,
+    funPeople: [],
+    weeksInPeriod: weeksInPeriod('2026-08-01', 1),
+  }).weeklyAllowance;
+  const edgeWeekly = weeklyAllowanceFrom(
+    { income, extra: [], bills, goals: [], funEnabled: false, funPeople: [] },
+    edgeWeeksInPeriod(2026, 7, 1)
+  );
+  check2(
+    'a five-week August yields the same weekly figure both sides',
+    clientWeekly === edgeWeekly && clientWeekly === 400,
+    `client ${clientWeekly} vs edge ${edgeWeekly}`
+  );
+
+  if (weekMismatch || remainingMismatch || clientWeekly !== edgeWeekly) {
+    throw new Error('period equivalence check failed');
+  }
+  console.log('');
+}
+
+function check2(label: string, ok: boolean, detail = '') {
+  console.log(`  ${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
+}
+
 pureEquivalenceCheck();
+billVarianceCheck();
+periodEquivalenceCheck();
 
 main().catch((err) => {
   console.error('verify-spend-alert failed:', err.message ?? err);

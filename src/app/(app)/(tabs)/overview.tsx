@@ -16,7 +16,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
+import { InfoSheet, InfoTap } from '@/components/info-sheet';
 import { FREQ, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
+import { weeksInPeriod } from '@/lib/period';
 import { monthLabel, monthStartISO } from '@/lib/month-review';
 import {
   useBills,
@@ -41,7 +43,7 @@ function monthBefore(month: string): string {
 }
 
 export default function OverviewScreen() {
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
   const members = useMembers(householdId);
   const income = useIncome(householdId);
   const extraIncome = useExtraIncome(householdId);
@@ -54,6 +56,7 @@ export default function OverviewScreen() {
 
   const [range, setRange] = useState<'3' | '6' | '9' | '12'>('3');
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month, -1 = last, …
+  const [cadenceInfo, setCadenceInfo] = useState(false);
 
   const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const isCurrentMonth = monthOffset === 0;
@@ -64,6 +67,13 @@ export default function OverviewScreen() {
   const viewedMonthName = monthLabel(viewedMonth).split(' ')[0];
 
   const funEnabled = funSettings.data?.enabled ?? false;
+  const weekStartDay = household?.week_start_day ?? 0;
+  // Paycheck cadences don't divide evenly into months (26 or 52 a year), so
+  // their monthly figure is an average. Monthly and twice-a-month do divide
+  // evenly, so those households never need the explanation.
+  const hasPaycheckCadence = (income.data ?? []).some(
+    (s) => s.frequency === 'biweekly' || s.frequency === 'weekly'
+  );
   const budget = computeBudget({
     incomeSources: income.data ?? [],
     extraIncome: extraIncome.data ?? [],
@@ -71,6 +81,7 @@ export default function OverviewScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    weeksInPeriod: weeksInPeriod(monthStartISO(new Date()), weekStartDay),
   });
 
   const memberName = (id: string | null) =>
@@ -91,6 +102,7 @@ export default function OverviewScreen() {
         funTotal: budget.funTotal,
         weeklyAllowance: budget.weeklyAllowance,
         monthlyPool: budget.monthlyPool,
+        weeks: budget.weeksInPeriod,
         variablePool: budget.variablePool,
         goalsSaved: goalsSavedNow,
       }
@@ -101,7 +113,8 @@ export default function OverviewScreen() {
           goalsMonthly: viewedSnapshot.goals_monthly,
           funTotal: viewedSnapshot.fun_total,
           weeklyAllowance: viewedSnapshot.weekly_allowance,
-          monthlyPool: viewedSnapshot.weekly_allowance * 4,
+          monthlyPool: viewedSnapshot.weekly_allowance * weeksInPeriod(viewedMonth, weekStartDay),
+          weeks: weeksInPeriod(viewedMonth, weekStartDay),
           variablePool: viewedSnapshot.total_income - viewedSnapshot.total_fixed,
           goalsSaved: viewedSnapshot.goals_saved_total,
         }
@@ -217,12 +230,27 @@ export default function OverviewScreen() {
                   <MoneyRow key={x.id} label={`+ ${x.source}`} value={fmt(x.amount)} sub />
                 ))}
 
+              {/* Only for households that actually have paycheck-cadence
+                  income, where the monthly figure is an average rather than
+                  what lands in the account. */}
+              {isCurrentMonth && hasPaycheckCadence && (
+                <View style={styles.noteRow}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+                    Shown as a monthly average
+                  </ThemedText>
+                  <InfoTap
+                    label="How every 2 week income averages out"
+                    onPress={() => setCadenceInfo(true)}
+                  />
+                </View>
+              )}
+
               <View style={styles.divider} />
               <MoneyRow label="Fixed expenses" value={`−${fmt(glance.totalFixed)}`} strong color={Palette.terracottaDeep} dot={Palette.ink} />
               <View style={styles.divider} />
               <MoneyRow label="Variable pool" value={fmt(glance.variablePool)} strong color={Palette.sageDeep} />
               <MoneyRow
-                label={`Weekly allowance · ${fmt(glance.weeklyAllowance)}/wk ×4`}
+                label={`Weekly allowance · ${fmt(glance.weeklyAllowance)}/wk ×${glance.weeks}`}
                 value={`−${fmt(glance.monthlyPool)}`}
                 sub
                 color={Palette.terracottaDeep}
@@ -311,6 +339,17 @@ export default function OverviewScreen() {
           </Card>
         </>
       )}
+
+      <InfoSheet
+        visible={cadenceInfo}
+        title="How every 2 week income averages out"
+        paragraphs={[
+          'Getting paid every 2 weeks means 26 paychecks a year, which doesn’t divide evenly into 12 months. Most months have 2 paychecks, but twice a year you’ll get 3.',
+          'Your income here is the yearly total spread evenly, so your weekly amount stays steady instead of jumping around.',
+          'In practice most months land a little under this figure, and those two months land well over. It evens out across the year.',
+        ]}
+        onClose={() => setCadenceInfo(false)}
+      />
     </Screen>
   );
 }
@@ -359,6 +398,13 @@ const styles = StyleSheet.create({
   pagerLabel: { minWidth: 52, textAlign: 'center' },
   glanceCard: { paddingVertical: Spacing.four },
   donutWrap: { alignItems: 'center', marginBottom: Spacing.three },
+  flex: { flex: 1 },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(61,64,91,0.15)',

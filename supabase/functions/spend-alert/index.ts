@@ -13,7 +13,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 import {
+  adjustedWeeklyAllowance,
+  billVarianceFrom,
   buildSpendAlertBody,
+  currentPeriod,
   currentWeekBounds,
   weekFreeToSpend,
   weeklyAllowanceFrom,
@@ -95,16 +98,31 @@ Deno.serve(async (req) => {
       supabase.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
-    const allowance = weeklyAllowanceFrom({
-      income: inc.data ?? [],
-      extra: extra.data ?? [],
-      bills: bills.data ?? [],
-      goals: goals.data ?? [],
-      funEnabled: !!funSettings.data?.enabled,
-      funPeople: funPeople.data ?? [],
+    const weekStartDay = household.data?.week_start_day ?? 0;
+    const billRows = bills.data ?? [];
+    // The month's pool is split across its period's real week count (4 or 5),
+    // not a fixed 4, matching the app.
+    const period = currentPeriod(weekStartDay);
+    const plannedWeekly = weeklyAllowanceFrom(
+      {
+        income: inc.data ?? [],
+        extra: extra.data ?? [],
+        bills: billRows,
+        goals: goals.data ?? [],
+        funEnabled: !!funSettings.data?.enabled,
+        funPeople: funPeople.data ?? [],
+      },
+      period.weeks
+    );
+    // Bills that came in over/under their estimate land on the weeks that are
+    // left, same as the app does. Otherwise the push quotes a figure the
+    // household's own Week screen disagrees with.
+    const allowance = adjustedWeeklyAllowance({
+      plannedWeekly,
+      billVariance: billVarianceFrom({ bills: billRows }),
+      weeksRemaining: period.weeksRemaining,
     });
 
-    const weekStartDay = household.data?.week_start_day ?? 0;
     const { start, end } = currentWeekBounds(weekStartDay);
     const [weekTxns, envelopes] = await Promise.all([
       supabase

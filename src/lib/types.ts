@@ -1,7 +1,7 @@
 // Row shapes for the Supabase tables (design-brief §9). Only the columns the
 // app reads/writes are typed; timestamps etc. are optional where unused.
 
-export type Frequency = 'monthly' | 'semimonthly';
+export type Frequency = 'monthly' | 'semimonthly' | 'biweekly' | 'weekly';
 
 export type Account = {
   id: string;

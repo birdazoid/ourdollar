@@ -25,9 +25,14 @@ export const AVATAR_GLYPHS = {
 
 export type AvatarId = keyof typeof AVATAR_GLYPHS;
 
-/** Renders a known avatar id as its SVG, or falls back to legacy emoji/text values stored on old rows. */
+/**
+ * Renders a known avatar id as its SVG.
+ *
+ * Anything else (a legacy emoji stored on an old row, or nothing at all) falls
+ * back to the default glyph rather than a system emoji: emoji come from the OS
+ * font, so they look different on every platform and never match the drawn set.
+ */
 export function AvatarGlyph({ value, size = 28 }: { value: string | null | undefined; size?: number }) {
-  const Glyph = value ? AVATAR_GLYPHS[value as AvatarId] : undefined;
-  if (Glyph) return <Glyph width={size} height={size} />;
-  return <ThemedText type="body">{value ?? '🙂'}</ThemedText>;
+  const Glyph = (value ? AVATAR_GLYPHS[value as AvatarId] : undefined) ?? AVATAR_GLYPHS.blobbert;
+  return <Glyph width={size} height={size} />;
 }

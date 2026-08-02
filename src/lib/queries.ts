@@ -131,6 +131,48 @@ export function useIncomeMutations(householdId: string | null) {
   return { create, update, remove };
 }
 
+export type ExtraIncomeInput = {
+  member_id: string | null;
+  source: string;
+  amount: number;
+  occurred_on: string;
+};
+
+/** One-off income (a bonus, a refund, a side job) — counts toward this month
+ *  only, unlike a recurring income source. */
+export function useExtraIncomeMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['extra_income', householdId] });
+
+  const create = useMutation({
+    mutationFn: async (input: ExtraIncomeInput) => {
+      const { error } = await supabase
+        .from('extra_income')
+        .insert({ household_id: householdId, ...input });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...input }: ExtraIncomeInput & { id: string }) => {
+      const { error } = await supabase.from('extra_income').update(input).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('extra_income').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, remove };
+}
+
 // ---- Fun money mutations ----
 
 export function useFunMoneyMutations(householdId: string | null) {

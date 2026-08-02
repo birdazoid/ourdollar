@@ -4,9 +4,11 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import IconFreeToSpend from '@/assets/icons/icon-free-to-spend.svg';
+import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { EnvelopeSheet } from '@/components/envelope-sheet';
+import { BoundaryNotice } from '@/components/boundary-notice';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { Ring } from '@/components/ring';
@@ -19,7 +21,14 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
-import { computeBudget, computeEnvelopes, fmt, type EnvelopeStatus } from '@/lib/money';
+import {
+  adjustedWeeklyAllowance,
+  computeBudget,
+  computeEnvelopes,
+  fmt,
+  type EnvelopeStatus,
+} from '@/lib/money';
+import { fundingMonthForWeek, weeksInPeriod, weeksRemainingInPeriod } from '@/lib/period';
 import {
   useBills,
   useEnvelopes,
@@ -64,6 +73,10 @@ export default function WeekScreen() {
   const lastWeek = useMemo(() => getWeek(-1, weekStart), [weekStart]);
 
   const funEnabled = funSettings.data?.enabled ?? false;
+  // A week is funded by the month whose period contains it, which is simply the
+  // month its start date falls in. That's what stops a week spanning the
+  // boundary from being paid for out of two months at once.
+  const fundingMonth = fundingMonthForWeek(week.start);
   const budget = computeBudget({
     incomeSources: income.data ?? [],
     extraIncome: extraIncome.data ?? [],
@@ -71,8 +84,18 @@ export default function WeekScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    weeksInPeriod: weeksInPeriod(fundingMonth, weekStart),
   });
-  const allowance = budget.weeklyAllowance;
+  // Bills that came in over (or under) their estimate are absorbed by the weeks
+  // still left in the period. Past weeks keep the figure they were actually
+  // budgeted against, so navigating back shows honest history.
+  const allowance = isCurrent
+    ? adjustedWeeklyAllowance({
+        plannedWeekly: budget.weeklyAllowance,
+        billVariance: budget.billVariance,
+        weeksRemaining: weeksRemainingInPeriod(weekStart),
+      })
+    : budget.weeklyAllowance;
 
   const weekTxns = (transactions.data ?? []).filter(
     (t) => t.occurred_on >= week.start && t.occurred_on <= week.end
@@ -219,6 +242,10 @@ export default function WeekScreen() {
               ringCenter=""
             />
           )}
+
+          {/* Only during the days a new calendar month has started but this
+              week is still funded by the last one. */}
+          {isCurrent && <BoundaryNotice weekStartsOn={weekStart} />}
 
           {/* Day-of-week tracker with week navigation */}
           <View style={styles.trackerRow}>
@@ -387,7 +414,7 @@ export default function WeekScreen() {
                       key={t.id}
                       emoji={
                         isIncome ? (
-                          '💵'
+                          <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
                         ) : (
                           <CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />
                         )

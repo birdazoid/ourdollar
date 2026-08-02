@@ -3,9 +3,19 @@
 //   (income − fixed bills − savings goals − fun money) ÷ 4
 import type { Bill, ExtraIncome, Frequency, FunMoneyPerson, Goal, IncomeSource } from '@/lib/types';
 
+/**
+ * Monthly-equivalent multipliers.
+ *
+ * Every two weeks is NOT twice a month: 26 paychecks a year against 24. Paid
+ * $1,000 biweekly is $2,166.67 a month, and treating it as semimonthly
+ * understates income by 8.3%, about one paycheck a year. Weekly is 52/12,
+ * likewise not 4.
+ */
 export const FREQ: Record<Frequency, { label: string; mult: number }> = {
   monthly: { label: 'Monthly', mult: 1 },
   semimonthly: { label: 'Twice a month', mult: 2 },
+  biweekly: { label: 'Every 2 weeks', mult: 26 / 12 },
+  weekly: { label: 'Weekly', mult: 52 / 12 },
 };
 
 /** Monthly-equivalent of a recurring income source. */
@@ -26,8 +36,40 @@ export function fmt(n: number | null | undefined): string {
   );
 }
 
+/** What a bill actually costs this month: the real figure once paid, the
+ *  estimate until then. */
 export function billMonthlyCost(bill: Pick<Bill, 'paid' | 'paid_amount' | 'amount'>): number {
   return bill.paid ? bill.paid_amount ?? bill.amount ?? 0 : bill.amount ?? 0;
+}
+
+/** What the bill was budgeted at when the month was planned — always the
+ *  estimate, even after it's been paid for more or less. */
+export function billPlannedCost(bill: Pick<Bill, 'amount'>): number {
+  return bill.amount ?? 0;
+}
+
+/**
+ * The spendable allowance for the current week once bills have come in
+ * different from their estimates.
+ *
+ * The variance lands entirely on the weeks that are LEFT, not spread evenly
+ * across the month: the earlier weeks were already spent against the planned
+ * figure, so re-dividing would quietly understate every one of them after the
+ * fact. Over the full period this still absorbs exactly the variance. By the
+ * last week `weeksRemaining` is 1 and the remainder lands there.
+ *
+ * A bill that came in UNDER its estimate gives the remaining weeks more, by
+ * the same rule. Callers get `weeksRemaining` from
+ * weeksRemainingInPeriod() in lib/period.ts.
+ */
+export function adjustedWeeklyAllowance(args: {
+  plannedWeekly: number;
+  billVariance: number;
+  weeksRemaining: number;
+}): number {
+  const { plannedWeekly, billVariance, weeksRemaining } = args;
+  if (billVariance === 0 || weeksRemaining <= 0) return plannedWeekly;
+  return Math.round((plannedWeekly - billVariance / weeksRemaining) * 100) / 100;
 }
 
 export type BudgetInputs = {
@@ -37,17 +79,28 @@ export type BudgetInputs = {
   goals: Pick<Goal, 'monthly_amount'>[];
   funMoneyEnabled: boolean;
   funPeople: Pick<FunMoneyPerson, 'monthly_amount'>[];
+  /**
+   * Whole weeks the month's pool is split across, from
+   * weeksInPeriod() in lib/period.ts. Always 4 or 5.
+   *
+   * Deliberately required rather than defaulted: the old hardcoded 4 funded
+   * only 48 weeks a year, so a silent fallback would quietly reintroduce that.
+   */
+  weeksInPeriod: number;
 };
 
 export type Budget = {
   totalIncome: number;
-  totalFixed: number;
+  totalFixed: number; // what bills actually cost (paid figures where known)
+  plannedFixed: number; // what they were estimated at when the month was planned
+  billVariance: number; // totalFixed - plannedFixed; >0 means bills ran over
   variablePool: number;
   goalsMonthly: number;
   funTotal: number;
   committed: number;
-  weeklyAllowance: number;
-  monthlyPool: number; // weeklyAllowance * 4
+  weeksInPeriod: number; // echoed back so callers can label "split N ways"
+  weeklyAllowance: number; // the PLANNED weekly figure, see adjustedWeeklyAllowance
+  monthlyPool: number; // weeklyAllowance * weeksInPeriod
   fixedPct: number;
 };
 
@@ -159,23 +212,37 @@ export function computeBudget(inp: BudgetInputs): Budget {
   const extraTotal = inp.extraIncome.reduce((a, x) => a + x.amount, 0);
   const totalIncome = baseIncome + extraTotal;
   const totalFixed = inp.bills.reduce((a, b) => a + billMonthlyCost(b), 0);
+  const plannedFixed = inp.bills.reduce((a, b) => a + billPlannedCost(b), 0);
+  const billVariance = Math.round((totalFixed - plannedFixed) * 100) / 100;
   const variablePool = totalIncome - totalFixed;
   const goalsMonthly = inp.goals.reduce((a, g) => a + g.monthly_amount, 0);
   const funTotal = inp.funMoneyEnabled ? inp.funPeople.reduce((a, p) => a + p.monthly_amount, 0) : 0;
   const committed = goalsMonthly + funTotal;
-  const remainingForWeeks = Math.max(0, variablePool - committed);
-  const weeklyAllowance = Math.round((remainingForWeeks / 4) * 100) / 100;
+  // Derived from the ESTIMATES, so the weekly figure a household budgets
+  // against doesn't shift retroactively the moment one bill comes in high.
+  // The difference is applied to the weeks that are left, in
+  // adjustedWeeklyAllowance(). Callers showing a past week use this as-is.
+  //
+  // Split across the period's REAL week count, not a fixed 4: a five-week
+  // month genuinely has five weeks to fund, and pretending otherwise left the
+  // last one paid for out of nothing.
+  const weeks = Math.max(1, inp.weeksInPeriod);
+  const plannedForWeeks = Math.max(0, totalIncome - plannedFixed - committed);
+  const weeklyAllowance = Math.round((plannedForWeeks / weeks) * 100) / 100;
   const fixedPct = totalIncome > 0 ? Math.round((totalFixed / totalIncome) * 100) : 0;
 
   return {
     totalIncome,
     totalFixed,
+    plannedFixed,
+    billVariance,
     variablePool,
     goalsMonthly,
     funTotal,
     committed,
+    weeksInPeriod: weeks,
     weeklyAllowance,
-    monthlyPool: weeklyAllowance * 4,
+    monthlyPool: Math.round(weeklyAllowance * weeks * 100) / 100,
     fixedPct,
   };
 }

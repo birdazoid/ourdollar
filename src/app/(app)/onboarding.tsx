@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SvgProps } from 'react-native-svg';
 
+import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import IllustrationFixedExpenses from '@/assets/illustrations/onboarding-fixed-expenses.svg';
 import IllustrationHousehold from '@/assets/illustrations/onboarding-household.svg';
 import IllustrationIncome from '@/assets/illustrations/onboarding-income.svg';
@@ -21,7 +22,7 @@ import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { GoalGlyph } from '@/components/goal-glyph';
 import { GoalSheet } from '@/components/goal-sheet';
-import { IncomeSheet, type IncomeDraft } from '@/components/income-sheet';
+import { IncomeSheet, type IncomeDraft, type IncomeTarget } from '@/components/income-sheet';
 import { ListRow } from '@/components/list-row';
 import { MoneyRow } from '@/components/money-row';
 import { PlannedSpending } from '@/components/planned-spending';
@@ -33,7 +34,8 @@ import { useSession } from '@/lib/auth';
 import { billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { computeBudget, fmt, monthlyEquiv } from '@/lib/money';
+import { FREQ, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
+import { monthOf, weeksInPeriod } from '@/lib/period';
 import {
   useBillMutations,
   useBills,
@@ -47,6 +49,7 @@ import {
   useHouseholdMutations,
   useIncome,
   useIncomeMutations,
+  useExtraIncomeMutations,
   sendInvite,
   useMemberMutations,
   useMembers,
@@ -54,8 +57,8 @@ import {
   type GoalInput,
   type NewMemberInput,
 } from '@/lib/queries';
-import type { Bill, Goal, IncomeSource } from '@/lib/types';
-import { weekdayName } from '@/lib/week';
+import type { Bill, Goal } from '@/lib/types';
+import { todayISO, weekdayName } from '@/lib/week';
 
 const STEPS = [
   'Welcome',
@@ -82,6 +85,7 @@ export default function OnboardingScreen() {
   const envelopes = useEnvelopes(householdId);
 
   const incomeMut = useIncomeMutations(householdId);
+  const extraMut = useExtraIncomeMutations(householdId);
   const billMut = useBillMutations(householdId);
   const goalMut = useGoalMutations(householdId);
   const memberMut = useMemberMutations(householdId);
@@ -89,7 +93,16 @@ export default function OnboardingScreen() {
   const completeOnboarding = useCompleteOnboarding(session?.user.id ?? null);
 
   const [step, setStep] = useState(0);
-  const [incomeSheet, setIncomeSheet] = useState<{ source: IncomeSource | null } | null>(null);
+  const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
+  const [incomeTarget, setIncomeTarget] = useState<IncomeTarget>(null);
+  const openIncomeSheet = (t: IncomeTarget) => {
+    setIncomeTarget(t);
+    setIncomeSheetOpen(true);
+  };
+  const closeIncomeSheet = () => {
+    setIncomeSheetOpen(false);
+    setIncomeTarget(null);
+  };
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
   const [addingMember, setAddingMember] = useState(false);
@@ -101,18 +114,28 @@ export default function OnboardingScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funSettings.data?.enabled ?? false,
     funPeople: funPeople.data ?? [],
+    weeksInPeriod: weeksInPeriod(monthOf(todayISO()), household?.week_start_day ?? 0),
   });
 
   const memberById = (id: string | null) => (members.data ?? []).find((m) => m.id === id) ?? null;
 
+  // One-off income routes to extra_income, recurring to income_sources.
   function saveIncome(draft: IncomeDraft, id?: string) {
-    if (id) incomeMut.update.mutate({ id, ...draft });
-    else incomeMut.create.mutate(draft);
-    setIncomeSheet(null);
+    if (draft.kind === 'one-off') {
+      const { kind, ...input } = draft;
+      if (id) extraMut.update.mutate({ id, ...input });
+      else extraMut.create.mutate(input);
+    } else {
+      const { kind, ...input } = draft;
+      if (id) incomeMut.update.mutate({ id, ...input });
+      else incomeMut.create.mutate(input);
+    }
+    closeIncomeSheet();
   }
-  function deleteIncome(id: string) {
-    incomeMut.remove.mutate(id);
-    setIncomeSheet(null);
+  function deleteIncome(id: string, kind: 'recurring' | 'one-off') {
+    if (kind === 'one-off') extraMut.remove.mutate(id);
+    else incomeMut.remove.mutate(id);
+    closeIncomeSheet();
   }
   function saveBill(input: BillInput, id?: string) {
     if (id) billMut.update.mutate({ id, ...input });
@@ -228,10 +251,16 @@ export default function OnboardingScreen() {
                 return (
                   <ListRow
                     key={s.id}
-                    emoji={m ? <AvatarGlyph value={m.avatar} size={44} /> : '💵'}
+                    emoji={
+                      m ? (
+                        <AvatarGlyph value={m.avatar} size={44} />
+                      ) : (
+                        <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
+                      )
+                    }
                     title={m?.name ?? 'Household'}
-                    subtitle={`${fmt(s.amount)} · ${s.frequency === 'semimonthly' ? 'Twice a month' : 'Monthly'}`}
-                    onPress={() => setIncomeSheet({ source: s })}
+                    subtitle={`${fmt(s.amount)} · ${FREQ[s.frequency].label}`}
+                    onPress={() => openIncomeSheet({ kind: 'recurring', source: s })}
                     right={
                       <View style={styles.rightRow}>
                         <ThemedText type="bodyBold">{fmt(Math.round(monthlyEquiv(s)))}</ThemedText>
@@ -242,9 +271,14 @@ export default function OnboardingScreen() {
                 );
               })}
               {(income.data ?? []).length === 0 ? (
-                <EmptyCard emoji="💵" text="No income added yet." cta="Add income" onPress={() => setIncomeSheet({ source: null })} />
+                <EmptyCard
+                  emoji={<IconGiftBox width={26} height={26} color={Palette.sageDeep} />}
+                  text="No income added yet."
+                  cta="Add income"
+                  onPress={() => openIncomeSheet(null)}
+                />
               ) : (
-                <DashedAdd label="Add another income source" onPress={() => setIncomeSheet({ source: null })} />
+                <DashedAdd label="Add another income source" onPress={() => openIncomeSheet(null)} />
               )}
               <TotalCard label="Total monthly income" value={fmt(budget.totalIncome)} tone="sage" />
             </View>
@@ -381,10 +415,10 @@ export default function OnboardingScreen() {
         saving={memberMut.add.isPending}
       />
       <IncomeSheet
-        visible={!!incomeSheet}
-        source={incomeSheet?.source ?? null}
+        visible={incomeSheetOpen}
+        target={incomeTarget}
         members={members.data ?? []}
-        onClose={() => setIncomeSheet(null)}
+        onClose={closeIncomeSheet}
         onSave={saveIncome}
         onDelete={deleteIncome}
         saving={incomeMut.create.isPending || incomeMut.update.isPending}
