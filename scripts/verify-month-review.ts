@@ -111,6 +111,13 @@ async function dbChecks() {
       .insert({ household_id: hid, name: 'Gym', category: 'Other', amount: 40, due_day: 5, varies: false, paid: true, paid_amount: 40, paid_on: '2026-06-05' })
       .select()
       .single();
+    // Estimated low and paid high — the reported OG&E case ($421 est / $483
+    // actual). Closing the month must promote the actual to the estimate.
+    const { data: electricBill } = await u1
+      .from('bills')
+      .insert({ household_id: hid, name: 'Electric', category: 'Utilities', amount: 421, due_day: 20, varies: false, paid: true, paid_amount: 483, paid_on: '2026-06-20' })
+      .select()
+      .single();
 
     // A goal mid-contribution: paid_this_month must be cleared by the close,
     // or the contribute action stays hidden forever (bug found in review).
@@ -141,14 +148,36 @@ async function dbChecks() {
     check('close_month returns "closed"', !closeErr && closeRes === 'closed', closeErr?.message ?? `got ${closeRes}`);
 
     const { data: snap } = await u1.from('month_snapshots').select('*').eq('household_id', hid).eq('month', MONTH).single();
-    // Gym was paid $40; Rent ($1500) + Water (varies, null) were unpaid.
-    check('snapshot derived bills_paid_amount = 40', Number(snap?.bills_paid_amount) === 40, `got ${snap?.bills_paid_amount}`);
-    check('snapshot derived bills_total_amount = 1540 (null amount counts as 0)', Number(snap?.bills_total_amount) === 1540, `got ${snap?.bills_total_amount}`);
-    check('snapshot derived counts 1 paid / 3 total', snap?.bills_paid_count === 1 && snap?.bills_total_count === 3, `got ${snap?.bills_paid_count}/${snap?.bills_total_count}`);
+    // Gym paid $40 and Electric paid $483 (est. $421); Rent ($1500) + Water
+    // (varies, null) were unpaid. Paid totals use the ACTUAL, not the estimate.
+    check('snapshot derived bills_paid_amount = 523', Number(snap?.bills_paid_amount) === 523, `got ${snap?.bills_paid_amount}`);
+    check('snapshot derived bills_total_amount = 2023 (null amount counts as 0)', Number(snap?.bills_total_amount) === 2023, `got ${snap?.bills_total_amount}`);
+    check('snapshot derived counts 2 paid / 4 total', snap?.bills_paid_count === 2 && snap?.bills_total_count === 4, `got ${snap?.bills_paid_count}/${snap?.bills_total_count}`);
     check('snapshot kept the client-supplied plan figures', Number(snap?.total_income) === 5000 && Number(snap?.weekly_allowance) === 300);
 
-    const { data: billsAfter } = await u1.from('bills').select('paid, paid_amount').eq('household_id', hid);
+    const { data: billsAfter } = await u1.from('bills').select('name, paid, paid_amount, amount').eq('household_id', hid);
     check('every bill reset for the fresh cycle', (billsAfter ?? []).every((b) => b.paid === false && b.paid_amount === null));
+
+    // Carry-forward: next month is planned against what bills actually cost.
+    const electricAfter = (billsAfter ?? []).find((b) => b.name === 'Electric');
+    check(
+      'a bill paid over its estimate carries the actual forward (421 → 483)',
+      Number(electricAfter?.amount) === 483,
+      `got ${electricAfter?.amount}`
+    );
+    const gymAfter = (billsAfter ?? []).find((b) => b.name === 'Gym');
+    check('a bill paid exactly at estimate is left alone', Number(gymAfter?.amount) === 40, `got ${gymAfter?.amount}`);
+    const waterAfter = (billsAfter ?? []).find((b) => b.name === 'Water');
+    check(
+      'a varies bill stays estimate-less (not silently turned into a fixed bill)',
+      waterAfter?.amount === null,
+      `got ${waterAfter?.amount}`
+    );
+    check(
+      'the closed month keeps its own history (snapshot still has the actual)',
+      Number(snap?.bills_paid_amount) === 523,
+      `got ${snap?.bills_paid_amount}`
+    );
 
     const { data: goalAfter } = await u1.from('goals').select('paid_this_month').eq('id', goal!.id).single();
     check('BUGFIX: goals.paid_this_month cleared by the close', goalAfter?.paid_this_month === false, `got ${goalAfter?.paid_this_month}`);
@@ -183,8 +212,8 @@ async function dbChecks() {
     });
     check('resolve_carryover (paid) succeeds', !resolveErr && paidOk === true, resolveErr?.message ?? `got ${paidOk}`);
     const { data: snapAfter } = await u1.from('month_snapshots').select('bills_paid_amount, bills_paid_count').eq('household_id', hid).eq('month', MONTH).single();
-    check('June credited: paid_amount 40→1540', Number(snapAfter?.bills_paid_amount) === 1540, `got ${snapAfter?.bills_paid_amount}`);
-    check('June credited: paid_count 1→2', snapAfter?.bills_paid_count === 2, `got ${snapAfter?.bills_paid_count}`);
+    check('June credited: paid_amount 523→2023', Number(snapAfter?.bills_paid_amount) === 2023, `got ${snapAfter?.bills_paid_amount}`);
+    check('June credited: paid_count 2→3', snapAfter?.bills_paid_count === 3, `got ${snapAfter?.bills_paid_count}`);
 
     console.log('\n4. BUGFIX: a varies-amount bill can be marked PAID (not silently dismissed)');
     const { data: waterCo } = await u1.from('bill_carryovers').select('id, amount').eq('household_id', hid).eq('name', 'Water').eq('resolved', false).single();
@@ -197,8 +226,8 @@ async function dbChecks() {
     });
     check('marking a null-amount carryover paid succeeds', variesPaid === true, `got ${variesPaid}`);
     const { data: snapVaries } = await u1.from('month_snapshots').select('bills_paid_amount, bills_paid_count').eq('household_id', hid).eq('month', MONTH).single();
-    check('paid COUNT credited for the unknown amount (1→3)', snapVaries?.bills_paid_count === 3, `got ${snapVaries?.bills_paid_count}`);
-    check('paid AMOUNT unchanged (honest: amount is unknown)', Number(snapVaries?.bills_paid_amount) === 1540, `got ${snapVaries?.bills_paid_amount}`);
+    check('paid COUNT credited for the unknown amount (3→4)', snapVaries?.bills_paid_count === 4, `got ${snapVaries?.bills_paid_count}`);
+    check('paid AMOUNT unchanged (honest: amount is unknown)', Number(snapVaries?.bills_paid_amount) === 2023, `got ${snapVaries?.bills_paid_amount}`);
 
     console.log('\n5. Dismissing does NOT credit history');
     const { data: co2 } = await u1
@@ -211,13 +240,13 @@ async function dbChecks() {
     const { data: dismissRow } = await u1.from('bill_carryovers').select('resolved, resolved_amount').eq('id', co2!.id).single();
     check('dismissed row resolved with NO amount', dismissRow?.resolved === true && dismissRow?.resolved_amount === null);
     const { data: snapAfterDismiss } = await u1.from('month_snapshots').select('bills_paid_amount, bills_paid_count').eq('household_id', hid).eq('month', MONTH).single();
-    check('dismissal leaves paid totals unchanged', Number(snapAfterDismiss?.bills_paid_amount) === 1540 && snapAfterDismiss?.bills_paid_count === 3);
+    check('dismissal leaves paid totals unchanged', Number(snapAfterDismiss?.bills_paid_amount) === 2023 && snapAfterDismiss?.bills_paid_count === 4);
 
     console.log('\n6. Can’t double-resolve or resolve cross-household');
     const { data: doubleResolve } = await u1.rpc('resolve_carryover', { p_carryover_id: rentCo!.id, p_mark_paid: true, p_paid_amount: 999, p_settled_by_member_id: m!.id });
     check('re-resolving an already-resolved carryover is a no-op (false)', doubleResolve === false, `got ${doubleResolve}`);
     const { data: snapStillSame } = await u1.from('month_snapshots').select('bills_paid_amount').eq('household_id', hid).eq('month', MONTH).single();
-    check('no double-credit from the no-op', Number(snapStillSame?.bills_paid_amount) === 1540);
+    check('no double-credit from the no-op', Number(snapStillSame?.bills_paid_amount) === 2023);
 
     const { data: co3 } = await u1
       .from('bill_carryovers')

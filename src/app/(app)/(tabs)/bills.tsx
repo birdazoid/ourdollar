@@ -40,6 +40,15 @@ import type { Bill, Goal } from '@/lib/types';
 const MONTH_LABEL = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 const TODAY_DAY = new Date().getDate();
 
+/** " · est. $421" when a paid bill came in different from what it was budgeted
+ *  at — the card leads with what was actually paid, but the estimate is still
+ *  worth showing so the gap isn't silent. */
+function estimateNote(bill: Bill): string {
+  if (!bill.paid || bill.amount == null || bill.paid_amount == null) return '';
+  if (bill.paid_amount === bill.amount) return '';
+  return ` · est. ${fmt(bill.amount)}`;
+}
+
 export default function BillsScreen() {
   const { householdId } = useHousehold();
   const { session } = useSession();
@@ -281,7 +290,7 @@ export default function BillsScreen() {
                     title={b.name}
                     subtitle={
                       b.paid
-                        ? `Paid${memberName(b.paid_by_member_id) ? ` by ${memberName(b.paid_by_member_id)}` : ''}${b.paid_on ? ` · ${b.paid_on}` : ''}`
+                        ? `Paid${memberName(b.paid_by_member_id) ? ` by ${memberName(b.paid_by_member_id)}` : ''}${b.paid_on ? ` · ${b.paid_on}` : ''}${estimateNote(b)}`
                         : `${cat} · ${isOverdue ? `was due ${ordinal(b.due_day ?? 0)}` : `due the ${ordinal(b.due_day ?? 0)}`}`
                     }
                     subColor={isOverdue ? Palette.terracotta : undefined}
@@ -291,7 +300,13 @@ export default function BillsScreen() {
                     strikethrough={b.paid}
                     right={
                       <View style={styles.right}>
-                        <ThemedText type="label">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>
+                        <ThemedText type="label">
+                          {b.paid
+                            ? fmt(billMonthlyCost(b))
+                            : b.amount != null
+                              ? fmt(b.amount)
+                              : '—'}
+                        </ThemedText>
                         {b.paid ? (
                           <View style={styles.paidBadge}>
                             <Check size={13} color={Palette.card} strokeWidth={3} />
