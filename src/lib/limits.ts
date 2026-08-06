@@ -7,13 +7,18 @@
 //
 // Both sides currently ship permissive: ENTITLEMENTS_ENFORCED is false and
 // app_config.enforce_entitlements is false, so nothing is refused at launch.
+// Switching them on is docs/premium-launch.md; read it first, because the
+// client flag has to ship before the database one.
 
 import type { Account } from '@/lib/types';
 
 export const TIERS = ['free', 'premium'] as const;
 export type Tier = (typeof TIERS)[number];
 
-/** Mirrors public.app_config.enforce_entitlements. Keep the two in step. */
+/**
+ * Mirrors public.app_config.enforce_entitlements. Keep the two in step, and
+ * flip this one first. See docs/premium-launch.md.
+ */
 export const ENTITLEMENTS_ENFORCED = false;
 
 /** Mirrors the free_max_* defaults in public.app_config. */

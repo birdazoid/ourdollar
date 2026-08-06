@@ -18,6 +18,12 @@ npm start
 - Supabase (Postgres, Auth, Realtime, RLS)
 - RevenueCat for subscriptions (added in Phase 5)
 
+## Docs
+
+- [`docs/premium-launch.md`](docs/premium-launch.md) — how to switch plan limits
+  on. They're deployed but disabled; the runbook covers the order, because
+  getting it wrong un-grandfathers your launch users.
+
 ## Branching
 
 `main` stays in a working, buildable state. Do phase/feature work on a
