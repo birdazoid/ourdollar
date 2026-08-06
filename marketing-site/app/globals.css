@@ -552,6 +552,20 @@ a:hover {
   border-color: var(--sand);
 }
 
+/* Single centred block instead of the asymmetric two-column split. For
+   callouts that are one message rather than a heading plus a body column. */
+.callout-center {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+.callout-center > div {
+  max-width: 34rem;
+}
+.callout-center h2 {
+  margin-bottom: 22px;
+}
+
 /* ---------- Store badges (official Apple/Google artwork) ---------- */
 .store-badges {
   display: flex;

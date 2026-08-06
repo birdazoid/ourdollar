@@ -70,15 +70,17 @@ export default function SupportPage() {
         </div>
       </section>
 
-      <section className="callout">
-        <div className="container" style={{ textAlign: 'center' }}>
-          <p className="eyebrow">Still stuck?</p>
-          <h2>Email us and we’ll help you out.</h2>
-          <p>
-            <a className="link-arrow" href={`mailto:${siteConfig.legal.contactEmail}`}>
-              {siteConfig.legal.contactEmail} →
-            </a>
-          </p>
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="container">
+          <div className="callout callout-center" data-reveal>
+            <div>
+              <p className="eyebrow">Still stuck?</p>
+              <h2>Email us and we’ll help you out.</h2>
+              <a className="link-arrow" href={`mailto:${siteConfig.legal.contactEmail}`}>
+                {siteConfig.legal.contactEmail} →
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
