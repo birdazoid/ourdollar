@@ -10,6 +10,10 @@ export type Account = {
   avatar: string | null;
   subscription_status: string;
   subscription_tier: string;
+  // Entitlement columns; see src/lib/limits.ts for how these resolve to a tier.
+  plan_source: string | null;
+  plan_expires_at: string | null;
+  founding_user: boolean;
   onboarded: boolean;
   marketing_opt_in: boolean;
   created_at: string;
