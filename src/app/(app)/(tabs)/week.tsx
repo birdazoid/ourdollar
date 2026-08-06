@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import IconBills from '@/assets/icons/icon-bills.svg';
 import IconFreeToSpend from '@/assets/icons/icon-free-to-spend.svg';
 import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import { Card } from '@/components/card';
@@ -416,7 +417,7 @@ export default function WeekScreen() {
                         isIncome ? (
                           <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
                         ) : (
-                          <CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />
+                          <CategoryGlyph txId={cat.id} emoji={cat.emoji} />
                         )
                       }
                       title={t.label ?? cat.name}
@@ -446,7 +447,7 @@ export default function WeekScreen() {
             ))
           ) : (
             <Card style={styles.empty}>
-              <ThemedText type="subtitle">🧾</ThemedText>
+              <IconBills width={26} height={26} color={Palette.ink} />
               <ThemedText type="body" themeColor="textSecondary" style={styles.emptyText}>
                 Nothing logged for this week yet.
               </ThemedText>
@@ -549,7 +550,7 @@ function EnvelopeRow({
 
   return (
     <ListRow
-      emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />}
+      emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} />}
       title={cat.name}
       subtitle={subtitle}
       dim={env.state === 'skipped'}

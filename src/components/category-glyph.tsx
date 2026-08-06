@@ -18,6 +18,7 @@ import IconPets from '@/assets/icons/icon-pets.svg';
 import IconSubscriptions from '@/assets/icons/icon-subscriptions.svg';
 import IconUtilities from '@/assets/icons/icon-utilities.svg';
 import { ThemedText } from '@/components/themed-text';
+import { Palette } from '@/constants/theme';
 import type { BillCategory } from '@/lib/categories';
 
 // Every TX_CATEGORIES/BILL_CATS entry now has a matching icon; emoji only
@@ -54,8 +55,15 @@ type Props = {
   size?: number;
 };
 
-/** Renders the matching category SVG for a tx category id or bill category name, falling back to the emoji glyph. */
-export function CategoryGlyph({ txId, billCategory, emoji, color = '#3D405B', size = 26 }: Props) {
+/**
+ * Renders the matching category SVG for a tx category id or bill category name,
+ * falling back to the emoji glyph.
+ *
+ * Category icons are ink everywhere. The per-category colors in TX_CATEGORIES
+ * still drive charts and progress fills, but tinting the glyphs with them made
+ * the lighter categories hard to read, so callers should leave `color` alone.
+ */
+export function CategoryGlyph({ txId, billCategory, emoji, color = Palette.ink, size = 26 }: Props) {
   const Icon = (txId && TX_CATEGORY_ICONS[txId]) || (billCategory && BILL_CATEGORY_ICONS[billCategory as BillCategory]);
   if (Icon) return <Icon width={size} height={size} color={color} />;
   return <ThemedText type="subtitle">{emoji}</ThemedText>;

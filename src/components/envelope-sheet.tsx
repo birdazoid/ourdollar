@@ -63,7 +63,6 @@ export function EnvelopeSheet({
             <CategoryGlyph
               txId={envelope!.category}
               emoji={txCategoryById(envelope!.category).emoji}
-              color={txCategoryById(envelope!.category).color}
             />
           </View>
           <ThemedText type="bodyBold">{txCategoryById(envelope!.category).name}</ThemedText>
@@ -79,7 +78,7 @@ export function EnvelopeSheet({
                   key={c.id}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
-                  <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} />
+                  <CategoryGlyph txId={c.id} emoji={c.emoji} />
                   <ThemedText
                     type="small"
                     themeColor={on ? 'text' : 'textSecondary'}

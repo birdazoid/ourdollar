@@ -18,6 +18,8 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 type Props = {
   visible: boolean;
   title?: string;
+  /** Optional glyph shown before the title, so headers use icons rather than emoji. */
+  titleIcon?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 };
@@ -28,7 +30,7 @@ type Props = {
  * with the keyboard up you can still reach every field and the action button,
  * and there's always a visible ✕ to close.
  */
-export function Sheet({ visible, title, onClose, children }: Props) {
+export function Sheet({ visible, title, titleIcon, onClose, children }: Props) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(40)).current;
 
@@ -62,9 +64,12 @@ export function Sheet({ visible, title, onClose, children }: Props) {
           <View style={styles.grabber} />
           <View style={styles.headerRow}>
             {title ? (
-              <ThemedText type="subtitle" style={styles.title}>
-                {title}
-              </ThemedText>
+              <View style={styles.title}>
+                {titleIcon}
+                <ThemedText type="subtitle" style={styles.titleText}>
+                  {title}
+                </ThemedText>
+              </View>
             ) : (
               <View style={styles.title} />
             )}
@@ -123,7 +128,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.three,
   },
-  title: { flex: 1 },
+  title: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  titleText: { flexShrink: 1 },
   closeBtn: {
     width: 32,
     height: 32,

@@ -322,7 +322,7 @@ export default function OverviewScreen() {
                 {catTotals.map((c) => (
                   <View key={c.id} style={styles.catRow}>
                     <View style={[styles.catDot, { backgroundColor: c.color }]} />
-                    <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} size={21} />
+                    <CategoryGlyph txId={c.id} emoji={c.emoji} size={21} />
                     <ThemedText type="bodyBold" style={styles.catName}>
                       {c.name}
                     </ThemedText>

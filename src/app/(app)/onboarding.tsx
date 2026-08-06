@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SvgProps } from 'react-native-svg';
 
+import IconBills from '@/assets/icons/icon-bills.svg';
 import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import IllustrationFixedExpenses from '@/assets/illustrations/onboarding-fixed-expenses.svg';
 import IllustrationHousehold from '@/assets/illustrations/onboarding-household.svg';
@@ -293,7 +294,7 @@ export default function OnboardingScreen() {
                 desc="Add the bills that come out no matter what — rent or mortgage, loans, utilities, subscriptions. We set this aside before figuring your weekly spending money."
               />
               {(bills.data ?? []).length === 0 ? (
-                <EmptyCard emoji="🧾" text="No bills added yet." cta="Add a bill" onPress={() => setBillSheet({ bill: null })} />
+                <EmptyCard emoji={<IconBills width={26} height={26} color={Palette.ink} />} text="No bills added yet." cta="Add a bill" onPress={() => setBillSheet({ bill: null })} />
               ) : (
                 <>
                   <DashedAdd label="Add another bill" onPress={() => setBillSheet({ bill: null })} />

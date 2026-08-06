@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { GoalGlyph } from '@/components/goal-glyph';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
@@ -22,7 +23,11 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
   const pct = goal ? Math.min(1, goal.saved_amount / goal.target_amount) : 0;
 
   return (
-    <Sheet visible={!!goal} title={goal ? `${goal.emoji ?? '🎯'} ${goal.name}` : undefined} onClose={onClose}>
+    <Sheet
+      visible={!!goal}
+      title={goal?.name}
+      titleIcon={goal ? <GoalGlyph emoji={goal.emoji} size={22} /> : undefined}
+      onClose={onClose}>
       {goal && (
         <>
           <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>

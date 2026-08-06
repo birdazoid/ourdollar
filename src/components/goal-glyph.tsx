@@ -10,6 +10,7 @@ import IconSuv from '@/assets/icons/icon-suv.svg';
 import IconVacation from '@/assets/icons/icon-vacation.svg';
 import IconWedding from '@/assets/icons/icon-wedding.svg';
 import { ThemedText } from '@/components/themed-text';
+import { Palette } from '@/constants/theme';
 
 // Every GOAL_EMOJI_OPTIONS entry has a matching icon, plus the 🎯 default/unset
 // state, which uses the save icon.
@@ -30,7 +31,7 @@ const GOAL_EMOJI_ICONS: Record<string, typeof IconSave> = {
 /** Renders a savings-goal icon: matches a picked emoji to its icon, and treats an unset/default emoji as the save icon. */
 export function GoalGlyph({
   emoji,
-  color = '#3D405B',
+  color = Palette.ink,
   size = 26,
 }: {
   emoji?: string | null;

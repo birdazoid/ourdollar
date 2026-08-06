@@ -44,7 +44,7 @@ export function PlannedSpending({ householdId }: { householdId: string | null })
         return (
           <ListRow
             key={e.id}
-            emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} color={cat.color} />}
+            emoji={<CategoryGlyph txId={cat.id} emoji={cat.emoji} />}
             title={cat.name}
             subtitle="Every week"
             onPress={() => setSheet({ envelope: e })}

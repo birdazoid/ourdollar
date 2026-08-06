@@ -185,9 +185,16 @@ export default function AddExpenseScreen() {
                       if (!amount) setAmount(String(m.amount));
                       setShowSug(false);
                     }}>
-                    <ThemedText type="body">
-                      {txCategoryById(m.category).emoji} {m.label}
-                    </ThemedText>
+                    <View style={styles.sugLabel}>
+                      <CategoryGlyph
+                        txId={txCategoryById(m.category).id}
+                        emoji={txCategoryById(m.category).emoji}
+                        size={20}
+                      />
+                      <ThemedText type="body" numberOfLines={1} style={styles.sugLabelText}>
+                        {m.label}
+                      </ThemedText>
+                    </View>
                     <ThemedText type="small" themeColor="textSecondary">
                       {fmt(m.amount)}
                     </ThemedText>
@@ -206,7 +213,7 @@ export default function AddExpenseScreen() {
                   key={c.id}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
-                  <CategoryGlyph txId={c.id} emoji={c.emoji} color={c.color} />
+                  <CategoryGlyph txId={c.id} emoji={c.emoji} />
                   <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
                     {c.name}
                   </ThemedText>
@@ -329,6 +336,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(61,64,91,0.1)',
   },
+  sugLabel: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1 },
+  sugLabelText: { flexShrink: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   envHint: {
     marginTop: Spacing.two,

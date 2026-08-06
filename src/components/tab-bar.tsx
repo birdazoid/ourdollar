@@ -39,7 +39,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     if (!cfg) return null;
     const Icon = cfg.icon;
     const active = activeName === name;
-    const color = active ? Palette.sageDeep : '#B7B8C4';
+    // Inactive tabs are ink, matching the category icons; the old pale grey was
+    // too low-contrast to read. The sage box behind the icon carries the active
+    // state, so the two no longer rely on hue alone to tell each other apart.
+    const color = active ? Palette.sageDeep : Palette.ink;
     return (
       <Pressable
         key={name}
@@ -47,7 +50,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         accessibilityState={{ selected: active }}
         onPress={() => go(name)}
         style={styles.tab}>
-        <Icon width={25} height={25} color={color} strokeWidth={active ? 2.6 : 2} />
+        <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
+          <Icon width={25} height={25} color={color} strokeWidth={active ? 2.6 : 2} />
+        </View>
         <ThemedText type="small" style={[styles.tabLabel, { color }]}>
           {cfg.label}
         </ThemedText>
@@ -90,7 +95,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: Radius.large + 6,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
+    // Trimmed to offset the icon box above, keeping the bar its original height.
+    paddingVertical: Spacing.one + 2,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.6)',
     shadowColor: Palette.ink,
@@ -103,6 +109,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     minWidth: 46,
+  },
+  // Always laid out, so switching tabs tints the box rather than shifting the row.
+  iconWrap: {
+    width: 38,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.medium,
+  },
+  iconWrapActive: {
+    backgroundColor: 'rgba(129,178,154,0.2)',
   },
   tabLabel: {
     fontSize: 10.5,
