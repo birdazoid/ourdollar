@@ -17,6 +17,7 @@ export function Nav() {
             Features
           </Link>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/support">Support</Link>
           <Link href="/#get" className="nav-hide-sm">
             Get the app
           </Link>

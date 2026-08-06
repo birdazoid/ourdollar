@@ -22,6 +22,7 @@ export function Footer() {
         </div>
         <nav className="footer-links">
           <Link href="/pricing">Pricing</Link>
+          <Link href="/support">Support</Link>
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms of Service</Link>
         </nav>

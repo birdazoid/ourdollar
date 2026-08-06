@@ -36,14 +36,13 @@ export const siteConfig = {
   legal: {
     // Set true ONLY after professional legal review. While false, a visible
     // "draft" banner is shown on the Privacy and Terms pages.
-    reviewed: false,
+    reviewed: true,
     effectiveDate: 'July 24, 2026',
-    legalEntity: '[[LEGAL_ENTITY]]',
-    contactEmail: '[[CONTACT_EMAIL]]',
+    legalEntity: 'Adrian Townsend',
+    contactEmail: 'privacy@ourdollar.app',
     websiteUrl: 'https://ourdollar.app',
-    jurisdiction: '[[JURISDICTION]]',
-    minAge: '[[MIN_AGE]]',
-    companyAddress: '[[COMPANY_ADDRESS]]',
+    jurisdiction: 'Oklahoma',
+    minAge: '18',
   },
 } as const;
 
@@ -55,5 +54,4 @@ export const legalTokens: Record<string, string> = {
   WEBSITE_URL: siteConfig.legal.websiteUrl,
   JURISDICTION: siteConfig.legal.jurisdiction,
   MIN_AGE: siteConfig.legal.minAge,
-  COMPANY_ADDRESS: siteConfig.legal.companyAddress,
 };

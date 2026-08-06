@@ -151,5 +151,4 @@ Questions about this Policy or your information:
 
 [[LEGAL_ENTITY]]
 [[CONTACT_EMAIL]]
-[[COMPANY_ADDRESS]]
 [[WEBSITE_URL]]

@@ -126,5 +126,4 @@ accept the updated Terms.
 
 [[LEGAL_ENTITY]]
 [[CONTACT_EMAIL]]
-[[COMPANY_ADDRESS]]
 [[WEBSITE_URL]]
