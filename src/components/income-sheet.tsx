@@ -9,7 +9,7 @@ import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { FREQ, fmt, monthlyEquiv } from '@/lib/money';
+import { FREQ, fmt, groupAmountInput, monthlyEquiv, sanitizeAmountInput } from '@/lib/money';
 import type { ExtraIncome, Frequency, HouseholdMember, IncomeSource } from '@/lib/types';
 import { todayISO } from '@/lib/week';
 
@@ -96,8 +96,8 @@ export function IncomeSheet({ visible, target, members, onClose, onSave, onDelet
           $
         </ThemedText>
         <TextInput
-          value={amount}
-          onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+          value={groupAmountInput(amount)}
+          onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
           keyboardType="decimal-pad"
           inputMode="decimal"
           autoFocus

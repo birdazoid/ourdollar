@@ -105,7 +105,8 @@ async function main() {
 
     const weekStartDay = household.data?.week_start_day ?? 0;
     const billRows = bills.data ?? [];
-    const period = currentPeriod(weekStartDay);
+    const anchor = todayISO(); // the occurred_on the expense above was inserted with
+    const period = currentPeriod(weekStartDay, anchor);
     const allowance = adjustedWeeklyAllowance({
       plannedWeekly: weeklyAllowanceFrom(
         {
@@ -122,8 +123,8 @@ async function main() {
       weeksRemaining: period.weeksRemaining,
     });
 
-    const { start, end } = currentWeekBounds(weekStartDay);
-    const [weekTxns, envelopes] = await Promise.all([
+    const { start, end } = currentWeekBounds(weekStartDay, anchor);
+    const [weekTxns, envelopes, rollovers] = await Promise.all([
       admin
         .from('transactions')
         .select('amount, type, is_fun_money, category')
@@ -131,6 +132,11 @@ async function main() {
         .gte('occurred_on', start)
         .lte('occurred_on', end),
       admin.from('weekly_envelopes').select('category, weekly_amount, skipped_week_start').eq('household_id', householdId),
+      admin
+        .from('week_rollovers')
+        .select('applied_amount')
+        .eq('household_id', householdId)
+        .eq('to_week_start', start),
     ]);
 
     const remaining = weekFreeToSpend({
@@ -141,6 +147,7 @@ async function main() {
         weekly_amount: Number(e.weekly_amount),
         skipped: e.skipped_week_start === start,
       })),
+      carriedIn: (rollovers.data ?? []).reduce((a, r) => a + Number(r.applied_amount), 0),
     });
     const body = buildSpendAlertBody({
       spenderName: spender.name,
@@ -368,11 +375,125 @@ function periodEquivalenceCheck() {
   console.log('');
 }
 
+/**
+ * Regression guard for the carried-over week (the reported bug): when a
+ * household settles a week that finished over budget by carrying it forward,
+ * week_rollovers.applied_amount is negative and the Week screen folds it into
+ * the new week's effective allowance. The push ignored the table entirely, so
+ * it quoted a balance too generous by exactly the carried overage — reported:
+ * push said "over $100 left", app said "-$1.75".
+ */
+function carryForwardCheck() {
+  console.log('Pure check: a carried-over week must move the push’s figure too\n');
+
+  const weeklyAllowance = 800;
+  const carriedIn = -104; // last week finished $104 over and was carried forward
+  const envelopes = [{ category: 'fuel', weekly_amount: 80, skipped: false }];
+  // Fuel $93 of $80 (over by $13) plus $631 of other spending = $724 spent.
+  const weekTxns = [
+    { amount: 93, type: 'expense', is_fun_money: false, category: 'fuel' },
+    { amount: 631, type: 'expense', is_fun_money: false, category: 'groceries' },
+  ];
+
+  const spentByCategory: Record<string, number> = {};
+  for (const t of weekTxns) spentByCategory[t.category] = (spentByCategory[t.category] ?? 0) + t.amount;
+  const client = computeEnvelopes({
+    weeklyAllowance,
+    incomeBack: 0 + carriedIn, // the Week screen passes incomeBack + adjustment
+    totalNonFunExpense: weekTxns.reduce((a, t) => a + t.amount, 0),
+    spentByCategory,
+    envelopes: envelopes.map((e) => ({ id: e.category, ...e })),
+  }).freeToSpend;
+
+  const edge = weekFreeToSpend({ weeklyAllowance, weekTxns, envelopes, carriedIn });
+  check2(`edge agrees with the client once the carry-in is applied`, edge === client, `${edge} vs ${client}`);
+  check2('and the household reads as over budget, not flush', edge < 0, `${edge}`);
+
+  // The gap this closes: ignoring the carry-in is a straight overstatement.
+  const ignoringCarry = weekFreeToSpend({ weeklyAllowance, weekTxns, envelopes });
+  check2(
+    'ignoring the carry-in is exactly what produced the wrong push',
+    Math.round((ignoringCarry - edge) * 100) / 100 === -carriedIn,
+    `would have said ${ignoringCarry} instead of ${edge}`
+  );
+
+  if (edge !== client || edge >= 0) throw new Error('carry-forward check failed');
+  console.log('');
+}
+
+/**
+ * Regression guard for income frequency: the edge function keeps its own
+ * multiplier table (Deno can't import the client's), and it was missing
+ * biweekly and weekly entirely — both silently fell back to "monthly", which
+ * understated a biweekly-paid household's income by more than half.
+ */
+function frequencyCheck() {
+  console.log('Pure check: edge-function income frequencies must match the client’s\n');
+
+  let mismatch = 0;
+  for (const frequency of ['monthly', 'semimonthly', 'biweekly', 'weekly'] as const) {
+    const income = [{ amount: 1000, frequency }];
+    const client = computeBudget({
+      incomeSources: income,
+      extraIncome: [],
+      bills: [],
+      goals: [],
+      funMoneyEnabled: false,
+      funPeople: [],
+      weeksInPeriod: 4,
+    }).weeklyAllowance;
+    const edge = weeklyAllowanceFrom(
+      { income, extra: [], bills: [], goals: [], funEnabled: false, funPeople: [] },
+      4
+    );
+    const ok = client === edge;
+    if (!ok) mismatch++;
+    console.log(`  ${ok ? '✅' : '❌'} ${frequency}: client ${client} vs edge ${edge}`);
+  }
+
+  if (mismatch) throw new Error('income frequency check failed');
+  console.log('');
+}
+
+/**
+ * Regression guard for the anchor date: the function runs on a UTC server, so
+ * an expense logged on a US evening carries tomorrow's UTC date. Anchoring to
+ * the transaction's own occurred_on (already the household's local date) keeps
+ * the push on the week the app is showing.
+ */
+function anchorDateCheck() {
+  console.log('Pure check: the week is anchored to occurred_on, not the server clock\n');
+
+  // Friday-start week, like the reported household. An expense that occurred on
+  // Thursday Aug 13 (the LAST day of that week) logged at 7:33pm US Central is
+  // already Aug 14 in UTC — the next week.
+  const weekStartDay = 5;
+  const serverNow = new Date('2026-08-14T00:33:00Z');
+
+  const byClock = currentWeekBounds(weekStartDay, serverNow);
+  const byOccurredOn = currentWeekBounds(weekStartDay, '2026-08-13');
+
+  check2('occurred_on keeps the expense in its own week', byOccurredOn.start === '2026-08-07', byOccurredOn.start);
+  check2('the raw UTC clock would have skipped a week', byClock.start === '2026-08-14', byClock.start);
+
+  // Same for the period, which drives weeks-remaining and the bill variance.
+  const p = currentPeriod(weekStartDay, '2026-08-13');
+  check2('period math accepts the same anchor', p.weeksRemaining >= 1, `${p.weeksRemaining} week(s) left`);
+
+  if (byOccurredOn.start !== '2026-08-07' || byClock.start !== '2026-08-14') {
+    throw new Error('anchor date check failed');
+  }
+  console.log('');
+}
+
 function check2(label: string, ok: boolean, detail = '') {
   console.log(`  ${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
 pureEquivalenceCheck();
+carryForwardCheck();
+frequencyCheck();
+anchorDateCheck();
 billVarianceCheck();
 periodEquivalenceCheck();
 

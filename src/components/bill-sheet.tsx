@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
+import { groupAmountInput, sanitizeAmountInput } from '@/lib/money';
 import type { BillInput } from '@/lib/queries';
 import type { Bill } from '@/lib/types';
 
@@ -102,8 +103,8 @@ export function BillSheet({ visible, bill, onClose, onSave, onDelete, saving }: 
           </ThemedText>
           <TextField
             placeholder="amount"
-            value={amount}
-            onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+            value={groupAmountInput(amount)}
+            onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
             keyboardType="decimal-pad"
             inputMode="decimal"
             style={styles.inlineInput}

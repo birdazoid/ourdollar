@@ -12,6 +12,7 @@ import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
+import { DeltaText } from '@/components/delta-text';
 import { ListRow } from '@/components/list-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,11 +21,12 @@ import { useSession } from '@/lib/auth';
 import { billEmoji } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { useEnsureMonthClosed } from '@/lib/month-close';
-import { billMonthlyCost, computeBudget, fmt } from '@/lib/money';
+import { billMonthlyCost, computeBudget, fmt, isVariableExpense } from '@/lib/money';
 import { weeksInPeriod } from '@/lib/period';
 import {
   lastCompletedMonthStart,
   monthLabel,
+  monthName,
   monthStartISO,
   weekBucketsInMonth,
 } from '@/lib/month-review';
@@ -109,7 +111,7 @@ export default function MonthReviewScreen() {
   // (never reset, so this works even before any snapshot history exists).
   const allTransactions = useTransactions(householdId);
   const transactions = useMemo(
-    () => (allTransactions.data ?? []).filter((t) => t.type === 'expense' && !t.is_fun_money),
+    () => (allTransactions.data ?? []).filter(isVariableExpense),
     [allTransactions.data]
   );
   const thisMonthSpend = sumExpenses(transactions, targetMonth.slice(0, 7));
@@ -141,6 +143,7 @@ export default function MonthReviewScreen() {
     });
   }, [targetMonth, weekStart, transactions]);
   const fullWeeks = weekBars.filter((w) => w.isFull);
+  const partWeekCount = weekBars.length - fullWeeks.length;
   const overWeekCount = fullWeeks.filter((w) => w.value > weeklyAllowanceForCharts).length;
 
   const fixedBills = liveBillList.filter((b) => !b.varies);
@@ -212,12 +215,10 @@ export default function MonthReviewScreen() {
                     {fmt(billsPaidAmount)} <ThemedText type="body" themeColor="textSecondary">of {fmt(billsTotalAmount)} paid</ThemedText>
                   </ThemedText>
                   {billsDelta != null ? (
-                    <ThemedText type="small" style={billsDelta <= 0 ? styles.good : styles.warn}>
-                      {billsDelta <= 0 ? '↓' : '↑'} {fmt(Math.abs(billsDelta))} vs {monthLabel(prevMonthKey)}
-                    </ThemedText>
+                    <DeltaText delta={billsDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
                   ) : (
                     <ThemedText type="small" themeColor="textSecondary">
-                      First month tracked — nothing to compare yet.
+                      First month tracked, nothing to compare yet.
                     </ThemedText>
                   )}
                 </Card>
@@ -226,9 +227,7 @@ export default function MonthReviewScreen() {
                   <ThemedText type="bodyBold">Variable spending</ThemedText>
                   <ThemedText type="title">{fmt(thisMonthSpend)}</ThemedText>
                   {spendDelta != null ? (
-                    <ThemedText type="small" style={spendDelta <= 0 ? styles.good : styles.warn}>
-                      {spendDelta <= 0 ? '↓' : '↑'} {fmt(Math.abs(spendDelta))} vs {monthLabel(prevMonthKey)}
-                    </ThemedText>
+                    <DeltaText delta={spendDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
                   ) : (
                     <ThemedText type="small" themeColor="textSecondary">
                       No prior month to compare yet.
@@ -248,6 +247,17 @@ export default function MonthReviewScreen() {
                 </ThemedText>
                 <Card style={styles.chartCard}>
                   <BarChart data={weekBars} highlightLast={false} />
+                  {/* A month rarely starts and ends on a week boundary, so the
+                      first and last bars can cover two or three days. They look
+                      like unusually good weeks unless the chart says otherwise,
+                      which is also why the count above only uses whole ones. */}
+                  {partWeekCount > 0 && (
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.chartNote}>
+                      {partWeekCount === 1 ? 'One bar covers' : `${partWeekCount} bars cover`} only
+                      part of a week, where {monthName(targetMonth)} starts or ends mid-week. They
+                      sit low for that reason and aren&apos;t counted above.
+                    </ThemedText>
+                  )}
                 </Card>
               </View>
             )}
@@ -460,11 +470,10 @@ const styles = StyleSheet.create({
   stepDesc: { marginTop: Spacing.two, lineHeight: 22 },
 
   summaryCard: { marginBottom: Spacing.three, gap: Spacing.one },
-  good: { color: Palette.sageDeep },
-  warn: { color: Palette.terracottaDeep },
   overNote: { marginTop: Spacing.one },
   chartLabel: { marginBottom: Spacing.two },
   chartCard: { paddingVertical: Spacing.three },
+  chartNote: { marginTop: Spacing.three, lineHeight: 18 },
 
   emptyNote: { textAlign: 'center', paddingVertical: Spacing.four },
   allPaidCard: { alignItems: 'center', paddingVertical: Spacing.five },

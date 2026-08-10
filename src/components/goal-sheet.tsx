@@ -10,6 +10,7 @@ import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { GOAL_EMOJI_OPTIONS } from '@/lib/categories';
+import { groupAmountInput, sanitizeAmountInput } from '@/lib/money';
 import type { GoalInput } from '@/lib/queries';
 import type { Goal } from '@/lib/types';
 
@@ -53,8 +54,8 @@ export function GoalSheet({ visible, goal, onClose, onSave, onDelete, saving }: 
             </ThemedText>
             <TextField
               placeholder="amount"
-              value={target}
-              onChangeText={(t) => setTarget(t.replace(/[^0-9.]/g, ''))}
+              value={groupAmountInput(target)}
+              onChangeText={(t) => setTarget(sanitizeAmountInput(t))}
               keyboardType="decimal-pad"
               inputMode="decimal"
               style={styles.inlineInput}
@@ -69,8 +70,8 @@ export function GoalSheet({ visible, goal, onClose, onSave, onDelete, saving }: 
             </ThemedText>
             <TextField
               placeholder="amount"
-              value={monthly}
-              onChangeText={(t) => setMonthly(t.replace(/[^0-9.]/g, ''))}
+              value={groupAmountInput(monthly)}
+              onChangeText={(t) => setMonthly(sanitizeAmountInput(t))}
               keyboardType="decimal-pad"
               inputMode="decimal"
               style={styles.inlineInput}

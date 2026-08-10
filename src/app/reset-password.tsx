@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { PasswordField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 
 export default function ResetPasswordScreen() {
-  const theme = useTheme();
   const { updatePassword, clearRecovery } = useSession();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -49,23 +48,15 @@ export default function ResetPasswordScreen() {
             </View>
 
             <View style={styles.form}>
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
+              <PasswordField
                 placeholder="New password"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                secureTextEntry
                 value={password}
                 onChangeText={setPassword}
                 editable={!loading}
                 autoFocus
               />
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
+              <PasswordField
                 placeholder="Confirm new password"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                secureTextEntry
                 value={confirm}
                 onChangeText={setConfirm}
                 editable={!loading}
@@ -101,14 +92,5 @@ const styles = StyleSheet.create({
   copy: { alignItems: 'center', gap: Spacing.two },
   tagline: { textAlign: 'center' },
   form: { gap: Spacing.three },
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderRadius: Radius.large,
-    paddingHorizontal: Spacing.three,
-    fontFamily: Fonts.sans.regular,
-    fontSize: 16,
-    backgroundColor: Palette.card,
-  },
   message: { textAlign: 'center' },
 });

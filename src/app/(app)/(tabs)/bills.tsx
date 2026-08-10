@@ -23,6 +23,7 @@ import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
 import { billMonthlyCost, fmt } from '@/lib/money';
 import { monthLabel } from '@/lib/month-review';
+import { monthOf } from '@/lib/period';
 import {
   useBillCarryovers,
   useBillMutations,
@@ -34,11 +35,9 @@ import {
   type BillInput,
   type GoalInput,
 } from '@/lib/queries';
+import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
 import type { Bill, Goal } from '@/lib/types';
-
-const MONTH_LABEL = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-const TODAY_DAY = new Date().getDate();
 
 /** " · est. $421" when a paid bill came in different from what it was budgeted
  *  at — the card leads with what was actually paid, but the estimate is still
@@ -50,6 +49,13 @@ function estimateNote(bill: Bill): string {
 }
 
 export default function BillsScreen() {
+  // These were module-level consts, which froze "today" for the whole JS
+  // runtime: overdue bills stayed overdue-as-of-launch-day and the header kept
+  // last month's name until the app was force-quit.
+  const today = useToday();
+  const headerMonth = monthLabel(monthOf(today));
+  const todayDay = Number(today.slice(8, 10));
+
   const { householdId } = useHousehold();
   const { session } = useSession();
   const bills = useBills(householdId);
@@ -88,10 +94,10 @@ export default function BillsScreen() {
 
   const billList = bills.data ?? [];
   const paid = billList.filter((b) => b.paid);
-  const overdue = billList.filter((b) => !b.paid && (b.due_day ?? 99) < TODAY_DAY);
+  const overdue = billList.filter((b) => !b.paid && (b.due_day ?? 99) < todayDay);
   const firstOverdueId = overdue[0]?.id ?? null;
   const dueSoon = billList.filter(
-    (b) => !b.paid && (b.due_day ?? 99) >= TODAY_DAY && (b.due_day ?? 99) <= TODAY_DAY + 7
+    (b) => !b.paid && (b.due_day ?? 99) >= todayDay && (b.due_day ?? 99) <= todayDay + 7
   );
   const frac = billList.length ? paid.length / billList.length : 0;
   const paidTotal = paid.reduce((a, b) => a + billMonthlyCost(b), 0);
@@ -171,7 +177,7 @@ export default function BillsScreen() {
 
   return (
     <Screen scrollRef={scrollRef}>
-      <ScreenHeader eyebrow={MONTH_LABEL} title="Bills" />
+      <ScreenHeader eyebrow={headerMonth} title="Bills" />
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
@@ -181,7 +187,10 @@ export default function BillsScreen() {
             eyebrow="Bills paid this month"
             big={`${paid.length} of ${billList.length}`}
             sub="paid"
-            sub2={`${fmt(paidTotal)} paid of ${fmt(billsTotal)}`}
+            // "of $6,631" mixes real paid amounts with estimates for the bills
+            // that haven't come in yet. Calling the total "expected" says so
+            // without a second line.
+            sub2={`${fmt(paidTotal)} paid of ${fmt(billsTotal)} expected`}
             ringValue={frac}
             ringLabel="done"
           />
@@ -190,13 +199,17 @@ export default function BillsScreen() {
             <TwoUp>
               <MiniCard
                 label="Overdue"
+                hint="due date has passed"
                 warn={overdue.length > 0}
                 onPress={overdue.length ? scrollToOverdue : undefined}>
                 <ThemedText type="title" style={{ color: overdue.length ? Palette.terracotta : Palette.ink }}>
                   {overdue.length}
                 </ThemedText>
               </MiniCard>
-              <MiniCard label="Due this week">
+              {/* Not the budget week: this counts due dates in the next 7 days
+                  from today, which is what someone checking their balance
+                  actually wants to know. */}
+              <MiniCard label="Due soon" hint="in the next 7 days">
                 <ThemedText type="title">{dueSoon.length}</ThemedText>
               </MiniCard>
             </TwoUp>
@@ -283,7 +296,7 @@ export default function BillsScreen() {
                 icon={<CategoryGlyph billCategory={cat} emoji={billEmoji(cat)} size={21} />}
               />
               {catBills.map((b) => {
-                const isOverdue = !b.paid && (b.due_day ?? 99) < TODAY_DAY;
+                const isOverdue = !b.paid && (b.due_day ?? 99) < todayDay;
                 const row = (
                   <ListRow
                     emoji={<CategoryGlyph billCategory={cat} emoji={billEmoji(cat)} />}

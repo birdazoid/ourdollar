@@ -108,6 +108,56 @@ export default function AddExpenseScreen() {
     : 0;
   const envRemaining = activeEnv ? activeEnv.weekly_amount - catSpentThisWeek : 0;
 
+  /**
+   * Which pot this expense will actually come out of, worked through for the
+   * amount being typed. "Where does this money come from?" is the question in
+   * the spender's head right now, and stating the balance alone didn't answer
+   * it. The un-enveloped case is spelled out too — knowing what DOESN'T come
+   * out of a planned category is half of understanding the system.
+   */
+  const spendSource = (() => {
+    if (type !== 'expense' || isFun || !category) return null;
+    const catName = txCategoryById(category).name;
+
+    if (!activeEnv) {
+      return { tone: 'free' as const, title: 'Comes out of free to spend', detail: `${catName} isn't a planned category.` };
+    }
+    if (envSkipped) {
+      return {
+        tone: 'free' as const,
+        title: 'Comes out of free to spend',
+        detail: `${catName} is planned, but it's skipped this week.`,
+      };
+    }
+    const budget = activeEnv.weekly_amount;
+    if (envRemaining <= 0) {
+      return {
+        tone: 'over' as const,
+        title: 'Comes out of free to spend',
+        detail: `${catName} is already ${fmt(-envRemaining)} past its ${fmt(budget)}.`,
+      };
+    }
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return {
+        tone: 'planned' as const,
+        title: `Comes out of ${catName}`,
+        detail: `${fmt(envRemaining)} left of ${fmt(budget)} this week.`,
+      };
+    }
+    const after = Math.round((envRemaining - amountNum) * 100) / 100;
+    return after >= 0
+      ? {
+          tone: 'planned' as const,
+          title: `Comes out of ${catName}`,
+          detail: `${fmt(envRemaining)} left, ${fmt(after)} after this.`,
+        }
+      : {
+          tone: 'over' as const,
+          title: `Comes out of ${catName}`,
+          detail: `This goes ${fmt(-after)} past the ${fmt(budget)}. The extra comes out of free to spend.`,
+        };
+  })();
+
   function save() {
     const input: TransactionInput = {
       member_id: memberId,
@@ -222,12 +272,18 @@ export default function AddExpenseScreen() {
             })}
           </View>
 
-          {type === 'expense' && !isFun && activeEnv && (
-            <View style={styles.envHint}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {envSkipped
-                  ? `${txCategoryById(category).name} is planned — skipped this week`
-                  : `Planned category · ${fmt(envRemaining)} left of ${fmt(activeEnv.weekly_amount)} this week`}
+          {spendSource && (
+            <View
+              style={[
+                styles.envHint,
+                spendSource.tone === 'planned' && styles.envHintPlanned,
+                spendSource.tone === 'over' && styles.envHintOver,
+              ]}>
+              <ThemedText type="bodyBold" style={styles[`${spendSource.tone}Text`]}>
+                {spendSource.title}
+              </ThemedText>
+              <ThemedText type="small" style={styles[`${spendSource.tone}Sub`]}>
+                {spendSource.detail}
               </ThemedText>
             </View>
           )}
@@ -339,13 +395,24 @@ const styles = StyleSheet.create({
   sugLabel: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1 },
   sugLabelText: { flexShrink: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  // Tinted to the pot the money leaves: sage for free, sand for a planned
+  // category, terracotta once it spills past one.
   envHint: {
     marginTop: Spacing.two,
+    gap: 2,
     backgroundColor: 'rgba(129,178,154,0.14)',
     borderRadius: Radius.medium,
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.two + 2,
     paddingHorizontal: Spacing.three,
   },
+  envHintPlanned: { backgroundColor: 'rgba(242,204,143,0.28)' },
+  envHintOver: { backgroundColor: 'rgba(224,122,95,0.14)' },
+  freeText: { color: Palette.sageDeep },
+  freeSub: { color: 'rgba(94,143,119,0.9)' },
+  plannedText: { color: Palette.sandDeep },
+  plannedSub: { color: 'rgba(201,151,74,0.95)' },
+  overText: { color: Palette.terracottaDeep },
+  overSub: { color: 'rgba(194,90,64,0.9)' },
   catTile: {
     width: '31.5%',
     alignItems: 'center',

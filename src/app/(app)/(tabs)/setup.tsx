@@ -8,8 +8,6 @@ import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
 import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
-import { InfoSheet, InfoTap } from '@/components/info-sheet';
-import { WEEKLY_PERIODS_INFO } from '@/components/weekly-periods-notice';
 import { IncomeSheet, type IncomeDraft, type IncomeTarget } from '@/components/income-sheet';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
@@ -18,8 +16,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
 import { FREQ, adjustedWeeklyAllowance, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
-import { monthOf, periodFor, periodRangeLabel, weeksRemainingInPeriod } from '@/lib/period';
-import { todayISO } from '@/lib/week';
+import { monthOf, periodFor, weeksRemainingInPeriod } from '@/lib/period';
+import { todayISO, weekdayName } from '@/lib/week';
 import {
   useBills,
   useExtraIncome,
@@ -34,7 +32,6 @@ import {
   useMembers,
 } from '@/lib/queries';
 import { WeekStartPicker } from '@/components/week-start-picker';
-import { weekdayName } from '@/lib/week';
 
 export default function SetupScreen() {
   const router = useRouter();
@@ -58,7 +55,6 @@ export default function SetupScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [target, setTarget] = useState<IncomeTarget>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [weeklyInfo, setWeeklyInfo] = useState(false);
 
   function openSheet(next: IncomeTarget) {
     setTarget(next);
@@ -88,6 +84,13 @@ export default function SetupScreen() {
     weeksInPeriod: period.weeks,
   });
   const weeksLeft = weeksRemainingInPeriod(weekStartDay);
+  // What a week is actually worth today, bill variance and all — the same
+  // figure the Week screen spends against, so the two never disagree.
+  const liveWeekly = adjustedWeeklyAllowance({
+    plannedWeekly: budget.weeklyAllowance,
+    billVariance: budget.billVariance,
+    weeksRemaining: weeksLeft,
+  });
 
   const loading = !householdId || income.isLoading || members.isLoading;
 
@@ -139,6 +142,31 @@ export default function SetupScreen() {
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
       ) : (
         <>
+          {/* The one figure this screen still shows. Everything below feeds it,
+              so watching it move while you edit is the point; the full
+              breakdown of how it's derived belongs on Overview. */}
+          {/* Tappable on purpose. It looks like a card either way, and the one
+              thing this screen can't answer is HOW the figure is reached, which
+              is exactly what Overview lays out. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Your week right now, see the full breakdown on Overview"
+            onPress={() => router.push('/overview')}
+            style={styles.liveWeek}>
+            <View style={styles.flex}>
+              <ThemedText type="bodyBold" style={styles.liveWeekText}>
+                Your week right now
+              </ThemedText>
+              <ThemedText type="small" style={styles.liveWeekSub}>
+                Updates as you edit below. Tap for how it&apos;s worked out.
+              </ThemedText>
+            </View>
+            <ThemedText type="title" style={styles.liveWeekText}>
+              {fmt(liveWeekly)}
+            </ThemedText>
+            <ChevronRight size={18} color={Palette.sageDeep} />
+          </Pressable>
+
           {/* INCOME */}
           <SectionHeader title="Monthly income" action="the foundation" />
           {(income.data ?? []).map((s) => {
@@ -197,85 +225,6 @@ export default function SetupScreen() {
           })}
 
           <DashedAdd label="Add income" onPress={() => openSheet(null)} />
-
-          {/* FIXED EXPENSES context */}
-          <SectionHeader title="Fixed expenses" action="from your bills" />
-          <Card>
-            <View style={styles.spread}>
-              <View style={styles.flex}>
-                <ThemedText type="bodyBold">Committed to bills</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {budget.fixedPct}% of your monthly income
-                </ThemedText>
-              </View>
-              <ThemedText type="title" themeColor="warningDeep">
-                −{fmt(budget.totalFixed)}
-              </ThemedText>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.min(100, budget.fixedPct)}%` }]} />
-            </View>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.footnote}>
-              This comes off the top before anything else — what&apos;s left becomes the pool below.
-            </ThemedText>
-          </Card>
-
-          {/* WEEKLY ALLOWANCE (auto-computed) */}
-          <SectionHeader title="Weekly spending allowance" action="auto-balanced" />
-          <Card>
-            <View style={styles.spread}>
-              <View style={styles.flex}>
-                <ThemedText type="bodyBold">Pool for the month</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Income minus fixed bills, goals &amp; fun money
-                </ThemedText>
-              </View>
-              <ThemedText type="subtitle">{fmt(budget.monthlyPool)}</ThemedText>
-            </View>
-            <View style={[styles.spread, styles.divider]}>
-              <View style={styles.flex}>
-                <View style={styles.labelRow}>
-                  <ThemedText type="bodyBold">Per week</ThemedText>
-                  <InfoTap
-                    label="How your weekly amount works"
-                    onPress={() => setWeeklyInfo(true)}
-                  />
-                </View>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Split across {period.weeks} weeks ({periodRangeLabel(period)})
-                </ThemedText>
-              </View>
-              <ThemedText type="title">{fmt(budget.weeklyAllowance)}</ThemedText>
-            </View>
-            {budget.billVariance !== 0 && (
-              <View style={[styles.spread, styles.divider]}>
-                <View style={styles.flex}>
-                  <ThemedText type="bodyBold">
-                    {budget.billVariance > 0 ? 'Bills came in over' : 'Bills came in under'}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Spread across the {weeksLeft} week{weeksLeft === 1 ? '' : 's'} left
-                  </ThemedText>
-                </View>
-                <ThemedText
-                  type="title"
-                  style={{
-                    color: budget.billVariance > 0 ? Palette.terracottaDeep : Palette.sageDeep,
-                  }}>
-                  {fmt(
-                    adjustedWeeklyAllowance({
-                      plannedWeekly: budget.weeklyAllowance,
-                      billVariance: budget.billVariance,
-                      weeksRemaining: weeksLeft,
-                    })
-                  )}
-                </ThemedText>
-              </View>
-            )}
-            <ThemedText type="small" themeColor="textSecondary" style={styles.footnote}>
-              Adjusts automatically when income, savings goals, or fun money change.
-            </ThemedText>
-          </Card>
 
           {/* WEEK START */}
           <SectionHeader title="Your week" />
@@ -389,12 +338,6 @@ export default function SetupScreen() {
         }
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
-      <InfoSheet
-        visible={weeklyInfo}
-        title={WEEKLY_PERIODS_INFO.title}
-        paragraphs={WEEKLY_PERIODS_INFO.paragraphs}
-        onClose={() => setWeeklyInfo(false)}
-      />
     </Screen>
   );
 }
@@ -435,27 +378,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(129,178,154,0.18)',
   },
   avatarGlyph: { color: Palette.card },
-  spread: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.three },
-  divider: {
-    marginTop: Spacing.three,
-    paddingTop: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(61,64,91,0.15)',
+  liveWeek: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: 'rgba(129,178,154,0.16)',
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
   },
-  progressTrack: {
-    height: 8,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(61,64,91,0.06)',
-    overflow: 'hidden',
-    marginTop: Spacing.three,
-  },
-  progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: '#B8B29B' },
-  footnote: {
-    marginTop: Spacing.three,
-    paddingTop: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(61,64,91,0.15)',
-  },
+  liveWeekText: { color: Palette.sageDeep },
+  liveWeekSub: { color: 'rgba(94,143,119,0.85)' },
   weekStartNote: { marginTop: 2, marginBottom: Spacing.three },
   dashedAdd: {
     flexDirection: 'row',

@@ -15,7 +15,14 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
 
-import { monthStartISO, pendingReviewMonth, weekBucketsInMonth } from '../src/lib/month-review';
+import { describeDelta } from '../src/lib/money';
+import {
+  buildMonthComparison,
+  monthName,
+  monthStartISO,
+  pendingReviewMonth,
+  weekBucketsInMonth,
+} from '../src/lib/month-review';
 
 loadEnv({ path: '.env.seed' });
 loadEnv({ path: '.env' });
@@ -82,6 +89,105 @@ function pureChecks() {
     }
   }
   check('buckets cover all 31 days of July with no leakage', covered.size === 31 && !covered.has('OUT'), `covered ${covered.size}`);
+
+  comparisonChecks();
+  deltaWordingChecks();
+}
+
+/**
+ * Overview and the month review each wrote their own change-wording and
+ * drifted: one said "$99 more", the other "↑ $99" for the same comparison.
+ * Both now go through describeDelta, so its contract is pinned here.
+ */
+function deltaWordingChecks() {
+  console.log('\nA3. Change wording (describeDelta)');
+
+  const up = describeDelta(99);
+  check('a rise reads in words', up.text === '$99 more', up.text);
+  check('a rise in income is good', up.good);
+
+  const upBills = describeDelta(99, { invert: true });
+  check('the same rise in bills is not', !upBills.good);
+  check('but reads identically', upBills.text === '$99 more', upBills.text);
+
+  const down = describeDelta(-40, { invert: true });
+  check('a fall in bills reads as less, and is good', down.text === '$40 less' && down.good, down.text);
+
+  // The bug the arrow form had: `delta <= 0` treated nothing as a decrease, so
+  // an unchanged month rendered "↓ $0".
+  const flat = describeDelta(0);
+  check('zero says No change, not "$0 less"', flat.text === 'No change', flat.text);
+  check('zero is flagged flat so it renders muted, not green', flat.flat && flat.good);
+  check('a rounding-dust delta is still flat', describeDelta(0.004).flat, describeDelta(0.004).text);
+
+  check('cents survive when they matter', describeDelta(61.25).text === '$61.25 more', describeDelta(61.25).text);
+  check('whole dollars stay clean', describeDelta(-171).text === '$171 less', describeDelta(-171).text);
+
+  // The month label the deltas are suffixed with drops the year, matching the
+  // comparison card ("vs July", not "vs July 2026").
+  check('month name drops the year', monthName('2026-07-01') === 'July', monthName('2026-07-01'));
+}
+
+/**
+ * Regression guard for the month comparison card.
+ *
+ * The reported bug, verbatim: a Friday-start household saw "Weekly allowance
+ * changed from $416 to $477.25" going from July into August 2026. That reads
+ * as a raise. July ran 5 weeks and August runs 4, so the pool actually fell
+ * from $2,080 to $1,909. The card has to report both figures, and has to
+ * notice when they point in opposite directions.
+ */
+function comparisonChecks() {
+  console.log('\nA2. Month comparison (buildMonthComparison)');
+
+  const reported = buildMonthComparison({
+    month: '2026-08-01',
+    weekStartsOn: 5, // Friday
+    now: { weeklyAllowance: 477.25, totalIncome: 8504, totalFixed: 6535, goalsSaved: 0 },
+    prev: { weeklyAllowance: 416, totalIncome: 8504, totalFixed: 6436, goalsSaved: 0 },
+  });
+
+  check('August is 4 weeks, July was 5', reported.weeks === 4 && reported.prevWeeks === 5, `${reported.weeks} vs ${reported.prevWeeks}`);
+  check('weekly is up $61.25', reported.weeklyDelta === 61.25, `got ${reported.weeklyDelta}`);
+  check('the MONTH is down $171', reported.poolDelta === -171, `got ${reported.poolDelta}`);
+  check('the two figures are flagged as opposed', reported.opposed, 'weekly up while the month shrank');
+  check('the week-count change is flagged', reported.weeksChanged);
+  check(
+    'only the bills row survives, income and goals collapse',
+    reported.changed.length === 1 && reported.changed[0].label === 'Fixed bills' && reported.changed[0].delta === 99,
+    JSON.stringify(reported.changed)
+  );
+  check(
+    'unchanged items read as one sentence',
+    reported.unchangedNote === 'Income and saved toward goals are unchanged.',
+    `got "${reported.unchangedNote}"`
+  );
+
+  // Same week count both months: the two deltas must agree in direction, and
+  // there's no week-count story to tell.
+  const steady = buildMonthComparison({
+    month: '2026-09-01', // 4 weeks, and August before it is also 4
+    weekStartsOn: 5,
+    now: { weeklyAllowance: 500, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
+    prev: { weeklyAllowance: 450, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
+  });
+  check('equal week counts raise no week note', !steady.weeksChanged, `${steady.weeks} vs ${steady.prevWeeks}`);
+  check('equal week counts are never "opposed"', !steady.opposed);
+  check('both deltas move together', steady.weeklyDelta > 0 && steady.poolDelta > 0, `${steady.weeklyDelta} / ${steady.poolDelta}`);
+
+  // Nothing moved at all.
+  const flat = buildMonthComparison({
+    month: '2026-09-01', // 4 weeks, and August before it is also 4
+    weekStartsOn: 5,
+    now: { weeklyAllowance: 450, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
+    prev: { weeklyAllowance: 450, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
+  });
+  check('a flat month lists no changed rows', flat.changed.length === 0);
+  check(
+    'and says so in one line',
+    flat.unchangedNote === 'Income, fixed bills and saved toward goals are unchanged.',
+    `got "${flat.unchangedNote}"`
+  );
 }
 
 async function dbChecks() {

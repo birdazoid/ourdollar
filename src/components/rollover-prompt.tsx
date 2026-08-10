@@ -12,6 +12,10 @@ import type { Goal } from '@/lib/types';
 type Props = {
   visible: boolean;
   amount: number; // signed: + leftover, − overage
+  /** The three figures `amount` came from, so the sheet can show its working. */
+  allowance: number;
+  spent: number;
+  incomeBack: number;
   goals: Goal[];
   loading?: boolean;
   onResolve: (resolution: RolloverResolution, goalId?: string) => void;
@@ -22,10 +26,25 @@ type Props = {
  * money left over or over budget. Asks what to do with it rather than silently
  * folding it into the new week (design-brief: household stays in control).
  */
-export function RolloverPrompt({ visible, amount, goals, loading, onResolve }: Props) {
+export function RolloverPrompt({
+  visible,
+  amount,
+  allowance,
+  spent,
+  incomeBack,
+  goals,
+  loading,
+  onResolve,
+}: Props) {
   const [pickingGoal, setPickingGoal] = useState(false);
   const over = amount < 0;
   const abs = Math.abs(amount);
+  // Where the figure came from. A sheet asking you to move real money should
+  // never make you take its number on trust.
+  const working =
+    incomeBack > 0
+      ? `${fmt(allowance)} allowance, plus ${fmt(incomeBack)} put back, less ${fmt(spent)} spent.`
+      : `${fmt(allowance)} allowance, less ${fmt(spent)} spent.`;
 
   function close(resolution: RolloverResolution, goalId?: string) {
     setPickingGoal(false);
@@ -59,6 +78,9 @@ export function RolloverPrompt({ visible, amount, goals, loading, onResolve }: P
         </ThemedText>
         <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
           {over ? "You went over last week's budget." : "You had money left over last week."}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.working}>
+          {working}
         </ThemedText>
       </View>
 
@@ -110,6 +132,7 @@ function Option({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center', marginTop: Spacing.one },
+  working: { textAlign: 'center', marginTop: Spacing.two, opacity: 0.75 },
   headline: { alignItems: 'center', marginBottom: Spacing.four },
   overColor: { color: Palette.terracottaDeep },
   underColor: { color: Palette.sageDeep },

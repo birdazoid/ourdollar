@@ -8,6 +8,7 @@ import { Sheet } from '@/components/sheet';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
+import { groupAmountInput } from '@/lib/money';
 import type { NewMemberInput } from '@/lib/queries';
 
 type Props = {
@@ -78,7 +79,7 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
           <FieldLabel>Fun money per month</FieldLabel>
           <TextField
             placeholder="Fun $/mo"
-            value={funMonthly}
+            value={groupAmountInput(funMonthly)}
             onChangeText={(t) => setFunMonthly(t.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
             inputMode="numeric"

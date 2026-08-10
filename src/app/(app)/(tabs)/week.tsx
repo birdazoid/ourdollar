@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, TrendingDown } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
@@ -19,6 +19,7 @@ import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
+import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
@@ -27,6 +28,9 @@ import {
   computeBudget,
   computeEnvelopes,
   fmt,
+  funMoneyUsed,
+  isVariableExpense,
+  splitAllowancePots,
   type EnvelopeStatus,
 } from '@/lib/money';
 import { fundingMonthForWeek, weeksInPeriod, weeksRemainingInPeriod } from '@/lib/period';
@@ -70,31 +74,41 @@ export default function WeekScreen() {
   const [offset, setOffset] = useState(0);
   const [envSheet, setEnvSheet] = useState<{ envelope: WeeklyEnvelope | null } | null>(null);
   const isCurrent = offset === 0;
-  const week = useMemo(() => getWeek(offset, weekStart), [offset, weekStart]);
-  const lastWeek = useMemo(() => getWeek(-1, weekStart), [weekStart]);
+  // Keyed on today's date so a backgrounded app that comes back on a new week
+  // (or crosses midnight while open) re-derives instead of holding the week it
+  // launched on until it's force-quit.
+  const today = useToday();
+  const week = useMemo(() => getWeek(offset, weekStart, today), [offset, weekStart, today]);
+  const lastWeek = useMemo(() => getWeek(-1, weekStart, today), [weekStart, today]);
 
   const funEnabled = funSettings.data?.enabled ?? false;
   // A week is funded by the month whose period contains it, which is simply the
   // month its start date falls in. That's what stops a week spanning the
   // boundary from being paid for out of two months at once.
   const fundingMonth = fundingMonthForWeek(week.start);
-  const budget = computeBudget({
+  // Everything computeBudget needs except the week count, which is per-period —
+  // last week's rollover figure below re-derives with its own.
+  const budgetInputs = {
     incomeSources: income.data ?? [],
     extraIncome: extraIncome.data ?? [],
     bills: bills.data ?? [],
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+  };
+  const budget = computeBudget({
+    ...budgetInputs,
     weeksInPeriod: weeksInPeriod(fundingMonth, weekStart),
   });
   // Bills that came in over (or under) their estimate are absorbed by the weeks
   // still left in the period. Past weeks keep the figure they were actually
   // budgeted against, so navigating back shows honest history.
+  const weeksLeft = weeksRemainingInPeriod(weekStart);
   const allowance = isCurrent
     ? adjustedWeeklyAllowance({
         plannedWeekly: budget.weeklyAllowance,
         billVariance: budget.billVariance,
-        weeksRemaining: weeksRemainingInPeriod(weekStart),
+        weeksRemaining: weeksLeft,
       })
     : budget.weeklyAllowance;
 
@@ -102,9 +116,14 @@ export default function WeekScreen() {
     (t) => t.occurred_on >= week.start && t.occurred_on <= week.end
   );
   const spent = weekTxns
-    .filter((t) => t.type === 'expense' && !t.is_fun_money)
+    .filter(isVariableExpense)
     .reduce((a, t) => a + t.amount, 0);
   const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+
+  // Fun money is a MONTHLY pot, so it's measured over the calendar month
+  // rather than the week this screen is otherwise about.
+  const funMonthKey = today.slice(0, 7);
+  const monthName = new Date(`${today}T00:00:00`).toLocaleDateString('en-US', { month: 'long' });
 
   // Any amount carried into this specific week from settling a prior week's
   // leftover/overage (0 for a week with no settlement targeting it).
@@ -121,17 +140,39 @@ export default function WeekScreen() {
     (t) => t.occurred_on >= lastWeek.start && t.occurred_on <= lastWeek.end
   );
   const lastSpent = lastWeekTxns
-    .filter((t) => t.type === 'expense' && !t.is_fun_money)
+    .filter(isVariableExpense)
     .reduce((a, t) => a + t.amount, 0);
   const lastIncomeBack = lastWeekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-  const lastRemaining = Math.round((allowance - lastSpent + lastIncomeBack) * 100) / 100;
+  // Measured against what last week was PLANNED at, not this week's allowance:
+  // `allowance` carries the current week's bill-variance adjustment, which was
+  // never last week's number. The two weeks can also sit in different funding
+  // months, and a 5-week month funds a smaller weekly figure than a 4-week one,
+  // so the week count has to come from last week's own period.
+  const lastFundingMonth = fundingMonthForWeek(lastWeek.start);
+  const lastPlannedWeekly =
+    lastFundingMonth === fundingMonth
+      ? budget.weeklyAllowance
+      : computeBudget({
+          ...budgetInputs,
+          weeksInPeriod: weeksInPeriod(lastFundingMonth, weekStart),
+        }).weeklyAllowance;
+  const lastRemaining = Math.round((lastPlannedWeekly - lastSpent + lastIncomeBack) * 100) / 100;
 
   const rolloverSettled = useRolloverSettled(householdId, isCurrent ? lastWeek.start : null);
   const settleRollover = useSettleRollover(householdId);
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id) ?? null;
 
+  // A week the household didn't exist for has no transactions to subtract, so
+  // its untouched allowance would read as a full week saved and could be banked
+  // as real money. Nobody rolls over from before they signed up.
+  const existedLastWeek = !!household && household.created_at.slice(0, 10) <= lastWeek.start;
+
   const showRolloverPrompt =
-    isCurrent && allowance > 0 && lastRemaining !== 0 && rolloverSettled.data === false;
+    isCurrent &&
+    existedLastWeek &&
+    lastPlannedWeekly > 0 &&
+    lastRemaining !== 0 &&
+    rolloverSettled.data === false;
 
   function resolveRollover(resolution: RolloverResolution, goalId?: string) {
     const goal = goalId ? (goals.data ?? []).find((g) => g.id === goalId) : undefined;
@@ -151,7 +192,7 @@ export default function WeekScreen() {
   // keep the plain "money left" view (budgets/skip aren't tracked historically).
   const spentByCategory: Record<string, number> = {};
   for (const t of weekTxns) {
-    if (t.type === 'expense' && !t.is_fun_money) {
+    if (isVariableExpense(t)) {
       const c = t.category ?? 'other';
       spentByCategory[c] = (spentByCategory[c] ?? 0) + t.amount;
     }
@@ -178,6 +219,18 @@ export default function WeekScreen() {
       : envSummary.effAllowance > 0
         ? Math.max(0, Math.min(1, envFree / envSummary.effAllowance))
         : 0;
+
+  // The allowance as two pots (planned / free), which is what the bar below
+  // draws. See splitAllowancePots for why three peer slices misled.
+  const pots = splitAllowancePots(envSummary);
+
+  // Which categories overspent, for the deduction line below. Named rather than
+  // just totalled: "Fuel $13" tells you what to do about it, "-$13" doesn't.
+  const overCategories = envSummary.envelopes.filter((e) => e.over > 0);
+  const overageDetail =
+    overCategories.length <= 2
+      ? overCategories.map((e) => `${txCategoryById(e.category).name} ${fmt(e.over)}`).join(' · ')
+      : `${overCategories.length} categories`;
 
   function toggleSkip(env: EnvelopeStatus) {
     envMut.setSkip.mutate({ id: env.id, weekStart: env.skipped ? null : week.start });
@@ -223,7 +276,14 @@ export default function WeekScreen() {
               eyebrow="This week's free-to-spend"
               big={envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
               bigColor={envFree < 0 ? Palette.terracottaDeep : Palette.ink}
-              sub={`${fmt(envSummary.spent)} spent · ${fmt(envSummary.reserved)} still planned`}
+              // Not "$56 spent", which sat under the free-to-spend figure and
+              // implied the spending had come out of it. Money in a planned
+              // category never touches this number until it overflows.
+              sub={
+                envSummary.plannedTotal > 0
+                  ? `${fmt(envSummary.plannedTotal)} set aside · ${fmt(envSummary.reserved)} of it still to spend`
+                  : `${fmt(envSummary.spent)} spent this week`
+              }
               subColor={envFree < 0 ? Palette.terracottaDeep : undefined}
               ringValue={envFreeFrac}
               ringColor={envFree < 0 ? Palette.terracottaDeep : Palette.sage}
@@ -247,6 +307,45 @@ export default function WeekScreen() {
           {/* Only during the days a new calendar month has started but this
               week is still funded by the last one. */}
           {isCurrent && <BoundaryNotice weekStartsOn={weekStart} />}
+
+          {/* Money you agreed to carry when you settled last week. It feeds the
+              allowance below, so leaving it unlabelled meant free-to-spend was
+              silently lower (or higher) than the plan with nothing to point at.
+              This is the same money that made the spend-alert push disagree
+              with the app. */}
+          {isCurrent && adjustment !== 0 && (
+            <View
+              style={[
+                styles.varianceNote,
+                adjustment < 0 ? styles.varianceOver : styles.varianceUnder,
+              ]}>
+              <ThemedText type="small" style={adjustment < 0 ? styles.overageText : styles.freeText}>
+                {adjustment < 0
+                  ? `Last week went ${fmt(-adjustment)} over and you carried it into this week, so there's ${fmt(-adjustment)} less to spend.`
+                  : `${fmt(adjustment)} left over from last week was carried into this week.`}
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Why this week's allowance isn't the planned figure. It lives here
+              rather than in Setup because it explains THIS week's number, and
+              this is the screen that spends against it. */}
+          {isCurrent && budget.billVariance !== 0 && (
+            <View
+              style={[
+                styles.varianceNote,
+                budget.billVariance > 0 ? styles.varianceOver : styles.varianceUnder,
+              ]}>
+              <ThemedText
+                type="small"
+                style={budget.billVariance > 0 ? styles.overageText : styles.freeText}>
+                Bills came in {fmt(Math.abs(budget.billVariance))}{' '}
+                {budget.billVariance > 0 ? 'over' : 'under'} their estimate. Spread across the{' '}
+                {weeksLeft} week{weeksLeft === 1 ? '' : 's'} left, this week is {fmt(allowance)}{' '}
+                instead of {fmt(budget.weeklyAllowance)}.
+              </ThemedText>
+            </View>
+          )}
 
           {/* Day-of-week tracker with week navigation */}
           <View style={styles.trackerRow}>
@@ -288,24 +387,71 @@ export default function WeekScreen() {
               <SectionHeader
                 title="Planned this week"
                 action={envSummary.reserved > 0 ? `${fmt(envSummary.reserved)} still to come` : undefined}
+                caption={
+                  envSummary.hasEnvelopes
+                    ? "Set aside first. Spending here doesn't touch your free money unless you go over."
+                    : undefined
+                }
               />
               {envSummary.hasEnvelopes && (
                 <Card style={styles.allowCard}>
                   <View style={styles.allowBar}>
-                    {envSummary.spent > 0 && (
-                      <View style={[styles.allowSeg, { flex: envSummary.spent, backgroundColor: '#B8B29B' }]} />
+                    {/* Planned pot: a fixed-width block that FILLS as it's spent. */}
+                    {pots.plannedUsed > 0 && (
+                      <View style={[styles.allowSeg, { flex: pots.plannedUsed, backgroundColor: Palette.sandDeep }]} />
                     )}
-                    {envSummary.reserved > 0 && (
-                      <View style={[styles.allowSeg, { flex: envSummary.reserved, backgroundColor: Palette.sand }]} />
+                    {pots.plannedLeft > 0 && (
+                      <View style={[styles.allowSeg, { flex: pots.plannedLeft, backgroundColor: 'rgba(242,204,143,0.5)' }]} />
                     )}
-                    {Math.max(envFree, 0) > 0 && (
-                      <View style={[styles.allowSeg, { flex: Math.max(envFree, 0), backgroundColor: Palette.sage }]} />
+                    {/* Free pot: the spill sits first, right against the planned
+                        block it came from, so the hand-off is visible. */}
+                    {pots.overage > 0 && (
+                      <View style={[styles.allowSeg, { flex: pots.overage, backgroundColor: Palette.terracotta }]} />
+                    )}
+                    {pots.otherSpent > 0 && (
+                      <View style={[styles.allowSeg, { flex: pots.otherSpent, backgroundColor: '#B8B29B' }]} />
+                    )}
+                    {pots.freeLeft > 0 && (
+                      <View style={[styles.allowSeg, { flex: pots.freeLeft, backgroundColor: Palette.sage }]} />
                     )}
                   </View>
-                  <View style={styles.legendRow}>
-                    <Legend color="#B8B29B" label="Spent" value={fmt(envSummary.spent)} />
-                    <Legend color={Palette.sand} label="Planned" value={fmt(envSummary.reserved)} />
-                    <Legend color={Palette.sage} label="Free" value={fmt(Math.max(envFree, 0))} />
+
+                  {/* Brackets tie the segments above into the two pots. Without
+                      them the bar is just five stripes again. */}
+                  <View style={styles.bracketRow}>
+                    {pots.plannedPot > 0 && <View style={[styles.bracket, { flex: pots.plannedPot }]} />}
+                    {pots.freePot > 0 && <View style={[styles.bracket, { flex: pots.freePot }]} />}
+                  </View>
+                  {/* Left/right aligned rather than flexed to the pot widths:
+                      a household with one small envelope would otherwise
+                      squeeze a label into a sliver of the row. */}
+                  <View style={styles.potRow}>
+                    {pots.plannedPot > 0 && (
+                      <View>
+                        <ThemedText type="small">
+                          Planned <ThemedText type="bodyBold">{fmt(pots.plannedPot)}</ThemedText>
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {fmt(pots.plannedUsed)} used
+                        </ThemedText>
+                      </View>
+                    )}
+                    {/* Also shown when the pot itself is empty but free has gone
+                        negative (envelopes budgeted past the allowance) — that's
+                        precisely when the number needs saying. */}
+                    {(pots.freePot > 0 || envFree < 0) && (
+                      <View style={styles.potCellRight}>
+                        <ThemedText type="small">
+                          Free{' '}
+                          <ThemedText type="bodyBold" style={envFree < 0 ? styles.overageText : undefined}>
+                            {envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
+                          </ThemedText>
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {fmt(pots.overage + pots.otherSpent)} used
+                        </ThemedText>
+                      </View>
+                    )}
                   </View>
                 </Card>
               )}
@@ -318,6 +464,28 @@ export default function WeekScreen() {
                   onSkipToggle={() => toggleSkip(env)}
                 />
               ))}
+
+              {/* Where an envelope's overspend went. computeEnvelopes has
+                  already taken it out of free-to-spend; without this row that
+                  deduction is invisible and free just looks wrong. */}
+              {envSummary.overage > 0 && (
+                <View style={styles.overageRow}>
+                  <View style={styles.freeTile}>
+                    <TrendingDown size={24} color={Palette.terracottaDeep} />
+                  </View>
+                  <View style={styles.flex}>
+                    <ThemedText type="bodyBold" style={styles.overageText}>
+                      Over on planned
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.overageSub}>
+                      {overageDetail} · comes out of free to spend
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="bodyBold" style={styles.overageText}>
+                    -{fmt(envSummary.overage)}
+                  </ThemedText>
+                </View>
+              )}
 
               {/* Free-to-spend — everything not wrapped in an envelope. */}
               <View style={styles.freeRow}>
@@ -353,13 +521,19 @@ export default function WeekScreen() {
           {/* Fun money per person (current week only) */}
           {funEnabled && isCurrent && (funPeople.data ?? []).length > 0 && (
             <>
-              <SectionHeader title="Fun money" />
+              <SectionHeader
+                title="Fun money"
+                action={monthName}
+                caption="Each person's own money for the whole month. It sits outside the weekly figures above."
+              />
               <View style={styles.funRow}>
                 {(funPeople.data ?? []).map((p) => {
-                  const funSpent = weekTxns
-                    .filter((t) => t.type === 'expense' && t.is_fun_money && t.member_id === p.member_id)
-                    .reduce((a, t) => a + t.amount, 0);
-                  const rem = p.monthly_amount - funSpent;
+                  const funSpent = funMoneyUsed({
+                    transactions: transactions.data ?? [],
+                    memberId: p.member_id,
+                    monthKey: funMonthKey,
+                  });
+                  const rem = Math.round((p.monthly_amount - funSpent) * 100) / 100;
                   const pOver = rem < 0;
                   const pFrac = pOver ? 1 : p.monthly_amount > 0 ? Math.max(0, Math.min(1, rem / p.monthly_amount)) : 0;
                   return (
@@ -374,7 +548,7 @@ export default function WeekScreen() {
                           {memberName(p.member_id)}
                         </ThemedText>
                         <ThemedText type="small" style={{ color: Palette.sandDeep }}>
-                          of {fmt(p.monthly_amount)}/mo
+                          {fmt(funSpent)} of {fmt(p.monthly_amount)} used
                         </ThemedText>
                       </View>
                     </View>
@@ -475,6 +649,9 @@ export default function WeekScreen() {
       <RolloverPrompt
         visible={showRolloverPrompt}
         amount={lastRemaining}
+        allowance={lastPlannedWeekly}
+        spent={lastSpent}
+        incomeBack={lastIncomeBack}
         goals={goals.data ?? []}
         loading={settleRollover.isPending}
         onResolve={resolveRollover}
@@ -490,18 +667,6 @@ function NavArrow({ dir, onPress, disabled }: { dir: 'left' | 'right'; onPress: 
     <Pressable onPress={onPress} disabled={disabled} style={styles.navArrow}>
       <Icon size={18} color={disabled ? 'rgba(61,64,91,0.28)' : Palette.ink} />
     </Pressable>
-  );
-}
-
-function Legend({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: color }]} />
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}{' '}
-      </ThemedText>
-      <ThemedText type="small">{value}</ThemedText>
-    </View>
   );
 }
 
@@ -610,9 +775,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(61,64,91,0.06)',
   },
   allowSeg: { height: '100%' },
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendDot: { width: 8, height: 8, borderRadius: Radius.pill, marginRight: Spacing.one },
+  // Aligned to the bar above with no gap, so each bracket sits exactly under
+  // the segments it groups.
+  bracketRow: { flexDirection: 'row', height: 7, marginTop: 5 },
+  bracket: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(61,64,91,0.2)',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  potRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    marginTop: Spacing.one,
+  },
+  potCellRight: { alignItems: 'flex-end' },
   envFooter: { marginTop: Spacing.two + 2, gap: Spacing.two },
   envTrack: {
     height: 8,
@@ -639,6 +819,25 @@ const styles = StyleSheet.create({
   },
   freeText: { color: Palette.sageDeep },
   freeSub: { color: 'rgba(94,143,119,0.85)' },
+  overageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: 'rgba(224,122,95,0.14)',
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    marginBottom: Spacing.two + 2,
+  },
+  overageText: { color: Palette.terracottaDeep },
+  overageSub: { color: 'rgba(194,90,64,0.85)' },
+  varianceNote: {
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    marginTop: Spacing.three,
+  },
+  varianceUnder: { backgroundColor: 'rgba(129,178,154,0.16)' },
+  varianceOver: { backgroundColor: 'rgba(224,122,95,0.14)' },
   funRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   funCard: {
     flexBasis: '47%',

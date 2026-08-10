@@ -21,6 +21,12 @@ type Props = {
 export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete }: Props) {
   const done = goal ? goal.saved_amount >= goal.target_amount : false;
   const pct = goal ? Math.min(1, goal.saved_amount / goal.target_amount) : 0;
+  // Null when nothing is being put aside monthly, since "never" is not a
+  // useful thing to print next to a goal.
+  const monthsToGo =
+    goal && !done && goal.monthly_amount > 0
+      ? Math.ceil((goal.target_amount - goal.saved_amount) / goal.monthly_amount)
+      : null;
 
   return (
     <Sheet
@@ -41,6 +47,14 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
             </View>
             <ThemedText type="small" themeColor="textSecondary" style={styles.infoText}>
               {Math.round(pct * 100)}% of the way there
+              {done
+                ? ''
+                : `, ${fmt(goal.target_amount - goal.saved_amount)} to go`}
+              {/* The percentage says where you are but not when you arrive,
+                  which is the thing anyone looking at a savings goal wants. */}
+              {!done && monthsToGo != null
+                ? ` · about ${monthsToGo} more month${monthsToGo === 1 ? '' : 's'} at ${fmt(goal.monthly_amount)}/mo`
+                : ''}
             </ThemedText>
           </Card>
 

@@ -26,15 +26,17 @@ export function todayISO(): string {
  * The week `offset` weeks from the current one (0 = this week, -1 = last week),
  * starting on `weekStartsOn` (0 = Sunday … 6 = Saturday). Returns the 7 days and
  * the [start,end] ISO bounds.
+ *
+ * `today` is an explicit parameter so callers can memoize on it: reading the
+ * clock inside meant a memoized week never noticed the date changing under a
+ * running app. Pass useToday() from a component.
  */
-export function getWeek(offset = 0, weekStartsOn = 0) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+export function getWeek(offset = 0, weekStartsOn = 0, today: string = todayISO()) {
+  const now = fromISODateLocal(today);
   const sinceStart = (now.getDay() - weekStartsOn + 7) % 7;
   const start = new Date(now);
   start.setDate(now.getDate() - sinceStart + offset * 7);
 
-  const today = todayISO();
   const days: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -49,6 +51,12 @@ export function getWeek(offset = 0, weekStartsOn = 0) {
   });
 
   return { start: days[0].date, end: days[6].date, days };
+}
+
+/** Local midnight for a 'YYYY-MM-DD' (new Date(iso) would parse it as UTC). */
+function fromISODateLocal(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 // Local-timezone YYYY-MM-DD (Date.toISOString is UTC).

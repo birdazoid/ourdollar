@@ -100,9 +100,15 @@ Deno.serve(async (req) => {
 
     const weekStartDay = household.data?.week_start_day ?? 0;
     const billRows = bills.data ?? [];
+    // Anchor every date calculation to the expense's own occurred_on, which the
+    // app writes as the household's LOCAL date. Using the server's UTC clock
+    // meant an expense logged on a US evening was dated tomorrow, and on the
+    // last day of a week or period the push reported a different week than the
+    // one the Week screen was showing.
+    const anchor = record.occurred_on;
     // The month's pool is split across its period's real week count (4 or 5),
     // not a fixed 4, matching the app.
-    const period = currentPeriod(weekStartDay);
+    const period = currentPeriod(weekStartDay, anchor);
     const plannedWeekly = weeklyAllowanceFrom(
       {
         income: inc.data ?? [],
@@ -123,8 +129,8 @@ Deno.serve(async (req) => {
       weeksRemaining: period.weeksRemaining,
     });
 
-    const { start, end } = currentWeekBounds(weekStartDay);
-    const [weekTxns, envelopes] = await Promise.all([
+    const { start, end } = currentWeekBounds(weekStartDay, anchor);
+    const [weekTxns, envelopes, rollovers] = await Promise.all([
       supabase
         .from('transactions')
         .select('amount, type, is_fun_money, category')
@@ -132,6 +138,14 @@ Deno.serve(async (req) => {
         .gte('occurred_on', start)
         .lte('occurred_on', end),
       supabase.from('weekly_envelopes').select('category, weekly_amount, skipped_week_start').eq('household_id', householdId),
+      // Money the household chose to carry into this week when they settled
+      // last week's leftover/overage. Negative when last week ran over. The
+      // Week screen adds this to its allowance, so the push has to as well.
+      supabase
+        .from('week_rollovers')
+        .select('applied_amount')
+        .eq('household_id', householdId)
+        .eq('to_week_start', start),
     ]);
 
     const remaining = weekFreeToSpend({
@@ -142,6 +156,7 @@ Deno.serve(async (req) => {
         weekly_amount: Number(e.weekly_amount),
         skipped: e.skipped_week_start === start,
       })),
+      carriedIn: (rollovers.data ?? []).reduce((a, r) => a + Number(r.applied_amount), 0),
     });
     const body = buildSpendAlertBody({
       spenderName,

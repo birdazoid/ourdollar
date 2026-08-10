@@ -15,16 +15,23 @@ type MiniCardProps = {
   children: ReactNode;
   warn?: boolean;
   onPress?: () => void;
+  /** What the number actually counts, for labels that don't say (design-brief §8). */
+  hint?: string;
 };
 
 /** Small stat card. `warn` gives it a terracotta outline (design-brief §8). */
-export function MiniCard({ label, children, warn, onPress }: MiniCardProps) {
+export function MiniCard({ label, children, warn, onPress, hint }: MiniCardProps) {
   const inner = (
     <Card style={[styles.card, warn && styles.warn]}>
       <View style={styles.value}>{children}</View>
       <ThemedText type="label" themeColor="textSecondary">
         {label}
       </ThemedText>
+      {hint && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+          {hint}
+        </ThemedText>
+      )}
     </Card>
   );
   if (onPress) {
@@ -50,4 +57,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
   },
   value: {},
+  hint: { marginTop: -2, lineHeight: 16 },
 });

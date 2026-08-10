@@ -2,7 +2,15 @@
 // can be imported by both the edge function (Deno) and the Node verification
 // script (scripts/verify-spend-alert.ts). DB access lives in the callers.
 
-export const FREQ_MULT: Record<string, number> = { monthly: 1, semimonthly: 2 };
+// Mirror of FREQ in src/lib/money.ts. Every two weeks is NOT twice a month (26
+// paychecks a year against 24) and weekly is 52/12, not 4 — treating either as
+// monthly understated income badly enough to change the quoted balance.
+export const FREQ_MULT: Record<string, number> = {
+  monthly: 1,
+  semimonthly: 2,
+  biweekly: 26 / 12,
+  weekly: 52 / 12,
+};
 
 // Mirror of TX_CATEGORIES id → display name (src/lib/categories.ts).
 export const CATEGORY_NAME: Record<string, string> = {
@@ -29,13 +37,27 @@ export function fmt(n: number): string {
 }
 
 /**
- * Week bounds containing today, as YYYY-MM-DD (UTC), starting on `weekStartDay`
- * (0 = Sunday … 6 = Saturday — matches households.week_start_day). Defaults to
- * Sunday for callers that don't have a household's setting on hand.
+ * The day the week is measured from. Prefer passing the transaction's
+ * `occurred_on` ('YYYY-MM-DD'), which the app already writes in the
+ * household's LOCAL date: the server clock is UTC, so an expense logged on a
+ * US evening lands on tomorrow's UTC date and, on the last day of a week or
+ * period, sent the push looking at the wrong week entirely.
  */
-export function currentWeekBounds(weekStartDay = 0, now = new Date()) {
+function anchorDay(now: Date | string): Date {
+  if (typeof now === 'string') return new Date(`${now}T00:00:00Z`);
   const base = new Date(now);
   base.setUTCHours(0, 0, 0, 0);
+  return base;
+}
+
+/**
+ * Week bounds containing the anchor day, as YYYY-MM-DD, starting on
+ * `weekStartDay` (0 = Sunday … 6 = Saturday — matches
+ * households.week_start_day). Defaults to Sunday for callers that don't have a
+ * household's setting on hand.
+ */
+export function currentWeekBounds(weekStartDay = 0, now: Date | string = new Date()) {
+  const base = anchorDay(now);
   const sinceStart = (base.getUTCDay() - weekStartDay + 7) % 7;
   const start = new Date(base);
   start.setUTCDate(base.getUTCDate() - sinceStart);
@@ -84,9 +106,8 @@ export function weeksInPeriod(year: number, monthIndex: number, weekStartDay: nu
  * current one. A week belongs to the month its START date falls in, which is
  * what keeps a boundary-spanning week from being funded twice.
  */
-export function currentPeriod(weekStartDay: number, now = new Date()) {
-  const base = new Date(now);
-  base.setUTCHours(0, 0, 0, 0);
+export function currentPeriod(weekStartDay: number, now: Date | string = new Date()) {
+  const base = anchorDay(now);
   const back = (base.getUTCDay() - weekStartDay + 7) % 7;
   const weekStart = new Date(base);
   weekStart.setUTCDate(base.getUTCDate() - back);
@@ -154,8 +175,17 @@ export function weekFreeToSpend(args: {
   weeklyAllowance: number;
   weekTxns: { amount: number; type: string; is_fun_money: boolean; category: string | null }[];
   envelopes: EnvelopeInput[];
+  /**
+   * Signed total carried into this week by a settled rollover (Σ
+   * week_rollovers.applied_amount where to_week_start = this week's start).
+   * Negative when last week finished over budget. The Week screen folds this
+   * into its effective allowance, so omitting it made the push quote a balance
+   * that was too generous by exactly the overage the household had agreed to
+   * carry.
+   */
+  carriedIn?: number;
 }): number {
-  const { weeklyAllowance, weekTxns, envelopes } = args;
+  const { weeklyAllowance, weekTxns, envelopes, carriedIn = 0 } = args;
   const expenses = weekTxns.filter((t) => t.type === 'expense' && !t.is_fun_money);
   const totalNonFunExpense = expenses.reduce((a, t) => a + Number(t.amount), 0);
   const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0);
@@ -166,7 +196,7 @@ export function weekFreeToSpend(args: {
     spentByCategory[key] = (spentByCategory[key] ?? 0) + Number(t.amount);
   }
 
-  const effAllowance = weeklyAllowance + incomeBack;
+  const effAllowance = weeklyAllowance + incomeBack + carriedIn;
   let plannedTotal = 0;
   let overageTotal = 0;
   let activeEnvelopeSpent = 0;

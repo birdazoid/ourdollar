@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { BarChart, type Bar } from '@/components/bar-chart';
 import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
+import { DeltaText } from '@/components/delta-text';
 import { Donut } from '@/components/donut';
 import { MonthReviewBanner } from '@/components/month-review-banner';
 import { MoneyRow } from '@/components/money-row';
@@ -17,9 +18,17 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { InfoSheet, InfoTap } from '@/components/info-sheet';
-import { FREQ, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
-import { weeksInPeriod } from '@/lib/period';
-import { monthLabel, monthStartISO } from '@/lib/month-review';
+import { WEEKLY_PERIODS_INFO } from '@/components/weekly-periods-notice';
+import {
+  FREQ,
+  adjustedWeeklyAllowance,
+  computeBudget,
+  fmt,
+  isVariableExpense,
+  monthlyEquiv,
+} from '@/lib/money';
+import { periodFor, periodRangeLabel, weeksInPeriod, weeksRemainingInPeriod } from '@/lib/period';
+import { buildMonthComparison, monthBefore, monthLabel, monthStartISO } from '@/lib/month-review';
 import {
   useBills,
   useExtraIncome,
@@ -34,12 +43,6 @@ import {
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-/** The 'YYYY-MM-01' one calendar month before `month`. */
-function monthBefore(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return monthStartISO(new Date(y, m - 2, 1));
 }
 
 export default function OverviewScreen() {
@@ -57,6 +60,7 @@ export default function OverviewScreen() {
   const [range, setRange] = useState<'3' | '6' | '9' | '12'>('3');
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month, -1 = last, …
   const [cadenceInfo, setCadenceInfo] = useState(false);
+  const [weeklyInfo, setWeeklyInfo] = useState(false);
 
   const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const isCurrentMonth = monthOffset === 0;
@@ -105,6 +109,7 @@ export default function OverviewScreen() {
         weeks: budget.weeksInPeriod,
         variablePool: budget.variablePool,
         goalsSaved: goalsSavedNow,
+        fixedPct: budget.fixedPct,
       }
     : viewedSnapshot
       ? {
@@ -117,7 +122,52 @@ export default function OverviewScreen() {
           weeks: weeksInPeriod(viewedMonth, weekStartDay),
           variablePool: viewedSnapshot.total_income - viewedSnapshot.total_fixed,
           goalsSaved: viewedSnapshot.goals_saved_total,
+          fixedPct:
+            viewedSnapshot.total_income > 0
+              ? Math.round((viewedSnapshot.total_fixed / viewedSnapshot.total_income) * 100)
+              : 0,
         }
+      : null;
+
+  // Bill variance only exists for the live plan: a closed month's snapshot
+  // records what it was budgeted at, not what came in afterwards.
+  const weeksLeft = weeksRemainingInPeriod(weekStartDay);
+  const adjustedWeekly = adjustedWeeklyAllowance({
+    plannedWeekly: budget.weeklyAllowance,
+    billVariance: budget.billVariance,
+    weeksRemaining: weeksLeft,
+  });
+
+  /**
+   * What the variable pool has left after the three planned allocations.
+   *
+   * It reduces to plannedFixed − totalFixed every time, because the pool is
+   * measured against what bills actually cost while the allowance is derived
+   * from the estimates. Non-zero means the breakdown wouldn't sum on screen,
+   * so it gets its own row rather than being left as an unexplained gap.
+   */
+  const unallocated = glance
+    ? Math.round((glance.variablePool - glance.monthlyPool - glance.goalsMonthly - glance.funTotal) * 100) / 100
+    : 0;
+
+  const comparison =
+    glance && prevSnapshot
+      ? buildMonthComparison({
+          month: viewedMonth,
+          weekStartsOn: weekStartDay,
+          now: {
+            weeklyAllowance: glance.weeklyAllowance,
+            totalIncome: glance.totalIncome,
+            totalFixed: glance.totalFixed,
+            goalsSaved: glance.goalsSaved,
+          },
+          prev: {
+            weeklyAllowance: prevSnapshot.weekly_allowance,
+            totalIncome: prevSnapshot.total_income,
+            totalFixed: prevSnapshot.total_fixed,
+            goalsSaved: prevSnapshot.goals_saved_total,
+          },
+        })
       : null;
 
   const pie = glance
@@ -135,7 +185,7 @@ export default function OverviewScreen() {
   const catTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     (transactions.data ?? []).forEach((t) => {
-      if (t.type === 'expense' && t.occurred_on.startsWith(viewedMonthKey)) {
+      if (isVariableExpense(t) && t.occurred_on.startsWith(viewedMonthKey)) {
         totals[t.category ?? 'other'] = (totals[t.category ?? 'other'] ?? 0) + t.amount;
       }
     });
@@ -150,7 +200,7 @@ export default function OverviewScreen() {
     const n = Number(range);
     const byMonth: Record<string, number> = {};
     (transactions.data ?? []).forEach((t) => {
-      if (t.type !== 'expense') return;
+      if (!isVariableExpense(t)) return;
       const key = t.occurred_on.slice(0, 7);
       byMonth[key] = (byMonth[key] ?? 0) + t.amount;
     });
@@ -247,8 +297,16 @@ export default function OverviewScreen() {
 
               <View style={styles.divider} />
               <MoneyRow label="Fixed expenses" value={`−${fmt(glance.totalFixed)}`} strong color={Palette.terracottaDeep} dot={Palette.ink} />
+              {glance.fixedPct != null && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
+                  {glance.fixedPct}% of your monthly income, off the top before anything else
+                </ThemedText>
+              )}
               <View style={styles.divider} />
               <MoneyRow label="Variable pool" value={fmt(glance.variablePool)} strong color={Palette.sageDeep} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
+                What&apos;s left after bills. The three below come out of it.
+              </ThemedText>
               <MoneyRow
                 label={`Weekly allowance · ${fmt(glance.weeklyAllowance)}/wk ×${glance.weeks}`}
                 value={`−${fmt(glance.monthlyPool)}`}
@@ -256,8 +314,35 @@ export default function OverviewScreen() {
                 color={Palette.terracottaDeep}
                 dot={Palette.sage}
               />
+              <View style={styles.noteRow}>
+                <ThemedText type="small" themeColor="textSecondary" style={[styles.flex, styles.rowNote]}>
+                  {glance.weeks} weeks, {periodRangeLabel(periodFor(viewedMonth, weekStartDay))}
+                </ThemedText>
+                <InfoTap label="How your weekly amount works" onPress={() => setWeeklyInfo(true)} />
+              </View>
               <MoneyRow label="Savings goals" value={`−${fmt(glance.goalsMonthly)}`} sub color={Palette.terracottaDeep} dot={Palette.terracotta} />
               <MoneyRow label="Fun money" value={`−${fmt(glance.funTotal)}`} sub color={Palette.terracottaDeep} dot={Palette.sandDeep} />
+              {/* Closes the column. The pool is measured against what bills
+                  ACTUALLY cost while the allowance is derived from the
+                  estimates, so when the two differ this much is left sitting
+                  outside the plan. Without the row the numbers above simply
+                  don't add up, which is worse than the gap itself. */}
+              {unallocated !== 0 && (
+                <>
+                  <MoneyRow
+                    label={`Bills came in ${unallocated > 0 ? 'under' : 'over'}`}
+                    value={`${unallocated > 0 ? '+' : '−'}${fmt(Math.abs(unallocated))}`}
+                    sub
+                    color={unallocated > 0 ? Palette.sageDeep : Palette.terracottaDeep}
+                  />
+                  {isCurrentMonth && (
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
+                      Spread across the {weeksLeft} week{weeksLeft === 1 ? '' : 's'} left, so this
+                      week is {fmt(adjustedWeekly)}
+                    </ThemedText>
+                  )}
+                </>
+              )}
             </Card>
           ) : (
             <Card style={styles.noSnapshotCard}>
@@ -268,17 +353,47 @@ export default function OverviewScreen() {
             </Card>
           )}
 
-          {glance && prevSnapshot && (
+          {glance && comparison && (
             <Card style={styles.insightsCard}>
               <ThemedText type="label" themeColor="textSecondary" style={styles.insightsLabel}>
-                VS {monthLabel(monthBefore(viewedMonth)).split(' ')[0].toUpperCase()}
+                COMPARED WITH {comparison.prevName.toUpperCase()}
               </ThemedText>
-              <InsightRow label="Income" delta={glance.totalIncome - prevSnapshot.total_income} />
-              <InsightRow label="Fixed bills" delta={glance.totalFixed - prevSnapshot.total_fixed} invert />
-              <InsightRow label="Saved toward goals" delta={glance.goalsSaved - prevSnapshot.goals_saved_total} />
-              {Math.round(glance.weeklyAllowance * 100) !== Math.round(prevSnapshot.weekly_allowance * 100) && (
+
+              {/* Both figures, always. Showing only the weekly one let a month
+                  with fewer weeks read as a raise: the same (or smaller) pool
+                  divided four ways instead of five looks like more money until
+                  you see the monthly total fall next to it. */}
+              <CompareRow
+                label="Per week"
+                value={fmt(glance.weeklyAllowance)}
+                delta={comparison.weeklyDelta}
+              />
+              <CompareRow
+                label="For the month"
+                value={fmt(glance.monthlyPool)}
+                delta={comparison.poolDelta}
+                divider
+              />
+
+              {comparison.weeksChanged && (
+                <View style={styles.weeksNote}>
+                  <ThemedText type="small" style={styles.weeksNoteText}>
+                    {comparison.thisName} splits across {glance.weeks} weeks; {comparison.prevName}{' '}
+                    had {comparison.prevWeeks}.{' '}
+                    {comparison.opposed
+                      ? `That's why the weekly figure went ${comparison.weeklyDelta > 0 ? 'up' : 'down'} even though the month has ${comparison.poolDelta > 0 ? 'more' : 'less'} in it.`
+                      : "A month's pool is divided by its own week count, so the weekly figure shifts with it."}
+                  </ThemedText>
+                </View>
+              )}
+
+              <View style={styles.divider} />
+              {comparison.changed.map((c) => (
+                <CompareRow key={c.label} label={c.label} delta={c.delta} invert={c.invert} />
+              ))}
+              {comparison.unchangedNote && (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.allowanceNote}>
-                  Weekly allowance changed from {fmt(prevSnapshot.weekly_allowance)} to {fmt(glance.weeklyAllowance)}
+                  {comparison.unchangedNote}
                 </ThemedText>
               )}
             </Card>
@@ -287,7 +402,7 @@ export default function OverviewScreen() {
           {/* Spending trend */}
           <SectionHeader title="Spending trend" />
           <ThemedText type="small" themeColor="textSecondary" style={styles.trendNote}>
-            Total variable spending logged each month.
+            Total variable spending logged each month. Bills and fun money aren&apos;t counted here.
           </ThemedText>
           <View style={styles.rangeWrap}>
             <Segmented
@@ -306,7 +421,11 @@ export default function OverviewScreen() {
           </Card>
 
           {/* Where the money went */}
-          <SectionHeader title="Where the money went" action={viewedMonthName} />
+          <SectionHeader
+            title="Where the money went"
+            action={viewedMonthName}
+            caption="Variable spending only, the same total as the trend above. Fun money is each person's own and sits outside this."
+          />
           <Card>
             {catTotals.length === 0 ? (
               <ThemedText type="body" themeColor="textSecondary" style={styles.emptyCats}>
@@ -350,28 +469,43 @@ export default function OverviewScreen() {
         ]}
         onClose={() => setCadenceInfo(false)}
       />
+      <InfoSheet
+        visible={weeklyInfo}
+        title={WEEKLY_PERIODS_INFO.title}
+        paragraphs={WEEKLY_PERIODS_INFO.paragraphs}
+        onClose={() => setWeeklyInfo(false)}
+      />
     </Screen>
   );
 }
 
-function InsightRow({ label, delta, invert }: { label: string; delta: number; invert?: boolean }) {
-  const flat = Math.round(delta * 100) === 0;
-  const up = delta > 0;
-  const good = invert ? !up : up;
+/**
+ * One line of the month comparison. `value` makes it a headline figure with
+ * its change beside it; without one it's a plain "what moved" row. The change
+ * itself is worded by DeltaText, shared with the month review.
+ */
+function CompareRow({
+  label,
+  value,
+  delta,
+  invert,
+  divider,
+}: {
+  label: string;
+  value?: string;
+  delta: number;
+  invert?: boolean;
+  divider?: boolean;
+}) {
   return (
-    <View style={styles.insightRow}>
-      <ThemedText type="small" themeColor="textSecondary">
+    <View style={[styles.compareRow, divider && styles.compareDivider]}>
+      <ThemedText type="body" style={styles.compareLabel}>
         {label}
       </ThemedText>
-      {flat ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          No change
-        </ThemedText>
-      ) : (
-        <ThemedText type="small" style={good ? styles.good : styles.warn}>
-          {up ? '↑' : '↓'} {fmt(Math.abs(delta))}
-        </ThemedText>
-      )}
+      {value && <ThemedText type="subtitle">{value}</ThemedText>}
+      <View style={value ? styles.compareDelta : undefined}>
+        <DeltaText delta={delta} invert={invert} type={value ? 'body' : 'bodyBold'} />
+      </View>
     </View>
   );
 }
@@ -410,13 +544,39 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(61,64,91,0.15)',
     marginVertical: Spacing.two,
   },
+  // Indented to sit under the row it annotates, matching MoneyRow's `sub`.
+  rowNote: { paddingLeft: Spacing.three, lineHeight: 18 },
   noSnapshotCard: { paddingVertical: Spacing.five },
   noSnapshotText: { textAlign: 'center' },
-  insightsCard: { marginTop: Spacing.three, gap: Spacing.one + 2 },
+  insightsCard: { marginTop: Spacing.three, gap: Spacing.one },
   insightsLabel: { letterSpacing: 0.6, marginBottom: Spacing.one },
-  insightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  compareRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one + 1,
+  },
+  compareDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(61,64,91,0.12)',
+    marginTop: 2,
+    paddingTop: Spacing.two,
+  },
+  compareLabel: { flex: 1 },
+  // Fixed width so the two headline deltas line up under each other rather
+  // than floating at the end of differently-sized figures.
+  compareDelta: { minWidth: 96, alignItems: 'flex-end' },
   good: { color: Palette.sageDeep },
   warn: { color: Palette.terracottaDeep },
+  weeksNote: {
+    backgroundColor: 'rgba(242,204,143,0.28)',
+    borderRadius: Radius.medium,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two + 4,
+    marginTop: Spacing.two,
+  },
+  weeksNoteText: { color: '#8A6A2A', lineHeight: 19 },
   allowanceNote: { marginTop: Spacing.one, lineHeight: 18 },
   trendNote: { marginTop: -Spacing.two, marginBottom: Spacing.three, marginLeft: Spacing.one },
   rangeWrap: { marginBottom: Spacing.three },

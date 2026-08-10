@@ -12,6 +12,7 @@ import IconSave from '@/assets/icons/icon-save.svg';
 import IconWeek from '@/assets/icons/icon-week.svg';
 import IllustrationLanding from '@/assets/illustrations/landing-login.svg';
 import { Button } from '@/components/button';
+import { PasswordField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
@@ -140,12 +141,8 @@ export default function SignInScreen() {
                 onChangeText={setEmail}
                 editable={!loading}
               />
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
+              <PasswordField
                 placeholder={isSignIn ? 'Password' : 'Create a password'}
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                secureTextEntry
                 value={password}
                 onChangeText={setPassword}
                 editable={!loading}
