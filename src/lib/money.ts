@@ -85,6 +85,23 @@ export function fmt(n: number | null | undefined): string {
   );
 }
 
+/**
+ * What's still owed on the catch-up balance.
+ *
+ * Summed from the entries rather than stored anywhere, so the figure and its
+ * own history can never disagree. Floored at zero: overpaying should read as
+ * "settled", not as the household being owed money by itself.
+ *
+ * Lives here rather than beside its queries because it is pure, and the verify
+ * scripts can't import anything that reaches react-native.
+ */
+export function catchUpBalance(
+  entries: { amount: number }[] | undefined
+): number {
+  const total = (entries ?? []).reduce((a, e) => a + Number(e.amount), 0);
+  return Math.max(0, Math.round(total * 100) / 100);
+}
+
 export type DeltaDescription = {
   text: string; // "$99 more", "$40 less", or "No change"
   good: boolean; // the movement went the way the household wants

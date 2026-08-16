@@ -12,10 +12,14 @@ import type { Goal } from '@/lib/types';
 type Props = {
   visible: boolean;
   amount: number; // signed: + leftover, − overage
-  /** The three figures `amount` came from, so the sheet can show its working. */
+  /** The figures `amount` came from, so the sheet can show its working. */
   allowance: number;
   spent: number;
   incomeBack: number;
+  /** Signed amount carried into that week when the one before it was settled. */
+  carriedIn: number;
+  /** What's currently owed on the catch-up balance, for the pay-it-down option. */
+  catchUpOwing: number;
   goals: Goal[];
   loading?: boolean;
   onResolve: (resolution: RolloverResolution, goalId?: string) => void;
@@ -32,6 +36,8 @@ export function RolloverPrompt({
   allowance,
   spent,
   incomeBack,
+  carriedIn,
+  catchUpOwing,
   goals,
   loading,
   onResolve,
@@ -41,10 +47,16 @@ export function RolloverPrompt({
   const abs = Math.abs(amount);
   // Where the figure came from. A sheet asking you to move real money should
   // never make you take its number on trust.
-  const working =
-    incomeBack > 0
-      ? `${fmt(allowance)} allowance, plus ${fmt(incomeBack)} put back, less ${fmt(spent)} spent.`
-      : `${fmt(allowance)} allowance, less ${fmt(spent)} spent.`;
+  const working = [
+    `${fmt(allowance)} allowance`,
+    incomeBack > 0 ? `plus ${fmt(incomeBack)} put back` : null,
+    carriedIn !== 0
+      ? `${carriedIn > 0 ? 'plus' : 'less'} ${fmt(Math.abs(carriedIn))} carried in from the week before`
+      : null,
+    `less ${fmt(spent)} spent`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   function close(resolution: RolloverResolution, goalId?: string) {
     setPickingGoal(false);
@@ -80,13 +92,37 @@ export function RolloverPrompt({
           {over ? "You went over last week's budget." : "You had money left over last week."}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.working}>
-          {working}
+          {working}.
         </ThemedText>
       </View>
 
+      {/* Catch-up leads when the week went over, because carrying a large
+          overage into a single week makes that week unwinnable: it starts
+          negative, overspends too, and the number grows. Catch-up records the
+          money without any one week having to absorb it. */}
+      {over && (
+        <Option
+          label="Move it to catch-up"
+          sub={`Tracked as ${fmt(abs)} to pay off later. This week's money isn't touched.`}
+          onPress={() => close('catch_up')}
+          loading={loading}
+        />
+      )}
+      {!over && catchUpOwing > 0 && (
+        <Option
+          label="Put it toward catch-up"
+          sub={`Pays off ${fmt(Math.min(abs, catchUpOwing))} of the ${fmt(catchUpOwing)} you owe.`}
+          onPress={() => close('catch_up')}
+          loading={loading}
+        />
+      )}
       <Option
         label={over ? "Take it from this week's money" : "Add it to this week's money"}
-        sub={over ? 'This week starts a bit tighter.' : 'This week starts with extra room.'}
+        sub={
+          over
+            ? `This week starts ${fmt(abs)} lower. Best for small amounts.`
+            : 'This week starts with extra room.'
+        }
         onPress={() => close('carry_forward')}
         loading={loading}
       />

@@ -9,6 +9,7 @@ import { DeltaText } from '@/components/delta-text';
 import { Donut } from '@/components/donut';
 import { MonthReviewBanner } from '@/components/month-review-banner';
 import { MoneyRow } from '@/components/money-row';
+import { LoadError } from '@/components/load-error';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
@@ -170,9 +171,25 @@ export default function OverviewScreen() {
         })
       : null;
 
+  /**
+   * The ring is a picture of how income is allocated, so its bills slice is
+   * what the plan SET ASIDE for bills, which is income less the other three
+   * allocations by construction. The rows below carry what bills actually
+   * cost, and the "bills came in under/over" row explains the difference.
+   *
+   * Using the actual figure here instead left the ring totalling $8,494 while
+   * its own centre read $8,504. Donut normalises to the sum of its segments,
+   * so the ring still drew as a complete circle and the gap was invisible.
+   * Deriving the slice this way makes it exact for live and closed months
+   * alike, with no fifth slice and no edge case when bills run over.
+   */
+  const plannedForBills = glance
+    ? Math.max(0, Math.round((glance.totalIncome - glance.monthlyPool - glance.goalsMonthly - glance.funTotal) * 100) / 100)
+    : 0;
+
   const pie = glance
     ? [
-        { name: 'Fixed expenses', value: glance.totalFixed, color: Palette.ink },
+        { name: 'Fixed expenses', value: plannedForBills, color: Palette.ink },
         { name: 'Weekly allowance', value: glance.monthlyPool, color: Palette.sage },
         { name: 'Savings goals', value: glance.goalsMonthly, color: Palette.terracotta },
         { name: 'Fun money', value: glance.funTotal, color: Palette.sandDeep },
@@ -217,6 +234,13 @@ export default function OverviewScreen() {
   }, [transactions.data, range]);
 
   const loading = !householdId || income.isLoading || transactions.isLoading || snapshots.isLoading;
+  const loadFailed = income.isError || transactions.isError || snapshots.isError || bills.isError;
+  const retryLoad = () => {
+    income.refetch();
+    transactions.refetch();
+    snapshots.refetch();
+    bills.refetch();
+  };
 
   return (
     <Screen>
@@ -225,6 +249,8 @@ export default function OverviewScreen() {
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
+      ) : loadFailed ? (
+        <LoadError onRetry={retryLoad} what="your overview" />
       ) : (
         <>
           {/* Month at a glance */}
@@ -265,7 +291,10 @@ export default function OverviewScreen() {
                 </View>
               )}
 
-              <MoneyRow label="Total income" value={fmt(glance.totalIncome)} strong color={Palette.sageDeep} />
+              {/* Deliberately NOT green. Green belongs to the weekly-allowance
+                  slice of the ring above, and a green total sitting beside a
+                  green arc taught people to read the arc as this number. */}
+              <MoneyRow label="Total income" value={fmt(glance.totalIncome)} strong />
               {isCurrentMonth &&
                 (income.data ?? []).map((s) => (
                   <MoneyRow
@@ -303,7 +332,10 @@ export default function OverviewScreen() {
                 </ThemedText>
               )}
               <View style={styles.divider} />
-              <MoneyRow label="Variable pool" value={fmt(glance.variablePool)} strong color={Palette.sageDeep} />
+              {/* Same reason. This was THE misleading one: a green $1,969 sat
+                  directly above a green arc worth $1,909, so the arc read as
+                  the variable pool when it's the weekly allowance. */}
+              <MoneyRow label="Variable pool" value={fmt(glance.variablePool)} strong />
               <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
                 What&apos;s left after bills. The three below come out of it.
               </ThemedText>

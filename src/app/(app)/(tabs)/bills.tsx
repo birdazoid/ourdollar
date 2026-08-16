@@ -1,10 +1,11 @@
-import { Check, ChevronRight, Plus } from 'lucide-react-native';
+import { Check, ChevronRight, CornerDownRight, Plus } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import IconSave from '@/assets/icons/icon-save.svg';
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
 import { BillSheet } from '@/components/bill-sheet';
+import { CatchUpSheet } from '@/components/catch-up-sheet';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { GoalDetailSheet } from '@/components/goal-detail-sheet';
@@ -13,6 +14,7 @@ import { GoalSheet } from '@/components/goal-sheet';
 import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { MiniCard, TwoUp } from '@/components/mini-card';
+import { LoadError } from '@/components/load-error';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
@@ -21,13 +23,15 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { billMonthlyCost, fmt } from '@/lib/money';
+import { billMonthlyCost, catchUpBalance, fmt } from '@/lib/money';
 import { monthLabel } from '@/lib/month-review';
 import { monthOf } from '@/lib/period';
 import {
   useBillCarryovers,
   useBillMutations,
   useBills,
+  useCatchUpEntries,
+  useCatchUpMutations,
   useGoalMutations,
   useGoals,
   useMembers,
@@ -65,12 +69,16 @@ export default function BillsScreen() {
   const billMut = useBillMutations(householdId);
   const goalMut = useGoalMutations(householdId);
   const resolveCarryover = useResolveCarryover(householdId);
+  const catchUp = useCatchUpEntries(householdId);
+  const catchUpMut = useCatchUpMutations(householdId);
+  const catchUpOwed = catchUpBalance(catchUp.data);
 
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
   const [billDetail, setBillDetail] = useState<Bill | null>(null);
   const [goalDetail, setGoalDetail] = useState<Goal | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [catchUpOpen, setCatchUpOpen] = useState(false);
 
   const currentMemberId = useMemo(() => {
     const uid = session?.user.id;
@@ -115,6 +123,13 @@ export default function BillsScreen() {
   }, [billList]);
 
   const loading = !householdId || bills.isLoading || goals.isLoading;
+  // Without this a failed fetch showed an empty bill list, which reads as
+  // "you have no bills" rather than "this didn't load".
+  const loadFailed = bills.isError || goals.isError;
+  const retryLoad = () => {
+    bills.refetch();
+    goals.refetch();
+  };
 
   // ---- bill handlers ----
   function saveBill(input: BillInput, id?: string) {
@@ -181,6 +196,8 @@ export default function BillsScreen() {
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
+      ) : loadFailed ? (
+        <LoadError onRetry={retryLoad} what="your bills" />
       ) : (
         <>
           <HeroCard
@@ -288,6 +305,43 @@ export default function BillsScreen() {
           })}
           <DashedAdd label="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
 
+          {/* Catch-up sits beside the goals on purpose: it behaves like a goal
+              in reverse, and a debt that costs nothing week to week is easy to
+              forget unless it's somewhere you already look. Hidden entirely
+              until there's something to show, so it never nags a household
+              that has never gone over. */}
+          {(catchUpOwed > 0 || (catchUp.data ?? []).length > 0) && (
+            <>
+              <SectionHeader
+                title="Catch-up"
+                icon={<CornerDownRight size={20} color={Palette.ink} />}
+                caption="Money you've already spent, kept on record. It doesn't come out of your weekly money."
+              />
+              <ListRow
+                emoji={
+                  <CornerDownRight
+                    size={22}
+                    color={catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep}
+                  />
+                }
+                title={catchUpOwed > 0 ? 'Still to pay off' : 'All caught up'}
+                subtitle={
+                  catchUpOwed > 0
+                    ? 'Pay it off whenever suits, or put a good week toward it'
+                    : 'Nothing outstanding'
+                }
+                onPress={() => setCatchUpOpen(true)}
+                right={
+                  <ThemedText
+                    type="bodyBold"
+                    style={{ color: catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep }}>
+                    {fmt(catchUpOwed)}
+                  </ThemedText>
+                }
+              />
+            </>
+          )}
+
           {/* Bills grouped by category */}
           {grouped.map(({ cat, bills: catBills }) => (
             <View key={cat}>
@@ -382,6 +436,18 @@ export default function BillsScreen() {
           setGoalSheet({ goal: g });
         }}
         onDelete={askDeleteGoal}
+      />
+      <CatchUpSheet
+        visible={catchUpOpen}
+        balance={catchUpOwed}
+        entries={catchUp.data ?? []}
+        memberName={memberName}
+        saving={catchUpMut.add.isPending}
+        onPay={(amount, note) => {
+          catchUpMut.add.mutate({ amount: -amount, kind: 'payment', note, memberId: currentMemberId });
+          setCatchUpOpen(false);
+        }}
+        onClose={() => setCatchUpOpen(false)}
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </Screen>

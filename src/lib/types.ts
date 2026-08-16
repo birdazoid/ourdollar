@@ -117,6 +117,22 @@ export type WeeklyEnvelope = {
   created_at: string;
 };
 
+/**
+ * One movement on the catch-up balance. Signed: positive adds to what's owed,
+ * negative pays it down. The balance is the sum of these and is never stored
+ * anywhere, so it can't drift from its own history.
+ */
+export type CatchUpEntry = {
+  id: string;
+  household_id: string;
+  amount: number;
+  kind: 'week_overage' | 'payment' | 'adjustment';
+  note: string | null;
+  source_week_start: string | null;
+  created_by_member_id: string | null;
+  created_at: string;
+};
+
 // A closed month's full budget plan + bill outcome — the only durable record of
 // "what the plan was" for a past month, since bills reset and computeBudget()
 // only ever reflects today's live settings. bills_paid_amount/count can be

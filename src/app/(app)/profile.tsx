@@ -23,6 +23,7 @@ import IconShare from '@/assets/icons/icon-share.svg';
 import IconSignOut from '@/assets/icons/icon-sign-out.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
 import { AvatarGlyph } from '@/components/avatar-glyph';
+import { AvatarPickerSheet } from '@/components/avatar-picker-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
@@ -40,7 +41,6 @@ import {
   isBiometricSupported,
   setBiometricLockEnabled,
 } from '@/lib/biometrics';
-import { AVATAR_OPTIONS } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { householdColor, HOUSEHOLD_COLORS } from '@/lib/household-color';
 import {
@@ -341,7 +341,7 @@ export default function ProfileScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Change avatar"
-                onPress={() => setPickingAvatar((v) => !v)}
+                onPress={() => setPickingAvatar(true)}
                 style={styles.avatarWrap}>
                 <View style={styles.avatar}>
                   <AvatarGlyph value={me?.avatar} size={84} />
@@ -372,21 +372,6 @@ export default function ProfileScreen() {
                     </ThemedText>
                   </Pressable>
                 </>
-              )}
-
-              {pickingAvatar && (
-                <View style={styles.avatarGrid}>
-                  {AVATAR_OPTIONS.map((a) => (
-                    <Pressable
-                      key={a}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Avatar ${a}`}
-                      onPress={() => pickAvatar(a)}
-                      style={styles.avatarOption}>
-                      <AvatarGlyph value={a} size={40} />
-                    </Pressable>
-                  ))}
-                </View>
               )}
             </View>
 
@@ -783,6 +768,12 @@ export default function ProfileScreen() {
         )}
       </Sheet>
 
+      <AvatarPickerSheet
+        visible={pickingAvatar}
+        current={me?.avatar}
+        onPick={pickAvatar}
+        onClose={() => setPickingAvatar(false)}
+      />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
 
       {deletingAccount && (
@@ -1000,22 +991,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     paddingVertical: Spacing.two + 2,
     paddingHorizontal: Spacing.four,
-  },
-  avatarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    marginTop: Spacing.three,
-  },
-  avatarOption: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
   },
 
   eyebrow: { marginTop: Spacing.four, marginBottom: Spacing.two, letterSpacing: 0.6 },

@@ -6,6 +6,7 @@ import type {
   Account,
   Bill,
   BillCarryover,
+  CatchUpEntry,
   ExtraIncome,
   FunMoneyPerson,
   FunMoneySettings,
@@ -833,6 +834,119 @@ export function useInviteResponses() {
 
 // ---- Week rollover / overage settlement ----
 
+// ---- Catch-up balance ----
+
+/** Every movement on the catch-up balance, newest first. */
+export function useCatchUpEntries(householdId: string | null) {
+  return useQuery({
+    queryKey: ['catchup_entries', householdId],
+    enabled: !!householdId,
+    queryFn: async (): Promise<CatchUpEntry[]> => {
+      const { data, error } = await supabase
+        .from('catchup_entries')
+        .select('*')
+        .eq('household_id', householdId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as CatchUpEntry[];
+    },
+  });
+}
+
+export type CatchUpInput = {
+  amount: number; // signed, as stored
+  kind: CatchUpEntry['kind'];
+  note?: string | null;
+  sourceWeekStart?: string | null;
+  memberId?: string | null;
+};
+
+export function useCatchUpMutations(householdId: string | null) {
+  const qc = useQueryClient();
+  const settle = () => qc.invalidateQueries({ queryKey: ['catchup_entries', householdId] });
+
+  const add = useMutation({
+    mutationFn: async (input: CatchUpInput) => {
+      const { error } = await supabase.from('catchup_entries').insert({
+        household_id: householdId,
+        amount: input.amount,
+        kind: input.kind,
+        note: input.note ?? null,
+        source_week_start: input.sourceWeekStart ?? null,
+        created_by_member_id: input.memberId ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: settle,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('catchup_entries').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: settle,
+  });
+
+  return { add, remove };
+}
+
+// ---- Week results (what a week was actually worth) ----
+
+/**
+ * The recorded weekly allowance for a week, or null if none was recorded.
+ *
+ * Null means the household didn't open the app during that week, so there's no
+ * historical figure and callers have to fall back to recomputing. Callers
+ * should say so on screen rather than presenting an estimate as fact.
+ */
+export function useWeekResult(householdId: string | null, weekStart: string | null) {
+  return useQuery({
+    queryKey: ['week_results', householdId, weekStart],
+    enabled: !!householdId && !!weekStart,
+    queryFn: async (): Promise<number | null> => {
+      const { data, error } = await supabase
+        .from('week_results')
+        .select('weekly_allowance')
+        .eq('household_id', householdId!)
+        .eq('week_start', weekStart!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? Number(data.weekly_allowance) : null;
+    },
+  });
+}
+
+/**
+ * Writes down what THIS week is worth, so it can never be restated later.
+ *
+ * Called while the week is still running, so the stored figure tracks changes
+ * (a bill landing, a pay rise) right up to the moment the week ends. After
+ * that nothing writes to it again.
+ */
+export function useRecordWeekResult(householdId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    // Bookkeeping the household never asked for, so a failure must not raise a
+    // toast: "Couldn't save your change" about a write they didn't make is
+    // alarming and unactionable. It simply records again next time the Week
+    // screen opens.
+    meta: { silent: true },
+    mutationFn: async ({ weekStart, weeklyAllowance }: { weekStart: string; weeklyAllowance: number }) => {
+      const { error } = await supabase
+        .from('week_results')
+        .upsert(
+          { household_id: householdId, week_start: weekStart, weekly_allowance: weeklyAllowance, recorded_at: new Date().toISOString() },
+          { onConflict: 'household_id,week_start' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['week_results', householdId, vars.weekStart] });
+    },
+  });
+}
+
 /** Total already carried into a given week from prior settlements (0 if none). */
 export function useWeekAdjustment(householdId: string | null, weekStart: string | null) {
   return useQuery({
@@ -868,7 +982,7 @@ export function useRolloverSettled(householdId: string | null, fromWeekStart: st
   });
 }
 
-export type RolloverResolution = 'carry_forward' | 'goal' | 'dismiss';
+export type RolloverResolution = 'carry_forward' | 'goal' | 'dismiss' | 'catch_up';
 
 export type SettleRolloverInput = {
   fromWeekStart: string;

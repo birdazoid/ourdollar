@@ -9,6 +9,7 @@ import { AvatarGlyph } from '@/components/avatar-glyph';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { IncomeSheet, type IncomeDraft, type IncomeTarget } from '@/components/income-sheet';
+import { LoadError } from '@/components/load-error';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
@@ -93,6 +94,14 @@ export default function SetupScreen() {
   });
 
   const loading = !householdId || income.isLoading || members.isLoading;
+  // Setup is the screen people edit from. Showing an empty income list after a
+  // failed fetch invites re-adding income that already exists.
+  const loadFailed = income.isError || members.isError || bills.isError;
+  const retryLoad = () => {
+    income.refetch();
+    members.refetch();
+    bills.refetch();
+  };
 
   // The sheet reports which kind it saved, so a one-off routes to extra_income
   // and a recurring source to income_sources. Switching cadence to or from
@@ -140,6 +149,8 @@ export default function SetupScreen() {
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
+      ) : loadFailed ? (
+        <LoadError onRetry={retryLoad} what="your setup" />
       ) : (
         <>
           {/* The one figure this screen still shows. Everything below feeds it,

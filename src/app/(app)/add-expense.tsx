@@ -158,7 +158,16 @@ export default function AddExpenseScreen() {
         };
   })();
 
-  function save() {
+  /**
+   * Leaves the screen only once the write has actually landed.
+   *
+   * This is the app's main data-entry path, and it used to fire the mutation
+   * and navigate in the same breath. A failed save then looked identical to a
+   * successful one: the form closed and the expense simply never existed. On
+   * failure the form now stays exactly as typed, so trying again is one tap
+   * rather than re-entering everything from memory in a car park.
+   */
+  async function save() {
     const input: TransactionInput = {
       member_id: memberId,
       amount: amountNum,
@@ -168,9 +177,13 @@ export default function AddExpenseScreen() {
       is_fun_money: type === 'expense' && funEnabled ? isFun : false,
       occurred_on: day,
     };
-    if (isEdit) txMut.update.mutate({ id: editing!.id, ...input });
-    else txMut.create.mutate(input);
-    goBack();
+    try {
+      if (isEdit) await txMut.update.mutateAsync({ id: editing!.id, ...input });
+      else await txMut.create.mutateAsync(input);
+      goBack();
+    } catch {
+      // The toast is raised by the global mutation handler; keep the form.
+    }
   }
 
   function askDelete() {
@@ -178,9 +191,13 @@ export default function AddExpenseScreen() {
     setConfirm({
       title: 'Delete this entry?',
       message: `This removes "${editing.label}" (${fmt(editing.amount)}) from your log.`,
-      onConfirm: () => {
-        txMut.remove.mutate(editing.id);
-        goBack();
+      onConfirm: async () => {
+        try {
+          await txMut.remove.mutateAsync(editing.id);
+          goBack();
+        } catch {
+          // Stay put with the entry intact rather than implying it's gone.
+        }
       },
     });
   }
@@ -349,6 +366,9 @@ export default function AddExpenseScreen() {
                     : `${type === 'income' ? 'Add income' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
                 }
                 disabled={!valid}
+                // The screen now waits for the write, so the button has to say
+                // it's working or the tap reads as having done nothing.
+                loading={txMut.create.isPending || txMut.update.isPending}
                 onPress={save}
               />
             </View>

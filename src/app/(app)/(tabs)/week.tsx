@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Plus, TrendingDown } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, CornerDownRight, Plus, TrendingDown } from 'lucide-react-native';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
@@ -14,6 +14,7 @@ import { HeroCard } from '@/components/hero-card';
 import { ListRow } from '@/components/list-row';
 import { Ring } from '@/components/ring';
 import { RolloverPrompt } from '@/components/rollover-prompt';
+import { LoadError } from '@/components/load-error';
 import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
@@ -25,6 +26,7 @@ import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import {
   adjustedWeeklyAllowance,
+  catchUpBalance,
   computeBudget,
   computeEnvelopes,
   fmt,
@@ -43,11 +45,15 @@ import {
   useFunSettings,
   useGoals,
   useIncome,
+  useCatchUpEntries,
+  useCatchUpMutations,
   useMembers,
+  useRecordWeekResult,
   useRolloverSettled,
   useSettleRollover,
   useTransactions,
   useWeekAdjustment,
+  useWeekResult,
   type EnvelopeDraft,
   type RolloverResolution,
 } from '@/lib/queries';
@@ -70,6 +76,8 @@ export default function WeekScreen() {
   const funSettings = useFunSettings(householdId);
   const envelopes = useEnvelopes(householdId);
   const envMut = useEnvelopeMutations(householdId);
+  const catchUp = useCatchUpEntries(householdId);
+  const catchUpMut = useCatchUpMutations(householdId);
 
   const [offset, setOffset] = useState(0);
   const [envSheet, setEnvSheet] = useState<{ envelope: WeeklyEnvelope | null } | null>(null);
@@ -101,16 +109,47 @@ export default function WeekScreen() {
     weeksInPeriod: weeksInPeriod(fundingMonth, weekStart),
   });
   // Bills that came in over (or under) their estimate are absorbed by the weeks
-  // still left in the period. Past weeks keep the figure they were actually
-  // budgeted against, so navigating back shows honest history.
+  // still left in the period.
   const weeksLeft = weeksRemainingInPeriod(weekStart);
-  const allowance = isCurrent
-    ? adjustedWeeklyAllowance({
-        plannedWeekly: budget.weeklyAllowance,
-        billVariance: budget.billVariance,
-        weeksRemaining: weeksLeft,
-      })
-    : budget.weeklyAllowance;
+  const liveAllowance = adjustedWeeklyAllowance({
+    plannedWeekly: budget.weeklyAllowance,
+    billVariance: budget.billVariance,
+    weeksRemaining: weeksLeft,
+  });
+
+  /**
+   * What the week being viewed was worth.
+   *
+   * A finished week reads its RECORDED figure, never a fresh calculation. The
+   * screen used to recompute every past week from today's income and bills, so
+   * a pay rise silently rewrote history: a week settled at $563.25 over later
+   * displayed as $592.75 over, because the weekly figure had gone up by $78
+   * after that week had already ended.
+   *
+   * `null` means nobody opened the app during that week, so there's nothing on
+   * record and the best we can do is estimate from today's figures. The screen
+   * says so rather than passing the estimate off as history.
+   */
+  const weekResult = useWeekResult(householdId, week.start);
+  const recordedAllowance = weekResult.data ?? null;
+  const estimatingPastWeek = !isCurrent && !weekResult.isLoading && recordedAllowance == null;
+  const allowance = isCurrent ? liveAllowance : recordedAllowance ?? budget.weeklyAllowance;
+
+  /**
+   * Keep this week's figure on record while the week is still running, so it
+   * stays true as bills land and income changes. Once the week ends nothing
+   * writes to it again, which is what freezes it.
+   */
+  const recordWeek = useRecordWeekResult(householdId);
+  useEffect(() => {
+    if (!householdId || !isCurrent || weekResult.isLoading) return;
+    if (recordedAllowance != null && Math.abs(recordedAllowance - liveAllowance) < 0.005) return;
+    if (recordWeek.isPending) return;
+    recordWeek.mutate({ weekStart: week.start, weeklyAllowance: liveAllowance });
+    // `recordWeek` is a stable mutation object; including it would re-run this
+    // on every render as its own pending state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId, isCurrent, weekResult.isLoading, recordedAllowance, liveAllowance, week.start]);
 
   const weekTxns = (transactions.data ?? []).filter(
     (t) => t.occurred_on >= week.start && t.occurred_on <= week.end
@@ -149,14 +188,30 @@ export default function WeekScreen() {
   // months, and a 5-week month funds a smaller weekly figure than a 4-week one,
   // so the week count has to come from last week's own period.
   const lastFundingMonth = fundingMonthForWeek(lastWeek.start);
+  // Prefer what last week was RECORDED at. Falling back to a recalculation is
+  // what made the prompt disagree with the week it was settling.
+  const lastWeekResult = useWeekResult(householdId, isCurrent ? lastWeek.start : null);
   const lastPlannedWeekly =
-    lastFundingMonth === fundingMonth
+    lastWeekResult.data ??
+    (lastFundingMonth === fundingMonth
       ? budget.weeklyAllowance
       : computeBudget({
           ...budgetInputs,
           weeksInPeriod: weeksInPeriod(lastFundingMonth, weekStart),
-        }).weeklyAllowance;
-  const lastRemaining = Math.round((lastPlannedWeekly - lastSpent + lastIncomeBack) * 100) / 100;
+        }).weeklyAllowance);
+  /**
+   * Money carried INTO last week when the week before it was settled.
+   *
+   * Leaving it out made the prompt disagree with the Week screen, which has
+   * always included it, and worse: the carried amount quietly left the books.
+   * Carry $107.50 of overspend into last week, and last week's own settlement
+   * would then act as though that debt had never been carried, so it was
+   * written off without anyone choosing to write it off.
+   */
+  const lastWeekAdjustment = useWeekAdjustment(householdId, isCurrent ? lastWeek.start : null);
+  const lastAdjustment = lastWeekAdjustment.data ?? 0;
+  const lastRemaining =
+    Math.round((lastPlannedWeekly - lastSpent + lastIncomeBack + lastAdjustment) * 100) / 100;
 
   const rolloverSettled = useRolloverSettled(householdId, isCurrent ? lastWeek.start : null);
   const settleRollover = useSettleRollover(householdId);
@@ -176,6 +231,32 @@ export default function WeekScreen() {
 
   function resolveRollover(resolution: RolloverResolution, goalId?: string) {
     const goal = goalId ? (goals.data ?? []).find((g) => g.id === goalId) : undefined;
+
+    // Catch-up records the money on its own balance instead of moving it into
+    // a week or a goal, so `applied_amount` stays 0 and no allowance shifts.
+    if (resolution === 'catch_up') {
+      const owed = catchUpBalance(catchUp.data);
+      catchUpMut.add.mutate(
+        lastRemaining < 0
+          ? {
+              amount: -lastRemaining, // overage becomes a positive debt
+              kind: 'week_overage',
+              note: `Week of ${weekRangeLabel(lastWeek.days)}`,
+              sourceWeekStart: lastWeek.start,
+              memberId: me?.id ?? null,
+            }
+          : {
+              // Never pay off more than is owed, or the balance would go
+              // negative and read as the household being owed money.
+              amount: -Math.min(lastRemaining, owed),
+              kind: 'payment',
+              note: `Left over from the week of ${weekRangeLabel(lastWeek.days)}`,
+              sourceWeekStart: lastWeek.start,
+              memberId: me?.id ?? null,
+            }
+      );
+    }
+
     settleRollover.mutate({
       fromWeekStart: lastWeek.start,
       toWeekStart: week.start,
@@ -262,6 +343,15 @@ export default function WeekScreen() {
   }, [weekTxns]);
 
   const loading = !householdId || transactions.isLoading || income.isLoading;
+  // A failed fetch left `data` undefined, the `?? []` fallbacks took over, and
+  // this screen rendered "Nothing logged for this week yet" on a week with
+  // plenty logged. Report the failure instead of inventing an empty week.
+  const loadFailed = transactions.isError || income.isError || bills.isError;
+  const retryLoad = () => {
+    transactions.refetch();
+    income.refetch();
+    bills.refetch();
+  };
 
   return (
     <Screen>
@@ -269,6 +359,8 @@ export default function WeekScreen() {
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
+      ) : loadFailed ? (
+        <LoadError onRetry={retryLoad} what="your week" />
       ) : (
         <>
           {showEnvelopes ? (
@@ -308,24 +400,11 @@ export default function WeekScreen() {
               week is still funded by the last one. */}
           {isCurrent && <BoundaryNotice weekStartsOn={weekStart} />}
 
-          {/* Money you agreed to carry when you settled last week. It feeds the
-              allowance below, so leaving it unlabelled meant free-to-spend was
-              silently lower (or higher) than the plan with nothing to point at.
-              This is the same money that made the spend-alert push disagree
-              with the app. */}
-          {isCurrent && adjustment !== 0 && (
-            <View
-              style={[
-                styles.varianceNote,
-                adjustment < 0 ? styles.varianceOver : styles.varianceUnder,
-              ]}>
-              <ThemedText type="small" style={adjustment < 0 ? styles.overageText : styles.freeText}>
-                {adjustment < 0
-                  ? `Last week went ${fmt(-adjustment)} over and you carried it into this week, so there's ${fmt(-adjustment)} less to spend.`
-                  : `${fmt(adjustment)} left over from last week was carried into this week.`}
-              </ThemedText>
-            </View>
-          )}
+          {/* Carried-over money used to be explained by a note here too. It now
+              lives as an entry in the ledger below, next to the spending it sits
+              among, which is where "why did this week start short?" is actually
+              asked. Saying the same sentence twice on one screen read as
+              clutter, and the ledger version also covers past weeks. */}
 
           {/* Why this week's allowance isn't the planned figure. It lives here
               rather than in Setup because it explains THIS week's number, and
@@ -375,9 +454,32 @@ export default function WeekScreen() {
             <NavArrow dir="right" onPress={() => setOffset(offset + 1)} disabled={isCurrent} />
           </View>
           {!isCurrent && (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.pastNote}>
-              Viewing a past week · read only
-            </ThemedText>
+            <View style={styles.pastWeekNote}>
+              <ThemedText type="bodyBold" themeColor="textSecondary">
+                A finished week · read only
+              </ThemedText>
+              {/* Says out loud that history is fixed. Before this the screen
+                  quietly recalculated old weeks from today's income, so a pay
+                  rise changed what a week that had already ended was worth. */}
+              {estimatingPastWeek ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
+                  Nothing was saved for this week, so the {fmt(allowance)} below is worked out
+                  from your income and bills as they are today. It may not be what the week
+                  really ran on.
+                </ThemedText>
+              ) : Math.abs(allowance - liveAllowance) >= 0.01 ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
+                  This week ran on {fmt(allowance)} a week. You&apos;re on {fmt(liveAllowance)} now.
+                  Changing your income or bills only affects weeks still to come, so a week
+                  that has already finished keeps the figure it actually had.
+                </ThemedText>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
+                  This week ran on {fmt(allowance)} a week, and that&apos;s saved. Later changes
+                  to your income or bills won&apos;t change it.
+                </ThemedText>
+              )}
+            </View>
           )}
 
           {/* Planned spending (envelopes) — current week. Always shown so a
@@ -575,6 +677,40 @@ export default function WeekScreen() {
               <ThemedText type="label">Add an expense</ThemedText>
             </Pressable>
           )}
+          {/* The week's opening position, shown wherever money went.
+
+              Deliberately NOT a transaction. The amount is already applied to
+              the allowance above, so writing it into the ledger as a real row
+              would deduct it a second time and make the week look twice as bad
+              as it is. Hence the dashed outline and no tap target: it reads as
+              context, not as something logged. */}
+          {adjustment !== 0 && (
+            <View style={styles.carryRow}>
+              <View style={styles.carryTile}>
+                <CornerDownRight
+                  size={20}
+                  color={adjustment < 0 ? Palette.terracottaDeep : Palette.sageDeep}
+                />
+              </View>
+              <View style={styles.flex}>
+                <ThemedText type="bodyBold">
+                  {adjustment < 0 ? 'Started short from last week' : 'Started ahead from last week'}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.carrySub}>
+                  {adjustment < 0
+                    ? `You went over last week and chose to carry it in, so this week began with ${fmt(-adjustment)} less to spend.`
+                    : `You had money left last week and chose to carry it in, so this week began with ${fmt(adjustment)} more to spend.`}
+                </ThemedText>
+              </View>
+              <ThemedText
+                type="bodyBold"
+                style={adjustment < 0 ? styles.overageText : styles.freeText}>
+                {adjustment < 0 ? '-' : '+'}
+                {fmt(Math.abs(adjustment))}
+              </ThemedText>
+            </View>
+          )}
+
           {dayGroups.length ? (
             dayGroups.map((g) => (
               <View key={g.date}>
@@ -652,6 +788,8 @@ export default function WeekScreen() {
         allowance={lastPlannedWeekly}
         spent={lastSpent}
         incomeBack={lastIncomeBack}
+        carriedIn={lastAdjustment}
+        catchUpOwing={catchUpBalance(catchUp.data)}
         goals={goals.data ?? []}
         loading={settleRollover.isPending}
         onResolve={resolveRollover}
@@ -765,7 +903,30 @@ const styles = StyleSheet.create({
   dayToday: { backgroundColor: Palette.sage },
   dayTodayText: { color: Palette.card },
   dayPast: { backgroundColor: 'rgba(61,64,91,0.08)' },
-  pastNote: { textAlign: 'center', marginTop: Spacing.two },
+  pastWeekNote: {
+    backgroundColor: 'rgba(61,64,91,0.05)',
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    marginTop: Spacing.two,
+    gap: 2,
+  },
+  pastWeekBody: { lineHeight: 19 },
+  // Dashed and untappable, so it reads as context rather than as a logged
+  // entry sitting among real ones.
+  carryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(61,64,91,0.22)',
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    marginBottom: Spacing.two + 2,
+  },
+  carryTile: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  carrySub: { lineHeight: 18 },
   allowCard: { marginBottom: Spacing.three, gap: Spacing.two + 2 },
   allowBar: {
     flexDirection: 'row',
