@@ -34,7 +34,14 @@ export function ListRow({
   strikethrough,
 }: Props) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={styles.wrap}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      // Only announce as a button when it actually does something; a plain row
+      // reporting itself as tappable is worse than saying nothing.
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? [title, subtitle].filter(Boolean).join(', ') : undefined}
+      style={styles.wrap}>
       <Card style={[styles.card, outline && styles.outline, dim && styles.dim]}>
         <View style={styles.topRow}>
           <View style={styles.tile}>

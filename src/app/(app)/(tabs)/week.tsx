@@ -762,7 +762,10 @@ export default function WeekScreen() {
                 Nothing logged for this week yet.
               </ThemedText>
               {isCurrent && (
-                <Pressable onPress={() => router.push('/add-expense')}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add your first expense"
+                  onPress={() => router.push('/add-expense')}>
                   <ThemedText type="label" style={{ color: Palette.sageDeep }}>
                     Add first expense
                   </ThemedText>
@@ -802,7 +805,13 @@ function NavArrow({ dir, onPress, disabled }: { dir: 'left' | 'right'; onPress: 
   const Icon = dir === 'left' ? ChevronLeft : ChevronRight;
   // Both boxes stay identical; a disabled arrow just dims its chevron.
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={styles.navArrow}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={dir === 'left' ? 'Previous week' : 'Next week'}
+      accessibilityState={{ disabled }}
+      onPress={onPress}
+      disabled={disabled}
+      style={styles.navArrow}>
       <Icon size={18} color={disabled ? 'rgba(61,64,91,0.28)' : Palette.ink} />
     </Pressable>
   );
@@ -868,7 +877,14 @@ function EnvelopeRow({
           <View style={styles.envTrack}>
             <View style={[styles.envFill, { width: `${frac * 100}%`, backgroundColor: barColor }]} />
           </View>
-          <Pressable onPress={onSkipToggle} hitSlop={8} style={styles.skipBtn}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              env.skipped ? `Stop skipping ${cat.name} this week` : `Skip ${cat.name} this week`
+            }
+            onPress={onSkipToggle}
+            hitSlop={8}
+            style={styles.skipBtn}>
             <ThemedText type="small" themeColor="textSecondary">
               {env.skipped ? 'Skipped · Undo' : 'Skip this week'}
             </ThemedText>

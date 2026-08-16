@@ -73,7 +73,11 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
             )}
           </View>
           <View style={styles.actions}>
-            <Pressable style={[styles.flex, styles.editBtn]} onPress={() => onEdit(bill)}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit bill"
+              style={[styles.flex, styles.editBtn]}
+              onPress={() => onEdit(bill)}>
               <Pencil size={16} color={Palette.ink} />
               <ThemedText type="bodyBold">Edit</ThemedText>
             </Pressable>

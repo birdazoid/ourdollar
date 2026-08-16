@@ -36,7 +36,11 @@ export function MiniCard({ label, children, warn, onPress, hint }: MiniCardProps
   );
   if (onPress) {
     return (
-      <Pressable style={styles.flex} onPress={onPress}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={[label, hint].filter(Boolean).join(', ')}
+        style={styles.flex}
+        onPress={onPress}>
         {inner}
       </Pressable>
     );

@@ -23,7 +23,7 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { billMonthlyCost, catchUpBalance, fmt } from '@/lib/money';
+import { billMonthlyCost, catchUpBalance, fmt, goalProgress } from '@/lib/money';
 import { monthLabel } from '@/lib/month-review';
 import { monthOf } from '@/lib/period';
 import {
@@ -277,7 +277,7 @@ export default function BillsScreen() {
           {/* Savings goals */}
           <SectionHeader title="Savings goals" icon={<IconSave width={21} height={21} color={Palette.ink} />} />
           {(goals.data ?? []).map((g) => {
-            const pct = Math.min(1, g.saved_amount / g.target_amount);
+            const pct = goalProgress(g.saved_amount, g.target_amount);
             const done = g.saved_amount >= g.target_amount;
             const settled = done || g.paid_this_month;
             return (

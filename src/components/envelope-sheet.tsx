@@ -76,6 +76,8 @@ export function EnvelopeSheet({
               return (
                 <Pressable
                   key={c.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={c.name}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
                   <CategoryGlyph txId={c.id} emoji={c.emoji} />

@@ -27,7 +27,7 @@ import {
   useTransactions,
   type TransactionInput,
 } from '@/lib/queries';
-import { getWeek, todayISO } from '@/lib/week';
+import { dayHeading, getWeek, todayISO } from '@/lib/week';
 
 type TxType = 'expense' | 'income';
 
@@ -245,6 +245,8 @@ export default function AddExpenseScreen() {
                 {suggestions.map((m) => (
                   <Pressable
                     key={m.label}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use ${m.label}, ${fmt(m.amount)}`}
                     style={styles.sugRow}
                     onPress={() => {
                       setLabel(m.label);
@@ -278,6 +280,9 @@ export default function AddExpenseScreen() {
               return (
                 <Pressable
                   key={c.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={c.name}
                   onPress={() => setCategory(c.id)}
                   style={[styles.catTile, on && styles.catTileOn]}>
                   <CategoryGlyph txId={c.id} emoji={c.emoji} />
@@ -326,6 +331,9 @@ export default function AddExpenseScreen() {
               return (
                 <Pressable
                   key={d.date}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={dayHeading(d.date)}
                   onPress={() => setDay(d.date)}
                   style={[styles.dayBtn, on && styles.dayBtnOn]}>
                   <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={on ? styles.dayOnText : undefined}>
@@ -340,7 +348,12 @@ export default function AddExpenseScreen() {
           </View>
 
           {type === 'expense' && funEnabled && (
-            <Pressable onPress={() => setIsFun(!isFun)} style={[styles.funRow, isFun && styles.funOn]}>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: isFun }}
+              accessibilityLabel="Count this as fun money"
+              onPress={() => setIsFun(!isFun)}
+              style={[styles.funRow, isFun && styles.funOn]}>
               <IconCelebrate width={23} height={23} color={Palette.ink} />
               <View style={styles.flex}>
                 <ThemedText type="bodyBold">Fun money</ThemedText>

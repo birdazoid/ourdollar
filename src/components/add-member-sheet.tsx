@@ -63,7 +63,12 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
         </ThemedText>
       )}
 
-      <Pressable onPress={() => setFunOn(!funOn)} style={[styles.funRow, funOn && styles.funOnRow]}>
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: funOn }}
+        accessibilityLabel="Give this person fun money"
+        onPress={() => setFunOn(!funOn)}
+        style={[styles.funRow, funOn && styles.funOnRow]}>
         <IconCelebrate width={23} height={23} color={Palette.ink} />
         <View style={styles.flex}>
           <ThemedText type="bodyBold">Give them fun money</ThemedText>

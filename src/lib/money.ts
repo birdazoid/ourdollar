@@ -72,9 +72,16 @@ export function monthlyEquiv(src: Pick<IncomeSource, 'amount' | 'frequency'>): n
   return src.amount * FREQ[src.frequency].mult;
 }
 
-/** "$1,234" or "$12.50" — cents only when non-integer. Null → em dash. */
+/**
+ * "$1,234" or "$12.50" — cents only when non-integer. Null → em dash.
+ *
+ * NaN and Infinity degrade to the same dash rather than rendering "$NaN" or
+ * "$∞". They shouldn't reach here, but a money app that prints "$NaN" at a
+ * household has lost their trust in every other figure on the screen too, and
+ * a dash at least reads as "we don't know".
+ */
 export function fmt(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null || !Number.isFinite(n)) return '—';
   const hasCents = n % 1 !== 0;
   return (
     '$' +
@@ -100,6 +107,20 @@ export function catchUpBalance(
 ): number {
   const total = (entries ?? []).reduce((a, e) => a + Number(e.amount), 0);
   return Math.max(0, Math.round(total * 100) / 100);
+}
+
+/**
+ * How far along a savings goal is, as 0…1.
+ *
+ * Guards the divide. Two screens computed `saved / target` directly, so a goal
+ * with a zero target produced NaN, which reached the UI as "NaN%" and a
+ * `width: "NaN%"` style on the progress bar. The goal form validates target > 0
+ * but nothing in the database enforces it, so a seed script or a direct write
+ * was one step away from a broken screen.
+ */
+export function goalProgress(saved: number, target: number): number {
+  if (!Number.isFinite(saved) || !Number.isFinite(target) || target <= 0) return 0;
+  return Math.max(0, Math.min(1, saved / target));
 }
 
 export type DeltaDescription = {

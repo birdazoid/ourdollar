@@ -92,7 +92,11 @@ export function CatchUpSheet({
               </ThemedText>
             )}
             <View style={styles.payActions}>
-              <Pressable onPress={() => setPaying(false)} style={styles.cancel}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel paying off"
+                onPress={() => setPaying(false)}
+                style={styles.cancel}>
                 <ThemedText type="bodyBold" themeColor="textSecondary">
                   Cancel
                 </ThemedText>

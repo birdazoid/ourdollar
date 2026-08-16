@@ -7,7 +7,7 @@ import { GoalGlyph } from '@/components/goal-glyph';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
-import { fmt } from '@/lib/money';
+import { fmt, goalProgress } from '@/lib/money';
 import type { Goal } from '@/lib/types';
 
 type Props = {
@@ -20,7 +20,7 @@ type Props = {
 
 export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete }: Props) {
   const done = goal ? goal.saved_amount >= goal.target_amount : false;
-  const pct = goal ? Math.min(1, goal.saved_amount / goal.target_amount) : 0;
+  const pct = goal ? goalProgress(goal.saved_amount, goal.target_amount) : 0;
   // Null when nothing is being put aside monthly, since "never" is not a
   // useful thing to print next to a goal.
   const monthsToGo =
@@ -64,7 +64,11 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
                 <Button title="Mark paid" onPress={() => onContribute(goal)} />
               </View>
             )}
-            <Pressable style={[styles.flex, styles.editBtn]} onPress={() => onEdit(goal)}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit goal"
+              style={[styles.flex, styles.editBtn]}
+              onPress={() => onEdit(goal)}>
               <Pencil size={16} color={Palette.ink} />
               <ThemedText type="bodyBold">Edit</ThemedText>
             </Pressable>

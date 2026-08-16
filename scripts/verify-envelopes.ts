@@ -13,7 +13,9 @@ import { config as loadEnv } from 'dotenv';
 
 import {
   computeEnvelopes,
+  fmt,
   funMoneyUsed,
+  goalProgress,
   isFunExpense,
   isVariableExpense,
   splitAllowancePots,
@@ -393,10 +395,43 @@ function spendingBasisChecks() {
   );
 }
 
+/**
+ * Display guards. Neither of these should ever be reachable, but a money app
+ * that prints "$NaN" or "NaN%" at a household has lost their trust in every
+ * other figure on the screen too.
+ */
+function displayGuardChecks() {
+  console.log('\nE. Display guards (fmt / goalProgress)');
+
+  check('fmt(null) is a dash', fmt(null) === '—', fmt(null));
+  check('fmt(NaN) degrades to a dash, not "$NaN"', fmt(NaN) === '—', fmt(NaN));
+  check('fmt(Infinity) degrades too, not "$∞"', fmt(Infinity) === '—', fmt(Infinity));
+  check('fmt(-Infinity) as well', fmt(-Infinity) === '—', fmt(-Infinity));
+  check('real money is untouched', fmt(1234) === '$1,234' && fmt(12.5) === '$12.50', `${fmt(1234)} / ${fmt(12.5)}`);
+  check('zero still prints', fmt(0) === '$0', fmt(0));
+
+  // The bug: saved / target with a zero target produced NaN, which reached the
+  // UI as "NaN%" and a width: "NaN%" style on the progress bar.
+  check('a zero target is 0, not NaN', goalProgress(50, 0) === 0, String(goalProgress(50, 0)));
+  check('a negative target is 0', goalProgress(50, -100) === 0, String(goalProgress(50, -100)));
+  check('NaN inputs are 0', goalProgress(NaN, 100) === 0 && goalProgress(50, NaN) === 0);
+  check('half way is 0.5', goalProgress(50, 100) === 0.5, String(goalProgress(50, 100)));
+  check('overfunded clamps to 1', goalProgress(500, 100) === 1, String(goalProgress(500, 100)));
+  check('negative saved clamps to 0', goalProgress(-20, 100) === 0, String(goalProgress(-20, 100)));
+  check(
+    'every result is a drawable percentage',
+    [[50, 0], [0, 0], [-5, 10], [999, 10], [NaN, NaN]].every(([s, t]) => {
+      const p = goalProgress(s, t);
+      return Number.isFinite(p) && p >= 0 && p <= 1;
+    })
+  );
+}
+
 async function main() {
   mathChecks();
   potChecks();
   spendingBasisChecks();
+  displayGuardChecks();
   await dbChecks();
   console.log(`\n${fail === 0 ? '✅ ALL CHECKS PASSED' : '❌ SOME CHECKS FAILED'} — ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

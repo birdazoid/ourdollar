@@ -67,7 +67,12 @@ export function RolloverPrompt({
     return (
       <Sheet visible={visible} title="Which goal?" onClose={() => setPickingGoal(false)}>
         {goals.map((g) => (
-          <Pressable key={g.id} onPress={() => close('goal', g.id)} style={styles.goalRow}>
+          <Pressable
+            key={g.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${g.name}, ${fmt(g.saved_amount)} of ${fmt(g.target_amount)} saved`}
+            onPress={() => close('goal', g.id)}
+            style={styles.goalRow}>
             <GoalGlyph emoji={g.emoji} />
             <View style={styles.flex}>
               <ThemedText type="bodyBold">{g.name}</ThemedText>
@@ -156,7 +161,12 @@ function Option({
   loading?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={loading} style={styles.option}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}. ${sub}`}
+      onPress={onPress}
+      disabled={loading}
+      style={styles.option}>
       <ThemedText type="bodyBold">{label}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {sub}
