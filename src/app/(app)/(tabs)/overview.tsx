@@ -24,11 +24,18 @@ import {
   FREQ,
   adjustedWeeklyAllowance,
   computeBudget,
+  extraIncomePerWeek,
   fmt,
   isVariableExpense,
   monthlyEquiv,
 } from '@/lib/money';
-import { periodFor, periodRangeLabel, weeksInPeriod, weeksRemainingInPeriod } from '@/lib/period';
+import {
+  periodFor,
+  periodRangeLabel,
+  weekStartFor,
+  weeksInPeriod,
+  weeksRemainingInPeriod,
+} from '@/lib/period';
 import { buildMonthComparison, monthBefore, monthLabel, monthStartISO } from '@/lib/month-review';
 import {
   useBills,
@@ -111,6 +118,7 @@ export default function OverviewScreen() {
         variablePool: budget.variablePool,
         goalsSaved: goalsSavedNow,
         fixedPct: budget.fixedPct,
+        extraTotal: budget.extraTotal,
       }
     : viewedSnapshot
       ? {
@@ -123,6 +131,7 @@ export default function OverviewScreen() {
           weeks: weeksInPeriod(viewedMonth, weekStartDay),
           variablePool: viewedSnapshot.total_income - viewedSnapshot.total_fixed,
           goalsSaved: viewedSnapshot.goals_saved_total,
+          extraTotal: 0,
           fixedPct:
             viewedSnapshot.total_income > 0
               ? Math.round((viewedSnapshot.total_fixed / viewedSnapshot.total_income) * 100)
@@ -137,6 +146,11 @@ export default function OverviewScreen() {
     plannedWeekly: budget.weeklyAllowance,
     billVariance: budget.billVariance,
     weeksRemaining: weeksLeft,
+    extraPerWeek: extraIncomePerWeek({
+      extraIncome: extraIncome.data ?? [],
+      weekStart: weekStartFor(monthStartISO(new Date()), weekStartDay),
+      weekStartsOn: weekStartDay,
+    }),
   });
 
   /**
@@ -184,7 +198,17 @@ export default function OverviewScreen() {
    * alike, with no fifth slice and no edge case when bills run over.
    */
   const plannedForBills = glance
-    ? Math.max(0, Math.round((glance.totalIncome - glance.monthlyPool - glance.goalsMonthly - glance.funTotal) * 100) / 100)
+    ? Math.max(
+        0,
+        Math.round(
+          (glance.totalIncome -
+            glance.monthlyPool -
+            glance.goalsMonthly -
+            glance.funTotal -
+            glance.extraTotal) *
+            100
+        ) / 100
+      )
     : 0;
 
   const pie = glance
@@ -193,6 +217,10 @@ export default function OverviewScreen() {
         { name: 'Weekly allowance', value: glance.monthlyPool, color: Palette.sage },
         { name: 'Savings goals', value: glance.goalsMonthly, color: Palette.terracotta },
         { name: 'Fun money', value: glance.funTotal, color: Palette.sandDeep },
+        // Its own slice, so the ring still totals the income in its centre.
+        // Extra income no longer joins the monthly pool: it's split across the
+        // weeks that were left when it arrived.
+        { name: 'Extra income', value: glance.extraTotal, color: Palette.sageDeep },
       ].filter((d) => d.value > 0)
     : [];
 
@@ -354,6 +382,21 @@ export default function OverviewScreen() {
               </View>
               <MoneyRow label="Savings goals" value={`−${fmt(glance.goalsMonthly)}`} sub color={Palette.terracottaDeep} dot={Palette.terracotta} />
               <MoneyRow label="Fun money" value={`−${fmt(glance.funTotal)}`} sub color={Palette.terracottaDeep} dot={Palette.sandDeep} />
+              {glance.extraTotal > 0 && (
+                <>
+                  <MoneyRow
+                    label="Extra income this month"
+                    value={`−${fmt(glance.extraTotal)}`}
+                    sub
+                    color={Palette.terracottaDeep}
+                    dot={Palette.sageDeep}
+                  />
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
+                    Split across the weeks that were left when it arrived, so all of it reaches
+                    you rather than part landing on weeks already finished.
+                  </ThemedText>
+                </>
+              )}
               {/* Closes the column. The pool is measured against what bills
                   ACTUALLY cost while the allowance is derived from the
                   estimates, so when the two differ this much is left sitting

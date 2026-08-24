@@ -1,6 +1,7 @@
 // Finance math, ported from family-budget-prototype.jsx. The weekly allowance is
 // always derived, never set directly (design-brief §2):
 //   (income − fixed bills − savings goals − fun money) ÷ 4
+import { fundingMonthForWeek, weekStartFor, weeksRemainingInPeriod } from '@/lib/period';
 import type {
   Bill,
   ExtraIncome,
@@ -137,6 +138,41 @@ export function goalProgress(saved: number, target: number): number {
   return Math.max(0, Math.min(1, saved / target));
 }
 
+/**
+ * The share of one-off extra income that belongs to a given week.
+ *
+ * Two bugs lived here. Extra income was folded into the monthly pool and
+ * divided by the period's FULL week count, so a $2,000 bonus arriving with two
+ * weeks left handed $1,000 of itself to weeks that had already finished and
+ * been frozen — money the household could never spend. And nothing filtered by
+ * date, so that same bonus went on inflating every month afterwards, forever.
+ *
+ * Both fall out of dividing at ARRIVAL instead. A row is split across the weeks
+ * that were left when it landed, which delivers the whole amount and never
+ * changes afterwards, and rows outside the week's own funding month are ignored.
+ */
+export function extraIncomePerWeek(args: {
+  extraIncome: { amount: number; occurred_on: string }[];
+  weekStart: string; // the week being asked about, YYYY-MM-DD
+  weekStartsOn: number;
+}): number {
+  const { extraIncome, weekStart, weekStartsOn } = args;
+  const period = fundingMonthForWeek(weekStart);
+
+  const total = (extraIncome ?? []).reduce((sum, row) => {
+    if (!row?.occurred_on) return sum;
+    const rowWeek = weekStartFor(row.occurred_on, weekStartsOn);
+    // Only this week's own funding period, and only money that had already
+    // arrived by then.
+    if (fundingMonthForWeek(rowWeek) !== period) return sum;
+    if (rowWeek > weekStart) return sum;
+    const weeksLeftAtArrival = Math.max(1, weeksRemainingInPeriod(weekStartsOn, row.occurred_on));
+    return sum + Number(row.amount) / weeksLeftAtArrival;
+  }, 0);
+
+  return Math.round(total * 100) / 100;
+}
+
 export type IncomeSplit = {
   applied: number; // what the chosen destination can absorb
   overflow: number; // the rest, which goes to this week
@@ -250,10 +286,12 @@ export function adjustedWeeklyAllowance(args: {
   plannedWeekly: number;
   billVariance: number;
   weeksRemaining: number;
+  /** This week's share of one-off extra income, from extraIncomePerWeek(). */
+  extraPerWeek?: number;
 }): number {
-  const { plannedWeekly, billVariance, weeksRemaining } = args;
-  if (billVariance === 0 || weeksRemaining <= 0) return plannedWeekly;
-  return Math.round((plannedWeekly - billVariance / weeksRemaining) * 100) / 100;
+  const { plannedWeekly, billVariance, weeksRemaining, extraPerWeek = 0 } = args;
+  const variance = billVariance === 0 || weeksRemaining <= 0 ? 0 : billVariance / weeksRemaining;
+  return Math.round((plannedWeekly - variance + extraPerWeek) * 100) / 100;
 }
 
 export type BudgetInputs = {
@@ -282,6 +320,7 @@ export type Budget = {
   goalsMonthly: number;
   funTotal: number;
   committed: number;
+  extraTotal: number; // one-off income; applied per week, not to the pool
   weeksInPeriod: number; // echoed back so callers can label "split N ways"
   weeklyAllowance: number; // the PLANNED weekly figure, see adjustedWeeklyAllowance
   monthlyPool: number; // weeklyAllowance * weeksInPeriod
@@ -464,7 +503,12 @@ export function computeBudget(inp: BudgetInputs): Budget {
   // month genuinely has five weeks to fund, and pretending otherwise left the
   // last one paid for out of nothing.
   const weeks = Math.max(1, inp.weeksInPeriod);
-  const plannedForWeeks = Math.max(0, totalIncome - plannedFixed - committed);
+  // Extra income is deliberately NOT in here. The pool is divided by the
+  // period's full week count, which is right for money that was there from the
+  // start and wrong for a lump that arrives midway: dividing a week-3 bonus by
+  // four hands two quarters of it to weeks that are already over. It's applied
+  // per-week by extraIncomePerWeek() instead, alongside bill variance.
+  const plannedForWeeks = Math.max(0, totalIncome - extraTotal - plannedFixed - committed);
   const weeklyAllowance = Math.round((plannedForWeeks / weeks) * 100) / 100;
   const fixedPct = totalIncome > 0 ? Math.round((totalFixed / totalIncome) * 100) : 0;
 
@@ -477,6 +521,7 @@ export function computeBudget(inp: BudgetInputs): Budget {
     goalsMonthly,
     funTotal,
     committed,
+    extraTotal,
     weeksInPeriod: weeks,
     weeklyAllowance,
     monthlyPool: Math.round(weeklyAllowance * weeks * 100) / 100,

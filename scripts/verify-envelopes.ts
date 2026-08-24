@@ -16,6 +16,7 @@ import {
   fmt,
   isWeekIncome,
   splitIncome,
+  extraIncomePerWeek,
   funMoneyUsed,
   goalProgress,
   isFunExpense,
@@ -510,6 +511,55 @@ function incomeOverflowChecks() {
   );
 }
 
+/**
+ * One-off extra income.
+ *
+ * Two bugs: it was divided by the period's FULL week count, so a $2,000 bonus
+ * arriving with two weeks left gave $1,000 of itself to weeks already finished
+ * and frozen; and nothing filtered by date, so that bonus went on inflating
+ * every month afterwards, forever.
+ */
+function extraIncomeChecks() {
+  console.log('\nH. Extra income (extraIncomePerWeek)');
+
+  const FRI = 5; // Adrian's week start
+  // August 2026 runs Aug 7 to Sep 3, four weeks.
+  const perWeek = (rows: { amount: number; occurred_on: string }[], weekStart: string) =>
+    extraIncomePerWeek({ extraIncome: rows, weekStart, weekStartsOn: FRI });
+
+  // $2,000 arriving in the FIRST week reaches every week: 2000 / 4 = 500.
+  const early = [{ amount: 2000, occurred_on: '2026-08-07' }];
+  const earlyWeeks = ['2026-08-07', '2026-08-14', '2026-08-21', '2026-08-28'];
+  const earlyEach = earlyWeeks.map((w) => perWeek(early, w));
+  check('arriving week 1: $500 to each of 4 weeks', earlyEach.every((v) => v === 500), earlyEach.join(', '));
+  check('and delivers the full $2,000', earlyEach.reduce((a, b) => a + b, 0) === 2000);
+
+  // Arriving in the THIRD week, only two weeks are left: 2000 / 2 = 1000.
+  const late = [{ amount: 2000, occurred_on: '2026-08-21' }];
+  const lateEach = earlyWeeks.map((w) => perWeek(late, w));
+  check('arriving week 3: nothing for the two weeks already gone', lateEach[0] === 0 && lateEach[1] === 0);
+  check('and $1,000 for each of the two left', lateEach[2] === 1000 && lateEach[3] === 1000, lateEach.join(', '));
+  check('still delivers the full $2,000', lateEach.reduce((a, b) => a + b, 0) === 2000, String(lateEach.reduce((a, b) => a + b, 0)));
+
+  // The old behaviour handed 2000/4 to every week, so half went nowhere.
+  check('the old divide-by-four would have delivered only $1,000', 2000 / 4 * 2 === 1000);
+
+  // A bonus from a PREVIOUS month must not touch this one.
+  const julyBonus = [{ amount: 2000, occurred_on: '2026-07-10' }];
+  check("last month's bonus is gone this month", perWeek(julyBonus, '2026-08-14') === 0);
+  check('and gone next month too', perWeek(julyBonus, '2026-09-04') === 0);
+
+  // Several rows in one month accumulate.
+  const many = [
+    { amount: 400, occurred_on: '2026-08-07' },
+    { amount: 200, occurred_on: '2026-08-21' },
+  ];
+  check('rows add up in the weeks they apply to', perWeek(many, '2026-08-21') === 200, String(perWeek(many, '2026-08-21')));
+  check('and only the earlier one applies before that', perWeek(many, '2026-08-07') === 100, String(perWeek(many, '2026-08-07')));
+
+  check('no rows is zero, not NaN', perWeek([], '2026-08-14') === 0);
+}
+
 async function main() {
   mathChecks();
   potChecks();
@@ -517,6 +567,7 @@ async function main() {
   displayGuardChecks();
   incomeDestinationChecks();
   incomeOverflowChecks();
+  extraIncomeChecks();
   await dbChecks();
   console.log(`\n${fail === 0 ? '✅ ALL CHECKS PASSED' : '❌ SOME CHECKS FAILED'} — ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

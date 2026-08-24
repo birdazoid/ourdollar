@@ -16,8 +16,15 @@ import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
-import { FREQ, adjustedWeeklyAllowance, computeBudget, fmt, monthlyEquiv } from '@/lib/money';
-import { monthOf, periodFor, weeksRemainingInPeriod } from '@/lib/period';
+import {
+  FREQ,
+  adjustedWeeklyAllowance,
+  computeBudget,
+  extraIncomePerWeek,
+  fmt,
+  monthlyEquiv,
+} from '@/lib/money';
+import { monthOf, periodFor, weekStartFor, weeksRemainingInPeriod } from '@/lib/period';
 import { todayISO, weekdayName } from '@/lib/week';
 import {
   useBills,
@@ -91,6 +98,11 @@ export default function SetupScreen() {
     plannedWeekly: budget.weeklyAllowance,
     billVariance: budget.billVariance,
     weeksRemaining: weeksLeft,
+    extraPerWeek: extraIncomePerWeek({
+      extraIncome: extraIncome.data ?? [],
+      weekStart: weekStartFor(todayISO(), weekStartDay),
+      weekStartsOn: weekStartDay,
+    }),
   });
 
   const loading = !householdId || income.isLoading || members.isLoading;

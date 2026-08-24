@@ -29,6 +29,7 @@ import {
   catchUpBalance,
   computeBudget,
   computeEnvelopes,
+  extraIncomePerWeek,
   fmt,
   funMoneyUsed,
   isVariableExpense,
@@ -133,10 +134,18 @@ export default function WeekScreen() {
   // Bills that came in over (or under) their estimate are absorbed by the weeks
   // still left in the period.
   const weeksLeft = weeksRemainingInPeriod(weekStart);
+  // One-off income is split across the weeks that were left when it arrived,
+  // so this is the share belonging to the week being viewed.
+  const extraPerWeek = extraIncomePerWeek({
+    extraIncome: extraIncome.data ?? [],
+    weekStart: week.start,
+    weekStartsOn: weekStart,
+  });
   const liveAllowance = adjustedWeeklyAllowance({
     plannedWeekly: budget.weeklyAllowance,
     billVariance: budget.billVariance,
     weeksRemaining: weeksLeft,
+    extraPerWeek,
   });
 
   /**
