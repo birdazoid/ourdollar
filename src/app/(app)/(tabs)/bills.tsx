@@ -1,4 +1,4 @@
-import { Check, ChevronRight, CornerDownRight, Plus } from 'lucide-react-native';
+import { Check, ChevronRight, CornerDownRight, LifeBuoy, Plus } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -6,6 +6,7 @@ import IconSave from '@/assets/icons/icon-save.svg';
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
 import { BillSheet } from '@/components/bill-sheet';
 import { CatchUpSheet } from '@/components/catch-up-sheet';
+import { EmergencyFundSheet } from '@/components/emergency-fund-sheet';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { GoalDetailSheet } from '@/components/goal-detail-sheet';
@@ -23,7 +24,7 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { billMonthlyCost, catchUpBalance, fmt, goalProgress } from '@/lib/money';
+import { balanceFromEntries, billMonthlyCost, catchUpBalance, fmt, goalProgress } from '@/lib/money';
 import { monthLabel } from '@/lib/month-review';
 import { monthOf } from '@/lib/period';
 import {
@@ -31,6 +32,8 @@ import {
   useBillMutations,
   useBills,
   useCatchUpEntries,
+  useEmergencyFund,
+  useEmergencyFundMutations,
   useGoalMutations,
   useGoals,
   useMembers,
@@ -70,6 +73,9 @@ export default function BillsScreen() {
   const resolveCarryover = useResolveCarryover(householdId);
   const catchUp = useCatchUpEntries(householdId);
   const catchUpOwed = catchUpBalance(catchUp.data);
+  const fund = useEmergencyFund(householdId);
+  const fundMut = useEmergencyFundMutations(householdId);
+  const fundBalance = balanceFromEntries(fund.data);
 
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
@@ -77,6 +83,7 @@ export default function BillsScreen() {
   const [goalDetail, setGoalDetail] = useState<Goal | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [catchUpOpen, setCatchUpOpen] = useState(false);
+  const [fundOpen, setFundOpen] = useState(false);
 
   const currentMemberId = useMemo(() => {
     const uid = session?.user.id;
@@ -272,6 +279,33 @@ export default function BillsScreen() {
 
           <DashedAdd label="Add a bill" onPress={() => setBillSheet({ bill: null })} style={styles.addTop} />
 
+          {/* Emergency fund. Shown once there's something in it, or once the
+              household has ever used it, so it never nags an empty app. */}
+          {(fundBalance > 0 || (fund.data ?? []).length > 0) && (
+            <>
+              <SectionHeader
+                title="Emergency fund"
+                icon={<LifeBuoy size={20} color={Palette.ink} />}
+                caption="Money set aside for when something goes wrong. It sits outside your weekly spending."
+              />
+              <ListRow
+                emoji={<LifeBuoy size={22} color={Palette.sageDeep} />}
+                title={fundBalance > 0 ? 'Set aside' : 'Nothing set aside yet'}
+                subtitle={
+                  fundBalance > 0
+                    ? 'Tap to take some out, or see where it came from'
+                    : 'Send money in from the Week screen to start it'
+                }
+                onPress={() => setFundOpen(true)}
+                right={
+                  <ThemedText type="bodyBold" style={{ color: Palette.sageDeep }}>
+                    {fmt(fundBalance)}
+                  </ThemedText>
+                }
+              />
+            </>
+          )}
+
           {/* Above the goals and well clear of the bill categories. Sitting
               between "Savings goals" and "Loans" made it read as another kind
               of bill, which is exactly the question it kept prompting: is this
@@ -433,6 +467,24 @@ export default function BillsScreen() {
           setGoalSheet({ goal: g });
         }}
         onDelete={askDeleteGoal}
+      />
+      <EmergencyFundSheet
+        visible={fundOpen}
+        balance={fundBalance}
+        entries={fund.data ?? []}
+        memberName={memberName}
+        saving={fundMut.withdraw.isPending}
+        onWithdraw={(amount, note) => {
+          fundMut.withdraw.mutate({
+            amount,
+            balance: fundBalance,
+            note,
+            occurredOn: today,
+            memberId: currentMemberId,
+          });
+          setFundOpen(false);
+        }}
+        onClose={() => setFundOpen(false)}
       />
       <CatchUpSheet
         visible={catchUpOpen}

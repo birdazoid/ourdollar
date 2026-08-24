@@ -227,6 +227,11 @@ export default function AddExpenseScreen() {
         ]
       : []),
     {
+      value: 'emergency_fund' as const,
+      label: 'Toward the emergency fund',
+      sub: 'Set aside for when something goes wrong. Your week does not change.',
+    },
+    {
       value: 'month' as const,
       label: 'Spread across the month',
       sub: 'Raises every remaining week a little, rather than one.',

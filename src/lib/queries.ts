@@ -8,6 +8,7 @@ import type {
   Bill,
   BillCarryover,
   CatchUpEntry,
+  EmergencyFundEntry,
   ExtraIncome,
   FunMoneyPerson,
   FunMoneySettings,
@@ -587,7 +588,9 @@ export function useTransactionMutations(householdId: string | null) {
           ? Math.max(0, args.catchUpOwed ?? 0)
           : dest === 'goal' && goal
             ? Math.max(0, goal.target_amount - goal.saved_amount)
-            : amount;
+            : // this_week, month and the emergency fund all take everything;
+              // a fund you can fill up isn't an emergency fund.
+              amount;
 
       const { applied, overflow } = splitIncome(amount, room);
 
@@ -636,6 +639,17 @@ export function useTransactionMutations(householdId: string | null) {
         if (gErr) throw gErr;
       }
 
+      if (dest === 'emergency_fund' && applied > 0) {
+        const { error: fErr } = await supabase.from('emergency_fund_entries').insert({
+          household_id: householdId,
+          amount: applied,
+          kind: 'deposit',
+          note: input.label || 'Money in',
+          created_by_member_id: memberId ?? input.member_id ?? null,
+        });
+        if (fErr) throw fErr;
+      }
+
       if (dest === 'month') {
         const { error: eErr } = await supabase.from('extra_income').insert({
           household_id: householdId,
@@ -650,6 +664,7 @@ export function useTransactionMutations(householdId: string | null) {
     onSuccess: () => {
       invalidate();
       qc.invalidateQueries({ queryKey: ['catchup_entries', householdId] });
+      qc.invalidateQueries({ queryKey: ['emergency_fund_entries', householdId] });
       qc.invalidateQueries({ queryKey: ['goals', householdId] });
       qc.invalidateQueries({ queryKey: ['extra_income', householdId] });
     },
@@ -999,6 +1014,81 @@ export function useCatchUpMutations(householdId: string | null) {
   });
 
   return { add, remove };
+}
+
+// ---- Emergency fund ----
+
+/** Every movement on the emergency fund, newest first. */
+export function useEmergencyFund(householdId: string | null) {
+  return useQuery({
+    queryKey: ['emergency_fund_entries', householdId],
+    enabled: !!householdId,
+    queryFn: async (): Promise<EmergencyFundEntry[]> => {
+      const { data, error } = await supabase
+        .from('emergency_fund_entries')
+        .select('*')
+        .eq('household_id', householdId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as EmergencyFundEntry[];
+    },
+  });
+}
+
+export function useEmergencyFundMutations(householdId: string | null) {
+  const qc = useQueryClient();
+
+  /**
+   * Takes money out, and puts it into the week it was taken in.
+   *
+   * Both halves matter. The fund goes down, and an ordinary income row raises
+   * this week, which is what makes an emergency cost nothing from the weekly
+   * budget: $500 out and a $500 repair logged against the week cancel exactly.
+   * Without the second half the repair would eat a week that never had the
+   * money in it.
+   */
+  const withdraw = useMutation({
+    mutationFn: async (args: {
+      amount: number;
+      balance: number;
+      note: string;
+      occurredOn: string;
+      memberId: string | null;
+    }) => {
+      // Never more than is in there: the balance floors at zero anyway, so an
+      // over-withdrawal would silently hand out money the fund never held.
+      const amount = Math.round(Math.min(Math.abs(args.amount), args.balance) * 100) / 100;
+      if (amount <= 0) return;
+
+      const { error } = await supabase.from('emergency_fund_entries').insert({
+        household_id: householdId,
+        amount: -amount,
+        kind: 'withdrawal',
+        note: args.note || 'Taken out',
+        created_by_member_id: args.memberId,
+      });
+      if (error) throw error;
+
+      const { error: tErr } = await supabase.from('transactions').insert({
+        household_id: householdId,
+        member_id: args.memberId,
+        amount,
+        category: null,
+        label: args.note || 'From emergency fund',
+        type: 'income',
+        is_fun_money: false,
+        income_destination: 'this_week',
+        occurred_on: args.occurredOn,
+      });
+      if (tErr) throw tErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['emergency_fund_entries', householdId] });
+      qc.invalidateQueries({ queryKey: ['transactions', householdId] });
+    },
+  });
+
+  return { withdraw };
 }
 
 // ---- Week results (what a week was actually worth) ----

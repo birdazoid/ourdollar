@@ -67,7 +67,8 @@
     "verify:week-rollovers": "tsx scripts/verify-week-rollovers.ts",
     "verify:month-review": "tsx scripts/verify-month-review.ts",
     "verify:periods": "tsx scripts/verify-periods.ts",
-    "verify:catch-up": "tsx scripts/verify-catch-up.ts"
+    "verify:catch-up": "tsx scripts/verify-catch-up.ts",
+    "verify:emergency-fund": "tsx scripts/verify-emergency-fund.ts"
   },
   "private": true
 }

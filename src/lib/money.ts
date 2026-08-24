@@ -117,9 +117,20 @@ export function fmt(n: number | null | undefined): string {
  * Lives here rather than beside its queries because it is pure, and the verify
  * scripts can't import anything that reaches react-native.
  */
-export function catchUpBalance(
-  entries: { amount: number }[] | undefined
-): number {
+export function catchUpBalance(entries: { amount: number }[] | undefined): number {
+  return balanceFromEntries(entries);
+}
+
+/**
+ * A running balance from signed entries, floored at zero.
+ *
+ * Shared by catch-up and the emergency fund, which are the same idea pointing
+ * in opposite directions: a list of movements whose sum is the balance, so the
+ * number on screen and the history behind it can never disagree. The floor
+ * stops an over-withdrawal or an over-payment reading as the household being
+ * owed money by itself.
+ */
+export function balanceFromEntries(entries: { amount: number }[] | undefined): number {
   const total = (entries ?? []).reduce((a, e) => a + Number(e.amount), 0);
   return Math.max(0, Math.round(total * 100) / 100);
 }

@@ -76,6 +76,8 @@ function incomeWentTo(dest: string | null | undefined): string {
       return 'Money in · to catch-up';
     case 'goal':
       return 'Money in · to a savings goal';
+    case 'emergency_fund':
+      return 'Money in · to the emergency fund';
     case 'month':
       return 'Money in · spread across the month';
     default:

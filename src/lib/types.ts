@@ -2,7 +2,12 @@
 // app reads/writes are typed; timestamps etc. are optional where unused.
 
 /** Where arriving money goes. Only 'this_week' raises the week's spending. */
-export type IncomeDestination = 'this_week' | 'catch_up' | 'goal' | 'month';
+export type IncomeDestination =
+  | 'this_week'
+  | 'catch_up'
+  | 'goal'
+  | 'month'
+  | 'emergency_fund';
 
 export type Frequency = 'monthly' | 'semimonthly' | 'biweekly' | 'weekly';
 
@@ -132,6 +137,21 @@ export type CatchUpEntry = {
   kind: 'week_overage' | 'payment' | 'adjustment';
   note: string | null;
   source_week_start: string | null;
+  created_by_member_id: string | null;
+  created_at: string;
+};
+
+/**
+ * One movement on the emergency fund. Signed: positive puts money in, negative
+ * takes it out. Like the catch-up balance, the total is summed from these
+ * rather than stored, so it can't drift from its own history.
+ */
+export type EmergencyFundEntry = {
+  id: string;
+  household_id: string;
+  amount: number;
+  kind: 'deposit' | 'withdrawal' | 'adjustment';
+  note: string | null;
   created_by_member_id: string | null;
   created_at: string;
 };
