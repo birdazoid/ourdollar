@@ -377,7 +377,38 @@ export default function WeekScreen() {
 
   return (
     <Screen>
-      <ScreenHeader eyebrow="This week" title="Week" />
+      <ScreenHeader
+        eyebrow={isCurrent ? 'This week' : weekRangeLabel(week.days)}
+        title={isCurrent ? 'Week' : 'Past week'}
+      />
+
+      {/* Orientation BEFORE the number, not after it.
+          The header, the hero and the ledger all looked the same on a past
+          week as on the current one. Someone who knew this week's balance saw
+          a different figure and reasonably assumed the app was wrong, and it
+          took a minute to work out the screen had simply been scrolled back.
+          The way out has to be visible at the same moment as the surprise. */}
+      {!isCurrent && !loading && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to this week"
+          onPress={() => setOffset(0)}
+          style={styles.pastBanner}>
+          <View style={styles.flex}>
+            <ThemedText type="bodyBold" style={styles.pastBannerText}>
+              You&apos;re looking at a past week
+            </ThemedText>
+            <ThemedText type="small" style={styles.pastBannerSub}>
+              {weekRangeLabel(week.days)} · finished and read only
+            </ThemedText>
+          </View>
+          <View style={styles.pastBannerBtn}>
+            <ThemedText type="small" style={styles.pastBannerBtnText}>
+              Back to this week
+            </ThemedText>
+          </View>
+        </Pressable>
+      )}
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
@@ -406,7 +437,9 @@ export default function WeekScreen() {
             />
           ) : (
             <HeroCard
-              eyebrow={isCurrent ? "This week's spending money" : `Week of ${weekRangeLabel(week.days)}`}
+              eyebrow={
+                isCurrent ? "This week's spending money" : `Past week · ${weekRangeLabel(week.days)}`
+              }
               big={over ? '-' + fmt(-remaining) : fmt(remaining)}
               bigColor={over ? Palette.terracottaDeep : Palette.ink}
               sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
@@ -477,27 +510,24 @@ export default function WeekScreen() {
           </View>
           {!isCurrent && (
             <View style={styles.pastWeekNote}>
-              <ThemedText type="bodyBold" themeColor="textSecondary">
-                A finished week · read only
-              </ThemedText>
               {/* Says out loud that history is fixed. Before this the screen
                   quietly recalculated old weeks from today's income, so a pay
                   rise changed what a week that had already ended was worth. */}
               {estimatingPastWeek ? (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
-                  Nothing was saved for this week, so the {fmt(allowance)} below is worked out
+                  Nothing was saved for that week, so the {fmt(allowance)} below is worked out
                   from your income and bills as they are today. It may not be what the week
                   really ran on.
                 </ThemedText>
               ) : Math.abs(allowance - liveAllowance) >= 0.01 ? (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
-                  This week ran on {fmt(allowance)} a week. You&apos;re on {fmt(liveAllowance)} now.
+                  That week ran on {fmt(allowance)} a week. You&apos;re on {fmt(liveAllowance)} now.
                   Changing your income or bills only affects weeks still to come, so a week
                   that has already finished keeps the figure it actually had.
                 </ThemedText>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.pastWeekBody}>
-                  This week ran on {fmt(allowance)} a week, and that&apos;s saved. Later changes
+                  That week ran on {fmt(allowance)} a week, and that&apos;s saved. Later changes
                   to your income or bills won&apos;t change it.
                 </ThemedText>
               )}
@@ -941,6 +971,30 @@ const styles = StyleSheet.create({
   dayToday: { backgroundColor: Palette.sage },
   dayTodayText: { color: Palette.card },
   dayPast: { backgroundColor: 'rgba(61,64,91,0.08)' },
+  // Sand rather than sage or terracotta: this is "pay attention, you're
+  // somewhere else", not good news or bad news. It must not read as another
+  // over-budget warning sitting above an over-budget figure.
+  pastBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: 'rgba(242,204,143,0.35)',
+    borderWidth: 1,
+    borderColor: Palette.sand,
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+  },
+  pastBannerText: { color: '#8A6A2A' },
+  pastBannerSub: { color: 'rgba(138,106,42,0.85)', marginTop: 1 },
+  pastBannerBtn: {
+    backgroundColor: Palette.ink,
+    borderRadius: Radius.pill,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+  },
+  pastBannerBtnText: { color: Palette.card, fontWeight: '600' },
   pastWeekNote: {
     backgroundColor: 'rgba(61,64,91,0.05)',
     borderRadius: Radius.large,
