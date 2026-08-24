@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
     const [weekTxns, envelopes, rollovers] = await Promise.all([
       supabase
         .from('transactions')
-        .select('amount, type, is_fun_money, category')
+        .select('amount, type, is_fun_money, category, income_destination')
         .eq('household_id', householdId)
         .gte('occurred_on', start)
         .lte('occurred_on', end),

@@ -14,6 +14,7 @@ import { config as loadEnv } from 'dotenv';
 import {
   computeEnvelopes,
   fmt,
+  isWeekIncome,
   funMoneyUsed,
   goalProgress,
   isFunExpense,
@@ -427,11 +428,53 @@ function displayGuardChecks() {
   );
 }
 
+/**
+ * Income assigned somewhere other than this week must NOT raise the week.
+ *
+ * That was the whole bug: selling something to dig out of a hole made the app
+ * announce you had more to spend. Null stays "this week" so every row logged
+ * before destinations existed behaves exactly as it did.
+ */
+function incomeDestinationChecks() {
+  console.log('\nF. Income destinations (isWeekIncome)');
+
+  const inc = (income_destination: string | null) =>
+    ({ type: 'income' as const, income_destination });
+
+  check('legacy income (null) still raises the week', isWeekIncome(inc(null)));
+  check("explicit 'this_week' raises the week", isWeekIncome(inc('this_week')));
+  check('catch-up money does NOT raise the week', !isWeekIncome(inc('catch_up')));
+  check('goal money does NOT raise the week', !isWeekIncome(inc('goal')));
+  check('month-spread money does NOT raise the week', !isWeekIncome(inc('month')));
+  check(
+    'an expense is never week income',
+    !isWeekIncome({ type: 'expense', income_destination: 'this_week' })
+  );
+
+  // The reported scenario: $67 from eBay sent to catch-up. The week must be
+  // untouched, which is the opposite of what the old code did.
+  const week = [
+    { type: 'expense' as const, is_fun_money: false, amount: 100, income_destination: null },
+    { type: 'income' as const, is_fun_money: false, amount: 67, income_destination: 'catch_up' },
+  ];
+  const raised = week.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0);
+  check('an eBay sale sent to catch-up adds $0 to the week', raised === 0, `got ${raised}`);
+
+  const spend = [
+    { type: 'income' as const, is_fun_money: false, amount: 67, income_destination: 'this_week' },
+  ];
+  check(
+    'the same money kept for the week adds $67',
+    spend.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0) === 67
+  );
+}
+
 async function main() {
   mathChecks();
   potChecks();
   spendingBasisChecks();
   displayGuardChecks();
+  incomeDestinationChecks();
   await dbChecks();
   console.log(`\n${fail === 0 ? '✅ ALL CHECKS PASSED' : '❌ SOME CHECKS FAILED'} — ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

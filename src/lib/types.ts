@@ -1,6 +1,9 @@
 // Row shapes for the Supabase tables (design-brief §9). Only the columns the
 // app reads/writes are typed; timestamps etc. are optional where unused.
 
+/** Where arriving money goes. Only 'this_week' raises the week's spending. */
+export type IncomeDestination = 'this_week' | 'catch_up' | 'goal' | 'month';
+
 export type Frequency = 'monthly' | 'semimonthly' | 'biweekly' | 'weekly';
 
 export type Account = {
@@ -181,6 +184,11 @@ export type Transaction = {
   label: string | null;
   type: 'expense' | 'income';
   is_fun_money: boolean;
+  /**
+   * For income only: where the money was assigned. Null means 'this_week',
+   * which is how every row behaved before destinations existed.
+   */
+  income_destination: IncomeDestination | null;
   occurred_on: string;
   created_at: string;
 };

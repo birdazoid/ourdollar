@@ -173,7 +173,7 @@ export type EnvelopeInput = { category: string; weekly_amount: number; skipped: 
  */
 export function weekFreeToSpend(args: {
   weeklyAllowance: number;
-  weekTxns: { amount: number; type: string; is_fun_money: boolean; category: string | null }[];
+  weekTxns: { amount: number; type: string; is_fun_money: boolean; category: string | null; income_destination?: string | null }[];
   envelopes: EnvelopeInput[];
   /**
    * Signed total carried into this week by a settled rollover (Σ
@@ -188,7 +188,12 @@ export function weekFreeToSpend(args: {
   const { weeklyAllowance, weekTxns, envelopes, carriedIn = 0 } = args;
   const expenses = weekTxns.filter((t) => t.type === 'expense' && !t.is_fun_money);
   const totalNonFunExpense = expenses.reduce((a, t) => a + Number(t.amount), 0);
-  const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + Number(t.amount), 0);
+  // Mirrors isWeekIncome() in src/lib/money.ts. Income assigned to catch-up, a
+  // goal, or the month does NOT raise this week, so counting every income row
+  // here would quote a balance higher than the app's.
+  const incomeBack = weekTxns
+    .filter((t) => t.type === 'income' && (t.income_destination ?? 'this_week') === 'this_week')
+    .reduce((a, t) => a + Number(t.amount), 0);
 
   const spentByCategory: Record<string, number> = {};
   for (const t of expenses) {

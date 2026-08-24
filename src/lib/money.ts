@@ -27,6 +27,20 @@ export function isVariableExpense(t: TxKind): boolean {
   return t.type === 'expense' && !t.is_fun_money;
 }
 
+/**
+ * Income that actually raises THIS week's spending money.
+ *
+ * Income can now be assigned elsewhere — to catch-up, a goal, or spread across
+ * the month — and only money assigned to the week itself should move the
+ * week's figure. Null means 'this_week' so every row logged before
+ * destinations existed keeps behaving exactly as it did.
+ */
+export function isWeekIncome(
+  t: Pick<Transaction, 'type'> & { income_destination?: string | null }
+): boolean {
+  return t.type === 'income' && (t.income_destination ?? 'this_week') === 'this_week';
+}
+
 /** A person's own fun money, which the weekly and monthly totals leave out. */
 export function isFunExpense(t: TxKind): boolean {
   return t.type === 'expense' && t.is_fun_money;

@@ -18,15 +18,18 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { TX_CATEGORIES, txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
-import { fmt } from '@/lib/money';
+import { catchUpBalance, fmt } from '@/lib/money';
 import {
+  useCatchUpEntries,
   useEnvelopes,
   useFunSettings,
+  useGoals,
   useMembers,
   useTransactionMutations,
   useTransactions,
   type TransactionInput,
 } from '@/lib/queries';
+import type { IncomeDestination } from '@/lib/types';
 import { dayHeading, getWeek, todayISO } from '@/lib/week';
 
 type TxType = 'expense' | 'income';
@@ -42,6 +45,9 @@ export default function AddExpenseScreen() {
   const transactions = useTransactions(householdId);
   const envelopes = useEnvelopes(householdId);
   const funSettings = useFunSettings(householdId);
+  const goals = useGoals(householdId);
+  const catchUp = useCatchUpEntries(householdId);
+  const catchUpOwed = catchUpBalance(catchUp.data);
   const txMut = useTransactionMutations(householdId);
   const weekStart = household?.week_start_day ?? 0;
   const funEnabled = funSettings.data?.enabled ?? false;
@@ -64,6 +70,10 @@ export default function AddExpenseScreen() {
   const [type, setType] = useState<TxType>(editing?.type ?? 'expense');
   const [isFun, setIsFun] = useState(editing?.is_fun_money ?? false);
   const [day, setDay] = useState(editing?.occurred_on ?? todayISO());
+  const [incomeDest, setIncomeDest] = useState<IncomeDestination>(
+    (editing?.income_destination as IncomeDestination) ?? 'this_week'
+  );
+  const [destGoalId, setDestGoalId] = useState<string | null>(null);
   const [showSug, setShowSug] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
@@ -87,7 +97,12 @@ export default function AddExpenseScreen() {
   }, [label, transactions.data]);
 
   const amountNum = Number(amount);
-  const valid = amount !== '' && amountNum > 0 && label.trim() !== '' && !!category;
+  const valid =
+    amount !== '' &&
+    amountNum > 0 &&
+    label.trim() !== '' &&
+    !!category &&
+    (type !== 'income' || incomeDest !== 'goal' || !!destGoalId);
 
   // Envelope hint: if the picked category is a planned one, show what's left in
   // it this week so the spender sees the bucket at the moment of spending.
@@ -159,6 +174,50 @@ export default function AddExpenseScreen() {
   })();
 
   /**
+   * Where arriving money should go.
+   *
+   * Money used to land in spending by default, in one of two places depending
+   * on which screen you happened to use: on the week it raised that week, in
+   * Setup it raised every week of the month. Neither let you say "this isn't
+   * for spending", so selling something to dig out of a hole made the app
+   * announce you had MORE to spend.
+   *
+   * These mirror the rollover prompt's options on purpose. Money arriving and
+   * money left over are the same question, and the app already asked it well
+   * in one place and not at all in the other.
+   */
+  const destinations: { value: IncomeDestination; label: string; sub: string }[] = [
+    ...(catchUpOwed > 0
+      ? [
+          {
+            value: 'catch_up' as const,
+            label: 'Toward catch-up',
+            sub: `Pays off ${fmt(Math.min(amountNum || 0, catchUpOwed) || catchUpOwed)} of what you're behind. Your week doesn't change.`,
+          },
+        ]
+      : []),
+    {
+      value: 'this_week' as const,
+      label: "This week's spending money",
+      sub: 'Raises what you can spend this week.',
+    },
+    ...((goals.data ?? []).length
+      ? [
+          {
+            value: 'goal' as const,
+            label: 'Toward a savings goal',
+            sub: 'Goes straight into a goal. Your week doesn’t change.',
+          },
+        ]
+      : []),
+    {
+      value: 'month' as const,
+      label: 'Spread across the month',
+      sub: 'Raises every remaining week a little, rather than one.',
+    },
+  ];
+
+  /**
    * Leaves the screen only once the write has actually landed.
    *
    * This is the app's main data-entry path, and it used to fire the mutation
@@ -176,10 +235,19 @@ export default function AddExpenseScreen() {
       type,
       is_fun_money: type === 'expense' && funEnabled ? isFun : false,
       occurred_on: day,
+      income_destination: type === 'income' ? incomeDest : null,
     };
     try {
-      if (isEdit) await txMut.update.mutateAsync({ id: editing!.id, ...input });
-      else await txMut.create.mutateAsync(input);
+      if (isEdit) {
+        await txMut.update.mutateAsync({ id: editing!.id, ...input });
+      } else if (type === 'income') {
+        // logIncome writes the transaction AND applies the destination as one
+        // operation, so a failure can't leave the money recorded but unassigned.
+        const goal = (goals.data ?? []).find((g) => g.id === destGoalId);
+        await txMut.logIncome.mutateAsync({ input, goal, memberId });
+      } else {
+        await txMut.create.mutateAsync(input);
+      }
       goBack();
     } catch {
       // The toast is raised by the global mutation handler; keep the form.
@@ -294,6 +362,54 @@ export default function AddExpenseScreen() {
             })}
           </View>
 
+          {/* Income has to be given a job. Money arriving and money left over
+              are the same question, and the rollover prompt already asks it
+              well, so these options mirror it. */}
+          {type === 'income' && (
+            <>
+              <FieldLabel>Where should this go?</FieldLabel>
+              {destinations.map((d) => {
+                const on = incomeDest === d.value;
+                return (
+                  <Pressable
+                    key={d.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`${d.label}. ${d.sub}`}
+                    onPress={() => setIncomeDest(d.value)}
+                    style={[styles.destRow, on && styles.destRowOn]}>
+                    <ThemedText type="bodyBold">{d.label}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
+                      {d.sub}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+              {incomeDest === 'goal' && (
+                <>
+                  <FieldLabel>Which goal?</FieldLabel>
+                  {(goals.data ?? []).map((g) => {
+                    const on = destGoalId === g.id;
+                    return (
+                      <Pressable
+                        key={g.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={`${g.name}, ${fmt(g.saved_amount)} of ${fmt(g.target_amount)} saved`}
+                        onPress={() => setDestGoalId(g.id)}
+                        style={[styles.destRow, on && styles.destRowOn]}>
+                        <ThemedText type="bodyBold">{g.name}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
+                          {fmt(g.saved_amount)} of {fmt(g.target_amount)} saved
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </>
+              )}
+            </>
+          )}
+
           {spendSource && (
             <View
               style={[
@@ -381,7 +497,7 @@ export default function AddExpenseScreen() {
                 disabled={!valid}
                 // The screen now waits for the write, so the button has to say
                 // it's working or the tap reads as having done nothing.
-                loading={txMut.create.isPending || txMut.update.isPending}
+                loading={txMut.create.isPending || txMut.update.isPending || txMut.logIncome.isPending}
                 onPress={save}
               />
             </View>
@@ -430,6 +546,16 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   // Tinted to the pot the money leaves: sage for free, sand for a planned
   // category, terracotta once it spills past one.
+  destRow: {
+    backgroundColor: Palette.card,
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  destRowOn: { borderColor: Palette.sageDeep },
+  destSub: { lineHeight: 18, marginTop: 2 },
   envHint: {
     marginTop: Spacing.two,
     gap: 2,

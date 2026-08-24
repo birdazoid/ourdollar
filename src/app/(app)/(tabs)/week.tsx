@@ -32,6 +32,7 @@ import {
   fmt,
   funMoneyUsed,
   isVariableExpense,
+  isWeekIncome,
   splitAllowancePots,
   type EnvelopeStatus,
 } from '@/lib/money';
@@ -59,6 +60,27 @@ import {
 } from '@/lib/queries';
 import type { Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
+
+/**
+ * Where a logged income row was assigned.
+ *
+ * Every income row used to read "Money back", which was fine when all of it
+ * raised the week. Now that money can be sent to catch-up, a goal, or the
+ * month, the ledger has to say which — otherwise a row shows +$67 next to a
+ * week that didn't move, and the app looks broken.
+ */
+function incomeWentTo(dest: string | null | undefined): string {
+  switch (dest ?? 'this_week') {
+    case 'catch_up':
+      return 'Money in · to catch-up';
+    case 'goal':
+      return 'Money in · to a savings goal';
+    case 'month':
+      return 'Money in · spread across the month';
+    default:
+      return 'Money in · this week';
+  }
+}
 
 export default function WeekScreen() {
   const router = useRouter();
@@ -157,7 +179,7 @@ export default function WeekScreen() {
   const spent = weekTxns
     .filter(isVariableExpense)
     .reduce((a, t) => a + t.amount, 0);
-  const incomeBack = weekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+  const incomeBack = weekTxns.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0);
 
   // Fun money is a MONTHLY pot, so it's measured over the calendar month
   // rather than the week this screen is otherwise about.
@@ -181,7 +203,7 @@ export default function WeekScreen() {
   const lastSpent = lastWeekTxns
     .filter(isVariableExpense)
     .reduce((a, t) => a + t.amount, 0);
-  const lastIncomeBack = lastWeekTxns.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+  const lastIncomeBack = lastWeekTxns.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0);
   // Measured against what last week was PLANNED at, not this week's allowance:
   // `allowance` carries the current week's bill-variance adjustment, which was
   // never last week's number. The two weeks can also sit in different funding
@@ -731,7 +753,7 @@ export default function WeekScreen() {
                         )
                       }
                       title={t.label ?? cat.name}
-                      subtitle={`${isIncome ? 'Money back' : cat.name} · ${memberName(t.member_id)}`}
+                      subtitle={`${isIncome ? incomeWentTo(t.income_destination) : cat.name} · ${memberName(t.member_id)}`}
                       badge={
                         t.is_fun_money ? (
                           <View style={styles.funBadge}>

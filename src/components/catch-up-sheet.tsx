@@ -1,13 +1,11 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { FieldLabel, MoneyInput } from '@/components/inputs';
+import { FieldLabel } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
-import { fmt, sanitizeAmountInput } from '@/lib/money';
+import { fmt } from '@/lib/money';
 import type { CatchUpEntry } from '@/lib/types';
 
 type Props = {
@@ -15,105 +13,54 @@ type Props = {
   balance: number;
   entries: CatchUpEntry[];
   memberName: (id: string | null) => string | null;
-  saving?: boolean;
-  onPay: (amount: number, note: string) => void;
   onClose: () => void;
 };
 
 const KIND_LABEL: Record<CatchUpEntry['kind'], string> = {
   week_overage: 'Went over',
-  payment: 'Paid off',
+  payment: 'Made up',
   adjustment: 'Adjusted',
 };
 
 /**
- * The catch-up balance in full: what's owed, where each piece came from, and a
- * way to pay some off.
+ * The catch-up balance in full: what's outstanding, how it got there, and how
+ * it comes down.
  *
- * The history is the point. A single number labelled "you owe $563" invites
- * exactly the question the app couldn't answer before, so every movement is
- * listed with the week it came from or the note attached to the payment.
+ * The history is the point. A single number labelled "you're $563 behind"
+ * invites exactly the question the app couldn't answer before, so every
+ * movement is listed with the week it came from or where the money came from.
  */
-export function CatchUpSheet({
-  visible,
-  balance,
-  entries,
-  memberName,
-  saving,
-  onPay,
-  onClose,
-}: Props) {
-  const [amount, setAmount] = useState('');
-  const [paying, setPaying] = useState(false);
-
-  // Reset on close, adjusted during render rather than in an effect. Setting
-  // state from an effect makes the React Compiler bail out of optimising the
-  // component, and this is the pattern React documents for reacting to a prop
-  // change: compare against the previous value and correct in the same pass.
-  const [wasVisible, setWasVisible] = useState(visible);
-  if (wasVisible !== visible) {
-    setWasVisible(visible);
-    if (!visible) {
-      setAmount('');
-      setPaying(false);
-    }
-  }
-
-  const amountNum = Number(amount);
-  // Never more than is owed: overpaying would drive the balance below zero and
-  // read as the household being owed money by itself.
-  const capped = Math.min(Number.isFinite(amountNum) ? amountNum : 0, balance);
-  const valid = capped > 0;
-
+export function CatchUpSheet({ visible, balance, entries, memberName, onClose }: Props) {
   return (
     <Sheet visible={visible} title="Catch-up" onClose={onClose}>
       <Card style={styles.headline}>
         <ThemedText type="small" themeColor="textSecondary">
-          {balance > 0 ? 'Still to pay off' : 'All caught up'}
+          {balance > 0 ? 'Still to make up' : 'All caught up'}
         </ThemedText>
         <ThemedText type="display" style={balance > 0 ? styles.owed : styles.clear}>
           {fmt(balance)}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.blurb}>
           {balance > 0
-            ? "This is money you've already spent, kept on record so it isn't forgotten. It doesn't come out of your weekly money, so pay it off whenever suits."
+            ? "You've already spent this. Nobody is owed it — it's a record of how far past your plan you went, so it isn't quietly forgotten. It never comes out of your weekly money."
             : "Nothing outstanding. Weeks that go over can be sent here instead of eating into the next week."}
         </ThemedText>
       </Card>
 
-      {balance > 0 &&
-        (paying ? (
-          <View style={styles.payBox}>
-            <FieldLabel>How much are you paying off?</FieldLabel>
-            <MoneyInput value={amount} onChangeText={(t) => setAmount(sanitizeAmountInput(t))} autoFocus />
-            {amountNum > balance && (
-              <ThemedText type="small" style={styles.capNote}>
-                Only {fmt(balance)} is owed, so that&apos;s all this will take off.
-              </ThemedText>
-            )}
-            <View style={styles.payActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel paying off"
-                onPress={() => setPaying(false)}
-                style={styles.cancel}>
-                <ThemedText type="bodyBold" themeColor="textSecondary">
-                  Cancel
-                </ThemedText>
-              </Pressable>
-              <View style={styles.flex}>
-                <Button
-                  title={valid ? `Pay off ${fmt(capped)}` : 'Pay off'}
-                  disabled={!valid}
-                  loading={saving}
-                  onPress={() => onPay(capped, 'Paid off')}
-                />
-              </View>
-            </View>
-          </View>
-        ) : (
-          <Button title="Pay some off" variant="secondary" onPress={() => setPaying(true)} />
-        ))}
+      {/* No "pay some off" button any more. It was the only route that let the
+          balance drop with no real money behind it. Every legitimate use of it
+          is better served by logging the money as income and assigning it here,
+          which records where the money came from as well as where it went. */}
+      <View style={styles.howBox}>
+        <ThemedText type="bodyBold" style={styles.howTitle}>
+          How this comes down
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.howBody}>
+          Two ways, and both come from real money. Finish a week under budget and you can put
+          the leftover toward it. Or log money coming in, from selling something or a bonus,
+          and choose &quot;Toward catch-up&quot; instead of adding it to your week.
+        </ThemedText>
+      </View>
 
       <FieldLabel>History</FieldLabel>
       {entries.length === 0 ? (
@@ -150,10 +97,15 @@ const styles = StyleSheet.create({
   blurb: { textAlign: 'center', marginTop: Spacing.two, lineHeight: 19 },
   owed: { color: Palette.terracottaDeep },
   clear: { color: Palette.sageDeep },
-  payBox: { gap: Spacing.two, marginBottom: Spacing.three },
-  capNote: { color: Palette.sandDeep },
-  payActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
-  cancel: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.two },
+  howBox: {
+    backgroundColor: 'rgba(129,178,154,0.14)',
+    borderRadius: Radius.large,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+    gap: 2,
+  },
+  howTitle: { color: Palette.sageDeep },
+  howBody: { lineHeight: 19 },
   empty: { paddingVertical: Spacing.three },
   entry: {
     flexDirection: 'row',

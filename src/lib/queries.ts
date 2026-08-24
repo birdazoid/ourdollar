@@ -12,6 +12,7 @@ import type {
   FunMoneySettings,
   Goal,
   HouseholdMember,
+  IncomeDestination,
   IncomeSource,
   MonthSnapshot,
   Transaction,
@@ -513,6 +514,8 @@ export type TransactionInput = {
   type: 'expense' | 'income';
   is_fun_money: boolean;
   occurred_on: string;
+  /** Income only. Null/'this_week' is the only value that raises the week. */
+  income_destination?: IncomeDestination | null;
 };
 
 export function useTransactionMutations(householdId: string | null) {
@@ -545,7 +548,72 @@ export function useTransactionMutations(householdId: string | null) {
     onSuccess: invalidate,
   });
 
-  return { create, update, remove };
+  /**
+   * Logs income AND applies wherever it was assigned, as one operation.
+   *
+   * The transaction row always exists, so the money is visible in the ledger on
+   * the day it arrived. What changes is what else happens: only 'this_week'
+   * raises the week's spending money, and the other destinations move the
+   * matching balance instead.
+   *
+   * One mutation rather than two awaited calls in the screen, so a failure is
+   * reported once and the household isn't left guessing which half landed.
+   */
+  const logIncome = useMutation({
+    mutationFn: async (args: {
+      input: TransactionInput;
+      goal?: { id: string; saved_amount: number; target_amount: number };
+      memberId?: string | null;
+    }) => {
+      const { input, goal, memberId } = args;
+      const dest = input.income_destination ?? 'this_week';
+
+      const { error } = await supabase
+        .from('transactions')
+        .insert({ household_id: householdId, ...input });
+      if (error) throw error;
+
+      if (dest === 'catch_up') {
+        const { error: cErr } = await supabase.from('catchup_entries').insert({
+          household_id: householdId,
+          amount: -Math.abs(input.amount),
+          kind: 'payment',
+          note: input.label || 'Money in',
+          created_by_member_id: memberId ?? input.member_id ?? null,
+        });
+        if (cErr) throw cErr;
+      }
+
+      if (dest === 'goal' && goal) {
+        // Same clamp the rollover prompt uses: a goal never banks past target.
+        const next = Math.max(0, Math.min(goal.target_amount, goal.saved_amount + input.amount));
+        const { error: gErr } = await supabase
+          .from('goals')
+          .update({ saved_amount: next })
+          .eq('id', goal.id);
+        if (gErr) throw gErr;
+      }
+
+      if (dest === 'month') {
+        const { error: eErr } = await supabase.from('extra_income').insert({
+          household_id: householdId,
+          member_id: input.member_id,
+          source: input.label || 'Extra income',
+          amount: input.amount,
+          occurred_on: input.occurred_on,
+        });
+        if (eErr) throw eErr;
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ['catchup_entries', householdId] });
+      qc.invalidateQueries({ queryKey: ['goals', householdId] });
+      qc.invalidateQueries({ queryKey: ['extra_income', householdId] });
+    },
+  });
+
+  return { create, update, remove, logIncome };
 }
 
 // ---- Account (subscription + onboarding state) ----

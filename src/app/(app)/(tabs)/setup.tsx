@@ -179,7 +179,11 @@ export default function SetupScreen() {
           </Pressable>
 
           {/* INCOME */}
-          <SectionHeader title="Monthly income" action="the foundation" />
+          <SectionHeader
+            title="Monthly income"
+            action="the foundation"
+            caption="Money here is part of the plan, so it raises every week of the month. For one-off money like selling something, log it on the Week screen instead and choose where it goes."
+          />
           {(income.data ?? []).map((s) => {
             const m = memberName(s.member_id);
             const label = m?.name ?? 'Household';

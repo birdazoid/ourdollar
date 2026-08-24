@@ -31,7 +31,6 @@ import {
   useBillMutations,
   useBills,
   useCatchUpEntries,
-  useCatchUpMutations,
   useGoalMutations,
   useGoals,
   useMembers,
@@ -70,7 +69,6 @@ export default function BillsScreen() {
   const goalMut = useGoalMutations(householdId);
   const resolveCarryover = useResolveCarryover(householdId);
   const catchUp = useCatchUpEntries(householdId);
-  const catchUpMut = useCatchUpMutations(householdId);
   const catchUpOwed = catchUpBalance(catchUp.data);
 
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
@@ -274,6 +272,42 @@ export default function BillsScreen() {
 
           <DashedAdd label="Add a bill" onPress={() => setBillSheet({ bill: null })} style={styles.addTop} />
 
+          {/* Above the goals and well clear of the bill categories. Sitting
+              between "Savings goals" and "Loans" made it read as another kind
+              of bill, which is exactly the question it kept prompting: is this
+              added to what I owe this month? It isn't, and it never was. */}
+          {(catchUpOwed > 0 || (catchUp.data ?? []).length > 0) && (
+            <>
+              <SectionHeader
+                title="Catch-up"
+                icon={<CornerDownRight size={20} color={Palette.ink} />}
+                caption="A record of how far past your plan you've gone. It never comes out of your weekly money."
+              />
+              <ListRow
+                emoji={
+                  <CornerDownRight
+                    size={22}
+                    color={catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep}
+                  />
+                }
+                title={catchUpOwed > 0 ? 'Still to make up' : 'All caught up'}
+                subtitle={
+                  catchUpOwed > 0
+                    ? 'Tap to see where it came from and how to bring it down'
+                    : 'Nothing outstanding'
+                }
+                onPress={() => setCatchUpOpen(true)}
+                right={
+                  <ThemedText
+                    type="bodyBold"
+                    style={{ color: catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep }}>
+                    {fmt(catchUpOwed)}
+                  </ThemedText>
+                }
+              />
+            </>
+          )}
+
           {/* Savings goals */}
           <SectionHeader title="Savings goals" icon={<IconSave width={21} height={21} color={Palette.ink} />} />
           {(goals.data ?? []).map((g) => {
@@ -304,43 +338,6 @@ export default function BillsScreen() {
             );
           })}
           <DashedAdd label="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
-
-          {/* Catch-up sits beside the goals on purpose: it behaves like a goal
-              in reverse, and a debt that costs nothing week to week is easy to
-              forget unless it's somewhere you already look. Hidden entirely
-              until there's something to show, so it never nags a household
-              that has never gone over. */}
-          {(catchUpOwed > 0 || (catchUp.data ?? []).length > 0) && (
-            <>
-              <SectionHeader
-                title="Catch-up"
-                icon={<CornerDownRight size={20} color={Palette.ink} />}
-                caption="Money you've already spent, kept on record. It doesn't come out of your weekly money."
-              />
-              <ListRow
-                emoji={
-                  <CornerDownRight
-                    size={22}
-                    color={catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep}
-                  />
-                }
-                title={catchUpOwed > 0 ? 'Still to pay off' : 'All caught up'}
-                subtitle={
-                  catchUpOwed > 0
-                    ? 'Pay it off whenever suits, or put a good week toward it'
-                    : 'Nothing outstanding'
-                }
-                onPress={() => setCatchUpOpen(true)}
-                right={
-                  <ThemedText
-                    type="bodyBold"
-                    style={{ color: catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep }}>
-                    {fmt(catchUpOwed)}
-                  </ThemedText>
-                }
-              />
-            </>
-          )}
 
           {/* Bills grouped by category */}
           {grouped.map(({ cat, bills: catBills }) => (
@@ -442,11 +439,6 @@ export default function BillsScreen() {
         balance={catchUpOwed}
         entries={catchUp.data ?? []}
         memberName={memberName}
-        saving={catchUpMut.add.isPending}
-        onPay={(amount, note) => {
-          catchUpMut.add.mutate({ amount: -amount, kind: 'payment', note, memberId: currentMemberId });
-          setCatchUpOpen(false);
-        }}
         onClose={() => setCatchUpOpen(false)}
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
