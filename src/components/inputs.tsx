@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.card,
     paddingHorizontal: Spacing.three,
     fontFamily: Fonts.sans.medium,
-    fontSize: 16,
+    fontSize: 17,
   },
   passwordRow: {
     flexDirection: 'row',
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     fontFamily: Fonts.sans.regular,
-    fontSize: 16,
+    fontSize: 17,
   },
   passwordToggle: { padding: Spacing.two },
   moneyCard: {

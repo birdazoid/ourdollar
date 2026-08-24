@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  note: { textAlign: 'center', marginTop: Spacing.one, marginBottom: Spacing.three, lineHeight: 18 },
+  note: { textAlign: 'center', marginTop: Spacing.one, marginBottom: Spacing.three, lineHeight: 22 },
   totalCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
 
   // Review
   reviewCard: { paddingVertical: Spacing.two },
-  reviewNote: { textAlign: 'center', marginTop: Spacing.three, lineHeight: 18 },
+  reviewNote: { textAlign: 'center', marginTop: Spacing.three, lineHeight: 22 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(61,64,91,0.15)',

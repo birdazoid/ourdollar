@@ -78,13 +78,25 @@ export const FontsToLoad = {
 // Type scale — display for hero dollar figures, title/subtitle for
 // headings, body/label/small for copy and UI chrome.
 export const Type = {
+  // Sizes raised across the board after testing feedback that text was hard to
+  // read. `small` was the worst of it: at 12pt it was the SMALLEST style in the
+  // app and also the most used (113 call sites), because every explanation,
+  // caption and option description was set in it. Those are sentences people
+  // are meant to read, not fine print.
+  //
+  // Line heights are raised further than the sizes. Explanatory text now runs
+  // to two and three lines in a lot of places, and leading matters more than
+  // point size for reading a paragraph.
+  //
+  // Headings are left alone: they're already large, and growing them risks
+  // wrapping the screen titles rather than helping anyone.
   display: { fontFamily: Fonts.serif.bold, fontSize: 40, lineHeight: 46 },
   title: { fontFamily: Fonts.serif.semiBold, fontSize: 28, lineHeight: 34 },
-  subtitle: { fontFamily: Fonts.serif.semiBold, fontSize: 20, lineHeight: 26 },
-  body: { fontFamily: Fonts.sans.regular, fontSize: 16, lineHeight: 22 },
-  bodyBold: { fontFamily: Fonts.sans.bold, fontSize: 16, lineHeight: 22 },
-  label: { fontFamily: Fonts.sans.medium, fontSize: 14, lineHeight: 18 },
-  small: { fontFamily: Fonts.sans.regular, fontSize: 12, lineHeight: 16 },
+  subtitle: { fontFamily: Fonts.serif.semiBold, fontSize: 21, lineHeight: 28 },
+  body: { fontFamily: Fonts.sans.regular, fontSize: 17, lineHeight: 24 },
+  bodyBold: { fontFamily: Fonts.sans.bold, fontSize: 17, lineHeight: 24 },
+  label: { fontFamily: Fonts.sans.medium, fontSize: 15, lineHeight: 20 },
+  small: { fontFamily: Fonts.sans.regular, fontSize: 14, lineHeight: 20 },
 } as const;
 
 export const Spacing = {

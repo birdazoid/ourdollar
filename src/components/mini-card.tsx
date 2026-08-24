@@ -61,5 +61,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
   },
   value: {},
-  hint: { marginTop: -2, lineHeight: 16 },
+  hint: { marginTop: -2, lineHeight: 22 },
 });

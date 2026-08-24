@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.large,
     paddingHorizontal: Spacing.three,
     fontFamily: Fonts.sans.regular,
-    fontSize: 16,
+    fontSize: 17,
     backgroundColor: Palette.card,
   },
   message: { textAlign: 'center' },

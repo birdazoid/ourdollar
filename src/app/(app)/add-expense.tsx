@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   destRowOn: { borderColor: Palette.sageDeep },
-  destSub: { lineHeight: 18, marginTop: 2 },
+  destSub: { lineHeight: 22, marginTop: 2 },
   envHint: {
     marginTop: Spacing.two,
     gap: 2,

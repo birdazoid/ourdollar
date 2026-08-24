@@ -1003,7 +1003,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     gap: 2,
   },
-  pastWeekBody: { lineHeight: 19 },
+  pastWeekBody: { lineHeight: 22 },
   // Dashed and untappable, so it reads as context rather than as a logged
   // entry sitting among real ones.
   carryRow: {
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two + 2,
   },
   carryTile: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  carrySub: { lineHeight: 18 },
+  carrySub: { lineHeight: 22 },
   allowCard: { marginBottom: Spacing.three, gap: Spacing.two + 2 },
   allowBar: {
     flexDirection: 'row',

@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(129,178,154,0.2)',
   },
   tabLabel: {
-    fontSize: 10.5,
+    fontSize: 11.5,
   },
   plus: {
     width: 58,

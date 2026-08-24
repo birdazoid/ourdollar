@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
   overNote: { marginTop: Spacing.one },
   chartLabel: { marginBottom: Spacing.two },
   chartCard: { paddingVertical: Spacing.three },
-  chartNote: { marginTop: Spacing.three, lineHeight: 18 },
+  chartNote: { marginTop: Spacing.three, lineHeight: 22 },
 
   emptyNote: { textAlign: 'center', paddingVertical: Spacing.four },
   allPaidCard: { alignItems: 'center', paddingVertical: Spacing.five },

@@ -112,7 +112,7 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
 const styles = StyleSheet.create({
   mb: { marginBottom: Spacing.three },
   flex: { flex: 1 },
-  hint: { marginTop: Spacing.one, marginBottom: Spacing.three, lineHeight: 18 },
+  hint: { marginTop: Spacing.one, marginBottom: Spacing.three, lineHeight: 22 },
   funRow: {
     flexDirection: 'row',
     alignItems: 'center',

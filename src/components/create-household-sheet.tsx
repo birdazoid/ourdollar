@@ -133,7 +133,7 @@ export function CreateHouseholdSheet({ visible, onClose, onCreated }: Props) {
 
 const styles = StyleSheet.create({
   mb: { marginBottom: Spacing.two },
-  hint: { marginBottom: Spacing.two, lineHeight: 18 },
+  hint: { marginBottom: Spacing.two, lineHeight: 22 },
   inviteRow: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },
   inviteInput: { flex: 1 },
   addBtn: {

@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   textCard: { paddingVertical: Spacing.three },
-  textInput: { fontSize: 16, padding: 0 },
+  textInput: { fontSize: 17, padding: 0 },
   fieldLabel: {
     marginTop: Spacing.three,
     marginBottom: Spacing.two,

@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: Fonts.sans.bold,
-    fontSize: 16,
+    fontSize: 17,
   },
 });

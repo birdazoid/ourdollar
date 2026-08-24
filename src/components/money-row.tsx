@@ -21,7 +21,7 @@ export function MoneyRow({ label, value, strong, sub, color, dot }: Props) {
         type={strong ? 'bodyBold' : 'body'}
         themeColor={sub ? 'textSecondary' : 'text'}
         style={styles.label}
-        numberOfLines={1}>
+        numberOfLines={2}>
         {label}
       </ThemedText>
       <ThemedText type={strong ? 'bodyBold' : 'body'} style={color ? { color } : undefined}>

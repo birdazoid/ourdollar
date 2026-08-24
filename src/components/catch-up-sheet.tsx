@@ -94,7 +94,7 @@ export function CatchUpSheet({ visible, balance, entries, memberName, onClose }:
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   headline: { alignItems: 'center', gap: 2, marginBottom: Spacing.three },
-  blurb: { textAlign: 'center', marginTop: Spacing.two, lineHeight: 19 },
+  blurb: { textAlign: 'center', marginTop: Spacing.two, lineHeight: 22 },
   owed: { color: Palette.terracottaDeep },
   clear: { color: Palette.sageDeep },
   howBox: {
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   howTitle: { color: Palette.sageDeep },
-  howBody: { lineHeight: 19 },
+  howBody: { lineHeight: 22 },
   empty: { paddingVertical: Spacing.three },
   entry: {
     flexDirection: 'row',

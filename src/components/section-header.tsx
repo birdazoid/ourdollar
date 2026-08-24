@@ -46,6 +46,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   rowTight: { marginBottom: Spacing.one },
-  caption: { marginBottom: Spacing.three, lineHeight: 18 },
+  caption: { marginBottom: Spacing.three, lineHeight: 22 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
 });

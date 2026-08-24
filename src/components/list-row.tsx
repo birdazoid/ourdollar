@@ -56,7 +56,14 @@ export function ListRow({
             </ThemedText>
             {subtitle && (
               <View style={styles.subRow}>
-                <ThemedText type="small" style={subColor ? { color: subColor } : undefined} themeColor={subColor ? undefined : 'textSecondary'} numberOfLines={1}>
+                {/* Two lines. This is descriptive text, not a name, and at
+                    one line it was already cutting sentences off mid-word
+                    before the type scale grew. */}
+                <ThemedText
+                  type="small"
+                  style={subColor ? { color: subColor } : undefined}
+                  themeColor={subColor ? undefined : 'textSecondary'}
+                  numberOfLines={2}>
                   {subtitle}
                 </ThemedText>
                 {badge}
