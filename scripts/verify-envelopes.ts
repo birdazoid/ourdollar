@@ -15,6 +15,7 @@ import {
   computeEnvelopes,
   fmt,
   isWeekIncome,
+  splitIncome,
   funMoneyUsed,
   goalProgress,
   isFunExpense,
@@ -469,12 +470,53 @@ function incomeDestinationChecks() {
   );
 }
 
+/**
+ * Money sent at a destination that can't absorb it all.
+ *
+ * Reported: "if I add income toward catch-up and it's more than the catch-up
+ * amount, where does the rest go?" It went nowhere. The whole amount was
+ * written as a payment, the balance floored at zero, and the remainder existed
+ * in no week, no goal and no month.
+ */
+function incomeOverflowChecks() {
+  console.log('\nG. Income overflow (splitIncome)');
+
+  // The reported case: $57.17 behind, $200 sold.
+  const big = splitIncome(200, 57.17);
+  check('clears exactly what was owed', big.applied === 57.17, String(big.applied));
+  check('the rest is kept, not lost', big.overflow === 142.83, String(big.overflow));
+  check('and the two add back to what arrived', big.applied + big.overflow === 200);
+
+  const small = splitIncome(20, 57.17);
+  check('less than owed all goes to catch-up', small.applied === 20 && small.overflow === 0);
+
+  const exact = splitIncome(57.17, 57.17);
+  check('exactly owed leaves no overflow', exact.applied === 57.17 && exact.overflow === 0);
+
+  const none = splitIncome(200, 0);
+  check('nothing owed sends it all to the week', none.applied === 0 && none.overflow === 200);
+
+  const uncapped = splitIncome(200, Infinity);
+  check('this week and month have no ceiling', uncapped.applied === 200 && uncapped.overflow === 0);
+
+  check('a negative ceiling is treated as none', splitIncome(50, -10).overflow === 50);
+  check('junk amounts produce nothing', splitIncome(NaN, 100).applied === 0);
+  check(
+    'no split ever invents or loses money',
+    [[200, 57.17], [20, 57.17], [0.03, 0.02], [999.99, 1000]].every(([a, r]) => {
+      const s = splitIncome(a, r);
+      return Math.abs(s.applied + s.overflow - a) < 0.005 && s.applied >= 0 && s.overflow >= 0;
+    })
+  );
+}
+
 async function main() {
   mathChecks();
   potChecks();
   spendingBasisChecks();
   displayGuardChecks();
   incomeDestinationChecks();
+  incomeOverflowChecks();
   await dbChecks();
   console.log(`\n${fail === 0 ? '✅ ALL CHECKS PASSED' : '❌ SOME CHECKS FAILED'} — ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

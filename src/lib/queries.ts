@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { splitIncome } from '@/lib/money';
 import { supabase } from '@/lib/supabase';
 import type {
   Account,
@@ -563,20 +564,62 @@ export function useTransactionMutations(householdId: string | null) {
     mutationFn: async (args: {
       input: TransactionInput;
       goal?: { id: string; saved_amount: number; target_amount: number };
+      /** What's currently behind, so catch-up can't be overpaid. */
+      catchUpOwed?: number;
       memberId?: string | null;
     }) => {
       const { input, goal, memberId } = args;
       const dest = input.income_destination ?? 'this_week';
+      const amount = Math.abs(input.amount);
 
-      const { error } = await supabase
-        .from('transactions')
-        .insert({ household_id: householdId, ...input });
+      /**
+       * How much the chosen destination can actually absorb.
+       *
+       * Catch-up and goals both have a ceiling, and sending more than that
+       * used to make the excess vanish: the whole amount was written as a
+       * payment, catchUpBalance floored the result at zero, and the leftover
+       * sat in no week, no goal and no month. Worse, the raw sum stayed
+       * negative, so a later overspend was silently swallowed by a credit
+       * nobody could see. "this_week" and "month" have no ceiling.
+       */
+      const room =
+        dest === 'catch_up'
+          ? Math.max(0, args.catchUpOwed ?? 0)
+          : dest === 'goal' && goal
+            ? Math.max(0, goal.target_amount - goal.saved_amount)
+            : amount;
+
+      const { applied, overflow } = splitIncome(amount, room);
+
+      /**
+       * Anything the destination can't take becomes its own row headed for
+       * this week, rather than disappearing. Two rows instead of one column
+       * on the transaction: each row keeps a single honest destination, they
+       * add up to what arrived, and the ledger explains itself because each
+       * one already prints where it went.
+       */
+      const rows = [
+        ...(applied > 0 ? [{ household_id: householdId, ...input, amount: applied }] : []),
+        ...(overflow > 0
+          ? [
+              {
+                household_id: householdId,
+                ...input,
+                amount: overflow,
+                income_destination: 'this_week' as const,
+              },
+            ]
+          : []),
+      ];
+      if (rows.length === 0) return;
+
+      const { error } = await supabase.from('transactions').insert(rows);
       if (error) throw error;
 
-      if (dest === 'catch_up') {
+      if (dest === 'catch_up' && applied > 0) {
         const { error: cErr } = await supabase.from('catchup_entries').insert({
           household_id: householdId,
-          amount: -Math.abs(input.amount),
+          amount: -applied,
           kind: 'payment',
           note: input.label || 'Money in',
           created_by_member_id: memberId ?? input.member_id ?? null,
@@ -584,9 +627,8 @@ export function useTransactionMutations(householdId: string | null) {
         if (cErr) throw cErr;
       }
 
-      if (dest === 'goal' && goal) {
-        // Same clamp the rollover prompt uses: a goal never banks past target.
-        const next = Math.max(0, Math.min(goal.target_amount, goal.saved_amount + input.amount));
+      if (dest === 'goal' && goal && applied > 0) {
+        const next = Math.round((goal.saved_amount + applied) * 100) / 100;
         const { error: gErr } = await supabase
           .from('goals')
           .update({ saved_amount: next })
@@ -599,7 +641,7 @@ export function useTransactionMutations(householdId: string | null) {
           household_id: householdId,
           member_id: input.member_id,
           source: input.label || 'Extra income',
-          amount: input.amount,
+          amount: applied,
           occurred_on: input.occurred_on,
         });
         if (eErr) throw eErr;

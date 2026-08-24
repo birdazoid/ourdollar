@@ -137,6 +137,30 @@ export function goalProgress(saved: number, target: number): number {
   return Math.max(0, Math.min(1, saved / target));
 }
 
+export type IncomeSplit = {
+  applied: number; // what the chosen destination can absorb
+  overflow: number; // the rest, which goes to this week
+};
+
+/**
+ * How arriving money divides between its destination and this week.
+ *
+ * Catch-up and goals both have a ceiling. Sending more than that used to make
+ * the excess vanish: the whole amount was recorded against the destination,
+ * the balance floored at zero, and the leftover appeared in no week, no goal
+ * and no month. The raw total stayed negative too, so a later overspend was
+ * quietly swallowed by a credit nobody could see.
+ *
+ * `room` is Infinity for destinations that have no ceiling.
+ */
+export function splitIncome(amount: number, room: number): IncomeSplit {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const total = Number.isFinite(amount) && amount > 0 ? round(amount) : 0;
+  const ceiling = Number.isFinite(room) ? Math.max(0, round(room)) : total;
+  const applied = round(Math.min(total, ceiling));
+  return { applied, overflow: round(total - applied) };
+}
+
 export type DeltaDescription = {
   text: string; // "$99 more", "$40 less", or "No change"
   good: boolean; // the movement went the way the household wants

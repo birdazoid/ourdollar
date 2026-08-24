@@ -186,13 +186,26 @@ export default function AddExpenseScreen() {
    * money left over are the same question, and the app already asked it well
    * in one place and not at all in the other.
    */
+  const typed = Number.isFinite(amountNum) && amountNum > 0 ? amountNum : 0;
+  // How much room the picked goal still has, so the same spillover warning
+  // applies there: a goal can't bank past its target either.
+  const pickedGoal = (goals.data ?? []).find((g) => g.id === destGoalId);
+  const goalRoom = pickedGoal
+    ? Math.max(0, Math.round((pickedGoal.target_amount - pickedGoal.saved_amount) * 100) / 100)
+    : null;
+
   const destinations: { value: IncomeDestination; label: string; sub: string }[] = [
     ...(catchUpOwed > 0
       ? [
           {
             value: 'catch_up' as const,
             label: 'Toward catch-up',
-            sub: `Pays off ${fmt(Math.min(amountNum || 0, catchUpOwed) || catchUpOwed)} of what you're behind. Your week doesn't change.`,
+            // Spells out the split when the money is more than you're behind
+            // by, so the spillover is expected rather than a surprise.
+            sub:
+              typed > catchUpOwed
+                ? `Clears all ${fmt(catchUpOwed)} you're behind. The other ${fmt(typed - catchUpOwed)} goes to this week.`
+                : `Puts ${fmt(typed || catchUpOwed)} toward the ${fmt(catchUpOwed)} you're behind. Your week doesn't change.`,
           },
         ]
       : []),
@@ -206,7 +219,10 @@ export default function AddExpenseScreen() {
           {
             value: 'goal' as const,
             label: 'Toward a savings goal',
-            sub: 'Goes straight into a goal. Your week doesn’t change.',
+            sub:
+              goalRoom != null && typed > goalRoom
+                ? `Finishes that goal with ${fmt(goalRoom)}. The other ${fmt(typed - goalRoom)} goes to this week.`
+                : 'Goes straight into a goal. Your week doesn’t change.',
           },
         ]
       : []),
@@ -244,7 +260,7 @@ export default function AddExpenseScreen() {
         // logIncome writes the transaction AND applies the destination as one
         // operation, so a failure can't leave the money recorded but unassigned.
         const goal = (goals.data ?? []).find((g) => g.id === destGoalId);
-        await txMut.logIncome.mutateAsync({ input, goal, memberId });
+        await txMut.logIncome.mutateAsync({ input, goal, catchUpOwed, memberId });
       } else {
         await txMut.create.mutateAsync(input);
       }
