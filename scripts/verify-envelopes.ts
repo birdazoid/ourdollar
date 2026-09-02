@@ -21,6 +21,7 @@ import {
   goalProgress,
   isFunExpense,
   isVariableExpense,
+  isWeekExpense,
   splitAllowancePots,
 } from '../src/lib/money';
 
@@ -356,6 +357,58 @@ function spendingBasisChecks() {
 
   // The two predicates partition expenses: no double counting, nothing missed.
   const expenses = rows.filter((r) => r.type === 'expense');
+  console.log('\nD2. A transfer leaves the week without being spending');
+  // Money moved into the emergency fund, or used to pay catch-up down, is an
+  // expense with transfer = true. It has to reduce the week (the money really
+  // is gone) while staying out of anything that describes WHERE money went, or
+  // saving reads as consumption.
+  const transferRow = { type: 'expense' as const, is_fun_money: false, transfer: true };
+  const plainRow = { type: 'expense' as const, is_fun_money: false, transfer: false };
+  const legacyRow = { type: 'expense' as const, is_fun_money: false };
+
+  check('a transfer counts against the week', isWeekExpense(transferRow));
+  check('a transfer is NOT spending', !isVariableExpense(transferRow));
+  check('a plain expense counts as both', isWeekExpense(plainRow) && isVariableExpense(plainRow));
+  // Every row written before the column existed, and anything selected without
+  // it, arrives as undefined. That must read as "not a transfer", or one
+  // missing field silently erases a household's entire spending history.
+  check('a row with no transfer field is ordinary spending', isWeekExpense(legacyRow) && isVariableExpense(legacyRow));
+  check('fun money is neither', !isWeekExpense({ type: 'expense', is_fun_money: true, transfer: false }));
+  check('income is neither', !isWeekExpense({ type: 'income', is_fun_money: false, transfer: false }));
+  // The two differ ONLY on transfers. Anything else would mean the week total
+  // and the spending total had drifted apart for some other reason.
+  const rowsToTry = [transferRow, plainRow, legacyRow,
+    { type: 'expense' as const, is_fun_money: true, transfer: true },
+    { type: 'income' as const, is_fun_money: false, transfer: true }];
+  const differOnlyOnTransfers = rowsToTry.every(
+    (r) => isWeekExpense(r) === isVariableExpense(r) || ('transfer' in r && r.transfer === true)
+  );
+  check('the two predicates differ only on transfers', differOnlyOnTransfers);
+
+  console.log('\nD3. A transfer comes out of free money, not out of an envelope');
+  // The invariant computeEnvelopes guarantees is spent + reserved + free ===
+  // effAllowance. A transfer is inside totalNonFunExpense but absent from
+  // spentByCategory, so it lands in the un-enveloped remainder and is charged
+  // to free — which is where a transfer belongs. If it were let into
+  // spentByCategory it would eat a category budget it has nothing to do with.
+  const withTransfer = computeEnvelopes({
+    weeklyAllowance: 500,
+    incomeBack: 0,
+    totalNonFunExpense: 300, // $100 groceries + a $200 transfer
+    spentByCategory: { groceries: 100 }, // the transfer is deliberately absent
+    envelopes: [{ id: 'g', category: 'groceries', weekly_amount: 150, skipped: false }],
+  });
+  check('the groceries envelope is untouched by the transfer', withTransfer.envelopes[0].spent === 100);
+  check('and it is not over budget', withTransfer.envelopes[0].over === 0);
+  check('it still reserves the rest of its budget', withTransfer.reserved === 50, String(withTransfer.reserved));
+  // 500 − 150 reserved-or-used by groceries − 200 transfer = 150 free.
+  check('the transfer is charged to free money', withTransfer.freeToSpend === 150, String(withTransfer.freeToSpend));
+  check(
+    'the invariant still holds',
+    Math.round((withTransfer.spent + withTransfer.reserved + withTransfer.freeToSpend) * 100) / 100 === 500,
+    `${withTransfer.spent} + ${withTransfer.reserved} + ${withTransfer.freeToSpend}`
+  );
+
   const both = expenses.filter((r) => isVariableExpense(r) && isFunExpense(r));
   const neither = expenses.filter((r) => !isVariableExpense(r) && !isFunExpense(r));
   check('no expense is counted twice', both.length === 0);

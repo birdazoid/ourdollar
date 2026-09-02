@@ -24,16 +24,26 @@ import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
-import { balanceFromEntries, billMonthlyCost, catchUpBalance, fmt, goalProgress } from '@/lib/money';
+import {
+  balanceFromEntries,
+  billMonthlyCost,
+  catchUpBalance,
+  fmt,
+  goalProgress,
+  monthlyContributionMade,
+} from '@/lib/money';
 import { monthLabel } from '@/lib/month-review';
 import { monthOf } from '@/lib/period';
 import {
   useBillCarryovers,
+  useBillHistory,
   useBillMutations,
   useBills,
   useCatchUpEntries,
+  useCatchUpMutations,
   useEmergencyFund,
   useEmergencyFundMutations,
+  useEmergencyFundSettings,
   useGoalMutations,
   useGoals,
   useMembers,
@@ -73,13 +83,41 @@ export default function BillsScreen() {
   const resolveCarryover = useResolveCarryover(householdId);
   const catchUp = useCatchUpEntries(householdId);
   const catchUpOwed = catchUpBalance(catchUp.data);
+  const catchUpMut = useCatchUpMutations(householdId);
   const fund = useEmergencyFund(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
   const fundMut = useEmergencyFundMutations(householdId);
   const fundBalance = balanceFromEntries(fund.data);
+  const fundTarget = fundSettings.data?.target_amount ?? 0;
+  const fundMonthly = fundSettings.data?.monthly_amount ?? 0;
+  // 'YYYY-MM' from the device's own date, matching what the entry is written
+  // with, so a household never gets asked for the same month's amount twice.
+  const fundMonthKey = today.slice(0, 7);
+  const fundMonthlyDone = monthlyContributionMade(fund.data, fundMonthKey);
+  // "Started" means the household has done anything at all with it: money in,
+  // a target, or a monthly amount. Until then the row is a dashed invitation.
+  const fundStarted =
+    fundBalance > 0 || (fund.data ?? []).length > 0 || fundTarget > 0 || fundMonthly > 0;
+  /**
+   * The one line under the fund row. Ordered by what's actionable: an amount
+   * still to put in this month comes before progress, because progress is a
+   * fact and the contribution is a thing to do.
+   */
+  const fundRowSubtitle =
+    fundMonthly > 0 && !fundMonthlyDone
+      ? `This month's ${fmt(fundMonthly)} has not gone in yet`
+      : fundTarget > 0
+        ? fundBalance >= fundTarget
+          ? `Past your ${fmt(fundTarget)} target`
+          : `${fmt(fundTarget - fundBalance)} to go toward your ${fmt(fundTarget)} target`
+        : 'Tap to add money, take some out, or set a target';
 
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
   const [goalSheet, setGoalSheet] = useState<{ goal: Goal | null } | null>(null);
   const [billDetail, setBillDetail] = useState<Bill | null>(null);
+  // Fetched only while a bill's sheet is open: a year of history across every
+  // bill is hundreds of rows, and none of them matter until one is asked about.
+  const billHistory = useBillHistory(householdId, billDetail?.id ?? null);
   const [goalDetail, setGoalDetail] = useState<Goal | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [catchUpOpen, setCatchUpOpen] = useState(false);
@@ -115,6 +153,10 @@ export default function BillsScreen() {
   const frac = billList.length ? paid.length / billList.length : 0;
   const paidTotal = paid.reduce((a, b) => a + billMonthlyCost(b), 0);
   const billsTotal = billList.reduce((a, b) => a + billMonthlyCost(b), 0);
+  // What is still owed this month: the unpaid bills at their estimates. Kept
+  // as a subtraction of the two totals above so it can never disagree with
+  // them, rather than being summed separately from the unpaid rows.
+  const billsLeft = Math.round((billsTotal - paidTotal) * 100) / 100;
 
   const grouped = useMemo(() => {
     const byCat: Record<string, Bill[]> = {};
@@ -127,7 +169,8 @@ export default function BillsScreen() {
     return BILL_CATS.filter((c) => byCat[c]).map((c) => ({ cat: c, bills: byCat[c] }));
   }, [billList]);
 
-  const loading = !householdId || bills.isLoading || goals.isLoading;
+  const loading =
+    !householdId || bills.isLoading || goals.isLoading || fund.isLoading || fundSettings.isLoading;
   // Without this a failed fetch showed an empty bill list, which reads as
   // "you have no bills" rather than "this didn't load".
   const loadFailed = bills.isError || goals.isError;
@@ -208,11 +251,21 @@ export default function BillsScreen() {
           <HeroCard
             eyebrow="Bills paid this month"
             big={`${paid.length} of ${billList.length}`}
-            sub="paid"
+            // No `sub`. "11 of 31" already reads as a count of bills, so a
+            // green "paid" underneath just repeated the eyebrow — and it spent
+            // the card's one accent colour on a word instead of on the figure
+            // people actually look for.
+            sub2Accent={`${fmt(paidTotal)} paid`}
             // "of $6,631" mixes real paid amounts with estimates for the bills
             // that haven't come in yet. Calling the total "expected" says so
-            // without a second line.
-            sub2={`${fmt(paidTotal)} paid of ${fmt(billsTotal)} expected`}
+            // without a second line. The remainder is the same subtraction the
+            // household would otherwise do in their head, and it's dropped
+            // once there's nothing left to pay rather than reading "$0".
+            sub2={`of ${fmt(billsTotal)} expected`}
+            // Its own line. Joined onto the one above with a separator, it
+            // wrapped mid-clause and left the "·" hanging at the end of a line.
+            // Dropped entirely once nothing is left, rather than reading "$0".
+            sub3={billsLeft > 0 ? `${fmt(billsLeft)} still to pay` : undefined}
             ringValue={frac}
             ringLabel="done"
           />
@@ -279,31 +332,48 @@ export default function BillsScreen() {
 
           <DashedAdd label="Add a bill" onPress={() => setBillSheet({ bill: null })} style={styles.addTop} />
 
-          {/* Emergency fund. Shown once there's something in it, or once the
-              household has ever used it, so it never nags an empty app. */}
-          {(fundBalance > 0 || (fund.data ?? []).length > 0) && (
-            <>
-              <SectionHeader
-                title="Emergency fund"
-                icon={<LifeBuoy size={20} color={Palette.ink} />}
-                caption="Money set aside for when something goes wrong. It sits outside your weekly spending."
-              />
-              <ListRow
-                emoji={<LifeBuoy size={22} color={Palette.sageDeep} />}
-                title={fundBalance > 0 ? 'Set aside' : 'Nothing set aside yet'}
-                subtitle={
-                  fundBalance > 0
-                    ? 'Tap to take some out, or see where it came from'
-                    : 'Send money in from the Week screen to start it'
-                }
-                onPress={() => setFundOpen(true)}
-                right={
+          {/* Emergency fund. Always here now, because a target has to be
+              settable before there's anything in the fund to set it against —
+              the section used to appear only once money had already arrived,
+              which left no way in for a household that wanted to START one.
+              With nothing going on it's a single dashed row, not a $0 card
+              nagging an empty app. */}
+          <SectionHeader
+            title="Emergency fund"
+            icon={<LifeBuoy size={20} color={Palette.ink} />}
+            caption="Money set aside for when something goes wrong. It sits outside your weekly spending."
+          />
+          {fundStarted ? (
+            <ListRow
+              emoji={<LifeBuoy size={22} color={Palette.sageDeep} />}
+              title={fundBalance > 0 ? 'Set aside' : 'Nothing set aside yet'}
+              subtitle={fundRowSubtitle}
+              onPress={() => setFundOpen(true)}
+              right={
+                <View style={styles.right}>
+                  {fundMonthly > 0 && !fundMonthlyDone && (
+                    <ThemedText type="label">{fmt(fundMonthly)}</ThemedText>
+                  )}
                   <ThemedText type="bodyBold" style={{ color: Palette.sageDeep }}>
                     {fmt(fundBalance)}
                   </ThemedText>
-                }
-              />
-            </>
+                </View>
+              }
+              footer={
+                fundTarget > 0 ? (
+                  <View style={styles.goalTrack}>
+                    <View
+                      style={[
+                        styles.goalFill,
+                        { width: `${goalProgress(fundBalance, fundTarget) * 100}%` },
+                      ]}
+                    />
+                  </View>
+                ) : undefined
+              }
+            />
+          ) : (
+            <DashedAdd label="Start an emergency fund" onPress={() => setFundOpen(true)} />
           )}
 
           {/* Above the goals and well clear of the bill categories. Sitting
@@ -315,7 +385,12 @@ export default function BillsScreen() {
               <SectionHeader
                 title="Catch-up"
                 icon={<CornerDownRight size={20} color={Palette.ink} />}
-                caption="A record of how far past your plan you've gone. It never comes out of your weekly money."
+                // "It never comes out of your weekly money" was the old ending.
+                // Nothing takes it out on its own, which is still the promise
+                // that matters, but paying some off from a week is now a
+                // button, and copy that quietly stops being true is worse than
+                // copy that was never written.
+                caption="A record of how far past your plan you've gone. Nothing takes it out of your weekly money unless you choose to."
               />
               <ListRow
                 emoji={
@@ -441,6 +516,8 @@ export default function BillsScreen() {
       <BillDetailSheet
         bill={billDetail}
         paidByName={billDetail ? memberName(billDetail.paid_by_member_id) : null}
+        history={billHistory.data ?? []}
+        historyLoading={billHistory.isLoading}
         onClose={() => setBillDetail(null)}
         onPay={confirmPay}
         onEdit={(b) => {
@@ -471,9 +548,17 @@ export default function BillsScreen() {
       <EmergencyFundSheet
         visible={fundOpen}
         balance={fundBalance}
+        target={fundTarget}
+        monthly={fundMonthly}
+        monthlyDone={fundMonthlyDone}
         entries={fund.data ?? []}
         memberName={memberName}
-        saving={fundMut.withdraw.isPending}
+        saving={
+          fundMut.withdraw.isPending ||
+          fundMut.deposit.isPending ||
+          fundMut.contributeMonthly.isPending ||
+          fundMut.saveSettings.isPending
+        }
         onWithdraw={(amount, note) => {
           fundMut.withdraw.mutate({
             amount,
@@ -484,6 +569,29 @@ export default function BillsScreen() {
           });
           setFundOpen(false);
         }}
+        onDeposit={(amount) => {
+          fundMut.deposit.mutate({
+            amount,
+            note: 'Put in by hand',
+            occurredOn: today,
+            memberId: currentMemberId,
+          });
+          setFundOpen(false);
+        }}
+        onContributeMonthly={() => {
+          fundMut.contributeMonthly.mutate({
+            amount: fundMonthly,
+            monthKey: fundMonthKey,
+            memberId: currentMemberId,
+          });
+          setFundOpen(false);
+        }}
+        // Stays open: setting a target is usually followed by putting the
+        // first money in, and closing the sheet would hide the result of the
+        // change that was just made.
+        onSaveSettings={(targetAmount, monthlyAmount) =>
+          fundMut.saveSettings.mutate({ targetAmount, monthlyAmount })
+        }
         onClose={() => setFundOpen(false)}
       />
       <CatchUpSheet
@@ -491,6 +599,16 @@ export default function BillsScreen() {
         balance={catchUpOwed}
         entries={catchUp.data ?? []}
         memberName={memberName}
+        saving={catchUpMut.payFromWeek.isPending}
+        onPayFromWeek={(amount) => {
+          catchUpMut.payFromWeek.mutate({
+            amount,
+            owed: catchUpOwed,
+            occurredOn: today,
+            memberId: currentMemberId,
+          });
+          setCatchUpOpen(false);
+        }}
         onClose={() => setCatchUpOpen(false)}
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />

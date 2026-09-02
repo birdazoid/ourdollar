@@ -17,14 +17,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
 
-import { computeBudget, computeEnvelopes, adjustedWeeklyAllowance as clientAdjusted } from '../src/lib/money';
-import { weeksInPeriod, weeksRemainingInPeriod } from '../src/lib/period';
+import {
+  computeBudget,
+  computeEnvelopes,
+  adjustedWeeklyAllowance as clientAdjusted,
+  extraIncomePerWeek as clientExtraPerWeek,
+} from '../src/lib/money';
+import { weekStartFor, weeksInPeriod, weeksRemainingInPeriod } from '../src/lib/period';
 import {
   adjustedWeeklyAllowance,
   billVarianceFrom,
   buildSpendAlertBody,
   currentPeriod,
   currentWeekBounds,
+  extraIncomePerWeek,
   weekFreeToSpend,
   weeklyAllowanceFrom,
   weeksInPeriod as edgeWeeksInPeriod,
@@ -93,13 +99,18 @@ async function main() {
     const pushTokens = (tokens ?? []).map((t) => t.expo_push_token as string);
     console.log(`Push tokens for those recipients: ${pushTokens.length}`);
 
-    const [inc, extra, bills, goals, funSettings, funPeople, household] = await Promise.all([
+    const [inc, extra, bills, goals, funSettings, funPeople, fundSettings, household] = await Promise.all([
       admin.from('income_sources').select('amount, frequency').eq('household_id', householdId),
-      admin.from('extra_income').select('amount').eq('household_id', householdId),
+      admin.from('extra_income').select('amount, occurred_on').eq('household_id', householdId),
       admin.from('bills').select('paid, paid_amount, amount').eq('household_id', householdId),
       admin.from('goals').select('monthly_amount').eq('household_id', householdId),
       admin.from('fun_money_settings').select('enabled').eq('household_id', householdId).maybeSingle(),
       admin.from('fun_money_people').select('monthly_amount').eq('household_id', householdId),
+      admin
+        .from('emergency_fund_settings')
+        .select('monthly_amount')
+        .eq('household_id', householdId)
+        .maybeSingle(),
       admin.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
@@ -116,18 +127,24 @@ async function main() {
           goals: goals.data ?? [],
           funEnabled: !!funSettings.data?.enabled,
           funPeople: funPeople.data ?? [],
+          emergencyMonthly: Number(fundSettings.data?.monthly_amount ?? 0),
         },
         period.weeks
       ),
       billVariance: billVarianceFrom({ bills: billRows }),
       weeksRemaining: period.weeksRemaining,
+      extraPerWeek: extraIncomePerWeek({
+        extraIncome: extra.data ?? [],
+        weekStart: currentWeekBounds(weekStartDay, anchor).start,
+        weekStartDay,
+      }),
     });
 
     const { start, end } = currentWeekBounds(weekStartDay, anchor);
     const [weekTxns, envelopes, rollovers] = await Promise.all([
       admin
         .from('transactions')
-        .select('amount, type, is_fun_money, category')
+        .select('amount, type, is_fun_money, category, income_destination, transfer')
         .eq('household_id', householdId)
         .gte('occurred_on', start)
         .lte('occurred_on', end),
@@ -490,12 +507,251 @@ function check2(label: string, ok: boolean, detail = '') {
   console.log(`  ${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
+/**
+ * Regression guard for one-off income, and for the hole that hid it.
+ *
+ * Every other parity check in this file passes `extraIncome: []` to the client
+ * and `extra: []` to the edge function. With no extra income the two formulas
+ * agree by definition, so when the client changed and the edge function didn't,
+ * this suite kept passing and the push went on quoting a figure nobody's Week
+ * screen showed.
+ *
+ * The drift was real and two-sided. The edge function folded extra income into
+ * the monthly pool and divided it by the period's full week count, handing part
+ * of a late-arriving bonus to weeks already finished. And nothing filtered by
+ * date, so an August bonus inflated the quoted balance in September and every
+ * month after it, forever. Every check below fails if either returns.
+ */
+function extraIncomeCheck() {
+  console.log('Pure check: one-off income lands the same both sides\n');
+
+  const ws = 1; // Monday-start, so the period maths is easy to follow
+  const income = [{ amount: 4000, frequency: 'monthly' as const }];
+  const bills = [{ paid: false, paid_amount: null, amount: 2000 }];
+  // A $2,000 bonus arriving in the third week of a four-week August period.
+  const month = '2026-08-01';
+  const weeks = weeksInPeriod(month, ws);
+  const bonusDate = '2026-08-17';
+  const extra = [{ amount: 2000, occurred_on: bonusDate }];
+
+  let failed = 0;
+  const check = (label: string, ok: boolean, detail = '') => {
+    console.log(`  ${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
+    if (!ok) failed++;
+  };
+
+  // 1. The bonus must not join the divided pool on either side.
+  const clientPlanned = computeBudget({
+    incomeSources: income,
+    extraIncome: extra,
+    bills,
+    goals: [],
+    funMoneyEnabled: false,
+    funPeople: [],
+    weeksInPeriod: weeks,
+  }).weeklyAllowance;
+  const edgePlanned = weeklyAllowanceFrom(
+    { income, extra, bills, goals: [], funEnabled: false, funPeople: [] },
+    edgeWeeksInPeriod(2026, 7, ws)
+  );
+  check('the bonus stays out of the divided pool', clientPlanned === edgePlanned, `client ${clientPlanned} vs edge ${edgePlanned}`);
+  // The real claim, stated without hardcoding a week count: adding a bonus
+  // must not move the PLANNED weekly figure by a cent. (August 2026 is a
+  // five-week period, so this is $400, not the $500 a four-week month gives.)
+  const noBonus = computeBudget({
+    incomeSources: income,
+    extraIncome: [],
+    bills,
+    goals: [],
+    funMoneyEnabled: false,
+    funPeople: [],
+    weeksInPeriod: weeks,
+  }).weeklyAllowance;
+  check('and the planned week is identical to having no bonus at all', clientPlanned === noBonus, `${clientPlanned} vs ${noBonus}`);
+
+  // 2. Its per-week share must match, week by week, across the whole period.
+  let shareMismatch = 0;
+  const cursor = new Date(`${month}T00:00:00Z`);
+  for (let i = 0; i < 40; i++) {
+    const iso = cursor.toISOString().slice(0, 10);
+    const weekStart = weekStartFor(iso, ws);
+    const clientShare = clientExtraPerWeek({ extraIncome: extra, weekStart, weekStartsOn: ws });
+    const edgeShare = extraIncomePerWeek({ extraIncome: extra, weekStart, weekStartDay: ws });
+    if (clientShare !== edgeShare) shareMismatch++;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  check('the per-week share agrees on all 40 days of the period', shareMismatch === 0, `${shareMismatch} mismatches`);
+
+  // 3. A week BEFORE the bonus arrived must get none of it. This is the half
+  //    that used to hand $500 to weeks that were already over and frozen.
+  const earlyWeek = weekStartFor('2026-08-03', ws);
+  check('a week already finished gets none of it', extraIncomePerWeek({ extraIncome: extra, weekStart: earlyWeek, weekStartDay: ws }) === 0);
+
+  // 4. The whole $2,000 reaches the weeks that were left when it landed.
+  const arrivalWeek = weekStartFor(bonusDate, ws);
+  const weeksLeftAtArrival = weeksRemainingInPeriod(ws, bonusDate);
+  const share = extraIncomePerWeek({ extraIncome: extra, weekStart: arrivalWeek, weekStartDay: ws });
+  check('all of it is delivered, none stranded in the past', Math.round(share * weeksLeftAtArrival) === 2000, `${share} x ${weeksLeftAtArrival}`);
+
+  // 5. The month after must see nothing. This is the half that inflated the
+  //    quoted balance forever.
+  const nextMonthWeek = weekStartFor('2026-09-21', ws);
+  check('the next month sees none of it', extraIncomePerWeek({ extraIncome: extra, weekStart: nextMonthWeek, weekStartDay: ws }) === 0);
+
+  // 6. End to end, with bills exactly on estimate — the case the old edge
+  //    function short-circuited past before it could add the bonus in.
+  const clientEffective = clientAdjusted({
+    plannedWeekly: clientPlanned,
+    billVariance: 0,
+    weeksRemaining: weeksLeftAtArrival,
+    extraPerWeek: share,
+  });
+  const edgeEffective = adjustedWeeklyAllowance({
+    plannedWeekly: edgePlanned,
+    billVariance: 0,
+    weeksRemaining: weeksLeftAtArrival,
+    extraPerWeek: share,
+  });
+  check('the effective week agrees end to end', clientEffective === edgeEffective, `client ${clientEffective} vs edge ${edgeEffective}`);
+
+  if (failed) throw new Error('extra income check failed');
+  console.log('');
+}
+
+/**
+ * Regression guard for the emergency fund's monthly amount.
+ *
+ * It's committed on the same terms as a savings goal's, so leaving it out of
+ * the edge function quoted a balance too high by exactly that amount every
+ * week for any household that had set one.
+ */
+function emergencyFundCheck() {
+  console.log('Pure check: the emergency fund is committed the same both sides\n');
+
+  const income = [{ amount: 4000, frequency: 'monthly' as const }];
+  const bills = [{ paid: false, paid_amount: null, amount: 2000 }];
+  let failed = 0;
+
+  for (const emergencyMonthly of [0, 200, 500]) {
+    const client = computeBudget({
+      incomeSources: income,
+      extraIncome: [],
+      bills,
+      goals: [],
+      funMoneyEnabled: false,
+      funPeople: [],
+      emergencyMonthly,
+      weeksInPeriod: 4,
+    }).weeklyAllowance;
+    const edge = weeklyAllowanceFrom(
+      { income, extra: [], bills, goals: [], funEnabled: false, funPeople: [], emergencyMonthly },
+      4
+    );
+    const ok = client === edge;
+    if (!ok) failed++;
+    console.log(`  ${ok ? '✅' : '❌'} $${emergencyMonthly}/mo: client ${client} vs edge ${edge}`);
+  }
+
+  // A household that has never set one, and a database that doesn't have the
+  // table yet, both arrive here as undefined. Neither may change the figure.
+  const withoutField = weeklyAllowanceFrom(
+    { income, extra: [], bills, goals: [], funEnabled: false, funPeople: [] },
+    4
+  );
+  const withZero = weeklyAllowanceFrom(
+    { income, extra: [], bills, goals: [], funEnabled: false, funPeople: [], emergencyMonthly: 0 },
+    4
+  );
+  const undefinedOk = withoutField === withZero && withoutField === 500;
+  if (!undefinedOk) failed++;
+  console.log(`  ${undefinedOk ? '✅' : '❌'} an unset fund is treated as zero — ${withoutField}`);
+
+  if (failed) throw new Error('emergency fund check failed');
+  console.log('');
+}
+
+/**
+ * Regression guard for transfers: money moved into the emergency fund or onto
+ * catch-up is an expense that isn't spending. The push has to charge the week
+ * for it (the money is gone) without calling it spending, and without letting
+ * it eat a planned-spending envelope it has nothing to do with.
+ */
+function transferCheck() {
+  console.log('Pure check: transfers reduce the week without being spending\n');
+
+  let failed = 0;
+  const check = (label: string, ok: boolean, detail = '') => {
+    console.log(`  ${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`);
+    if (!ok) failed++;
+  };
+
+  const envelopes = [{ category: 'groceries', weekly_amount: 150, skipped: false }];
+  const base = [
+    { amount: 100, type: 'expense', is_fun_money: false, category: 'groceries', transfer: false },
+  ];
+  const withTransfer = [
+    ...base,
+    { amount: 200, type: 'expense', is_fun_money: false, category: null, transfer: true },
+  ];
+
+  const edgeBefore = weekFreeToSpend({ weeklyAllowance: 500, weekTxns: base, envelopes });
+  const edgeAfter = weekFreeToSpend({ weeklyAllowance: 500, weekTxns: withTransfer, envelopes });
+  check('the transfer costs the week its full amount', edgeBefore - edgeAfter === 200, `${edgeBefore} -> ${edgeAfter}`);
+
+  // The client, over the same rows, has to land on the same number.
+  const clientAfter = computeEnvelopes({
+    weeklyAllowance: 500,
+    incomeBack: 0,
+    totalNonFunExpense: withTransfer.filter((t) => t.type === 'expense' && !t.is_fun_money).reduce((a, t) => a + t.amount, 0),
+    spentByCategory: { groceries: 100 },
+    envelopes: envelopes.map((e, i) => ({ id: String(i), ...e })),
+  }).freeToSpend;
+  check('and the client agrees exactly', edgeAfter === clientAfter, `edge ${edgeAfter} vs client ${clientAfter}`);
+
+  // If the transfer were let into spentByCategory it would push groceries
+  // $150 over its $150 budget, and the overage would be charged to free a
+  // second time. This pins that it isn't.
+  check('the groceries envelope is not charged for it', edgeAfter === 150, `${edgeAfter}`);
+
+  // And the message must stop calling it spending.
+  const spendBody = buildSpendAlertBody({ spenderName: 'Adrian', amount: 24, category: 'dining', remaining: 90 });
+  check('ordinary spending still reads as spent', spendBody === 'Adrian spent $24 on Dining — $90 left this week', spendBody);
+
+  const fundBody = buildSpendAlertBody({
+    spenderName: 'Adrian', amount: 200, category: null, remaining: 90,
+    transfer: true, label: 'To the emergency fund',
+  });
+  check('a fund transfer reads as moved', fundBody === 'Adrian moved $200 to the emergency fund — $90 left this week', fundBody);
+
+  const catchUpBody = buildSpendAlertBody({
+    spenderName: 'Adrian', amount: 25, category: null, remaining: 65,
+    transfer: true, label: 'Toward catch-up',
+  });
+  check('a catch-up payment reads as moved', catchUpBody === 'Adrian moved $25 toward catch-up — $65 left this week', catchUpBody);
+
+  // The old wording is what this exists to prevent: "Other" is just the
+  // fallback for the category a transfer deliberately doesn't have.
+  check('no transfer is ever described as "on Other"', !fundBody.includes('on Other') && !catchUpBody.includes('on Other'));
+
+  const overBody = buildSpendAlertBody({
+    spenderName: 'Adrian', amount: 200, category: null, remaining: -15,
+    transfer: true, label: 'To the emergency fund',
+  });
+  check('going over still reads as over budget', overBody.endsWith('$15 over budget'), overBody);
+
+  if (failed) throw new Error('transfer check failed');
+  console.log('');
+}
+
 pureEquivalenceCheck();
+transferCheck();
 carryForwardCheck();
 frequencyCheck();
 anchorDateCheck();
 billVarianceCheck();
 periodEquivalenceCheck();
+extraIncomeCheck();
+emergencyFundCheck();
 
 main().catch((err) => {
   console.error('verify-spend-alert failed:', err.message ?? err);

@@ -9,6 +9,7 @@ import {
   useCloseMonth,
   useExtraIncome,
   useFunPeople,
+  useEmergencyFundSettings,
   useFunSettings,
   useGoals,
   useIncome,
@@ -38,6 +39,7 @@ export function useEnsureMonthClosed(enabled: boolean) {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
   const snapshots = useMonthSnapshots(householdId);
   const closeMonth = useCloseMonth(householdId);
   const attempted = useRef<string | null>(null);
@@ -49,6 +51,7 @@ export function useEnsureMonthClosed(enabled: boolean) {
     goals.isLoading ||
     funPeople.isLoading ||
     funSettings.isLoading ||
+    fundSettings.isLoading ||
     snapshots.isLoading;
 
   const reviewedMonths = (snapshots.data ?? []).map((s) => s.month);
@@ -70,6 +73,7 @@ export function useEnsureMonthClosed(enabled: boolean) {
       goals: goals.data ?? [],
       funMoneyEnabled: funEnabled,
       funPeople: funPeople.data ?? [],
+      emergencyMonthly: fundSettings.data?.monthly_amount ?? 0,
       // The month being closed, so the snapshot records the weekly figure that
       // month was actually planned against.
       weeksInPeriod: weeksInPeriod(target, household.week_start_day ?? 0),
@@ -83,6 +87,7 @@ export function useEnsureMonthClosed(enabled: boolean) {
       goalsSavedTotal: (goals.data ?? []).reduce((a, g) => a + g.saved_amount, 0),
       funTotal: budget.funTotal,
       weeklyAllowance: budget.weeklyAllowance,
+      emergencyMonthly: budget.emergencyMonthly,
     });
     // Deliberately excludes the *.data arrays — this should fire once per
     // target month, not re-run every time a query refetches.

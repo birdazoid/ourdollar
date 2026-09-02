@@ -18,7 +18,9 @@ import {
   buildSpendAlertBody,
   currentPeriod,
   currentWeekBounds,
+  extraIncomePerWeek,
   weekFreeToSpend,
+  weekStartFor,
   weeklyAllowanceFrom,
 } from './logic.ts';
 
@@ -30,6 +32,8 @@ type Transaction = {
   category: string | null;
   type: 'expense' | 'income';
   is_fun_money: boolean;
+  transfer?: boolean;
+  label?: string | null;
   occurred_on: string;
 };
 
@@ -88,13 +92,25 @@ Deno.serve(async (req) => {
     // Weekly balance remaining — must match the app's own "free to spend"
     // figure exactly, including planned-category (envelope) reservations and
     // the household's own week-start day, or the push disagrees with the app.
-    const [inc, extra, bills, goals, funSettings, funPeople, household] = await Promise.all([
+    const [inc, extra, bills, goals, funSettings, funPeople, fundSettings, household] = await Promise.all([
       supabase.from('income_sources').select('amount, frequency').eq('household_id', householdId),
-      supabase.from('extra_income').select('amount').eq('household_id', householdId),
+      // occurred_on is part of the maths now, not decoration: extra income is
+      // divided at ARRIVAL across the weeks that were left then, rather than
+      // spread over the whole period.
+      supabase.from('extra_income').select('amount, occurred_on').eq('household_id', householdId),
       supabase.from('bills').select('paid, paid_amount, amount').eq('household_id', householdId),
       supabase.from('goals').select('monthly_amount').eq('household_id', householdId),
       supabase.from('fun_money_settings').select('enabled').eq('household_id', householdId).maybeSingle(),
       supabase.from('fun_money_people').select('monthly_amount').eq('household_id', householdId),
+      // Absent until a household sets one, and the table itself is absent
+      // until the emergency-fund-target migration is applied. Both read as 0
+      // below rather than as an error, so this function is safe to deploy on
+      // either side of that migration.
+      supabase
+        .from('emergency_fund_settings')
+        .select('monthly_amount')
+        .eq('household_id', householdId)
+        .maybeSingle(),
       supabase.from('households').select('week_start_day').eq('id', householdId).maybeSingle(),
     ]);
 
@@ -117,6 +133,7 @@ Deno.serve(async (req) => {
         goals: goals.data ?? [],
         funEnabled: !!funSettings.data?.enabled,
         funPeople: funPeople.data ?? [],
+        emergencyMonthly: Number(fundSettings.data?.monthly_amount ?? 0),
       },
       period.weeks
     );
@@ -127,13 +144,22 @@ Deno.serve(async (req) => {
       plannedWeekly,
       billVariance: billVarianceFrom({ bills: billRows }),
       weeksRemaining: period.weeksRemaining,
+      // One-off income is split across the weeks that were left when it
+      // arrived, so this is the share belonging to the week being quoted.
+      // Omitting it left the push describing a week the household's own screen
+      // had already added the bonus to.
+      extraPerWeek: extraIncomePerWeek({
+        extraIncome: extra.data ?? [],
+        weekStart: weekStartFor(anchor, weekStartDay),
+        weekStartDay,
+      }),
     });
 
     const { start, end } = currentWeekBounds(weekStartDay, anchor);
     const [weekTxns, envelopes, rollovers] = await Promise.all([
       supabase
         .from('transactions')
-        .select('amount, type, is_fun_money, category, income_destination')
+        .select('amount, type, is_fun_money, category, income_destination, transfer')
         .eq('household_id', householdId)
         .gte('occurred_on', start)
         .lte('occurred_on', end),
@@ -163,6 +189,8 @@ Deno.serve(async (req) => {
       amount: Number(record.amount),
       category: record.category,
       remaining,
+      transfer: !!record.transfer,
+      label: record.label,
     });
 
     const messages = pushTokens.map((to) => ({ to, title: 'OurDollar', body, sound: 'default' }));

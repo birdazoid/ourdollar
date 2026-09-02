@@ -69,11 +69,19 @@ export function currentWeekBounds(weekStartDay = 0, now: Date | string = new Dat
 
 export type BudgetRows = {
   income: { amount: number; frequency: string }[];
-  extra: { amount: number }[];
+  /**
+   * One-off income. `occurred_on` is required: it is NOT part of the monthly
+   * pool any more, it is divided at arrival across the weeks that were left
+   * then, which cannot be worked out without the date. See
+   * extraIncomePerWeek() below.
+   */
+  extra: { amount: number; occurred_on: string }[];
   bills: { paid: boolean; paid_amount: number | null; amount: number | null }[];
   goals: { monthly_amount: number }[];
   funEnabled: boolean;
   funPeople: { monthly_amount: number }[];
+  /** The emergency fund's monthly amount, committed alongside the goals. */
+  emergencyMonthly?: number;
 };
 
 // ---- Budget periods (mirrors src/lib/period.ts) ----
@@ -130,14 +138,82 @@ export function currentPeriod(weekStartDay: number, now: Date | string = new Dat
  * doesn't shift retroactively.
  */
 export function weeklyAllowanceFrom(r: BudgetRows, weeksInPeriod: number): number {
-  const totalIncome =
-    r.income.reduce((a, s) => a + Number(s.amount) * (FREQ_MULT[s.frequency] ?? 1), 0) +
-    r.extra.reduce((a, x) => a + Number(x.amount), 0);
+  const baseIncome = r.income.reduce(
+    (a, s) => a + Number(s.amount) * (FREQ_MULT[s.frequency] ?? 1),
+    0
+  );
+  const extraTotal = r.extra.reduce((a, x) => a + Number(x.amount), 0);
+  const totalIncome = baseIncome + extraTotal;
   const plannedFixed = r.bills.reduce((a, b) => a + Number(b.amount ?? 0), 0);
   const goalsMonthly = r.goals.reduce((a, g) => a + Number(g.monthly_amount), 0);
   const funTotal = r.funEnabled ? r.funPeople.reduce((a, p) => a + Number(p.monthly_amount), 0) : 0;
-  const plannedForWeeks = Math.max(0, totalIncome - plannedFixed - goalsMonthly - funTotal);
+  // The emergency fund's monthly amount is committed on the same terms as a
+  // savings goal's. Leaving it out quoted a balance too high by exactly that
+  // amount for any household that had set one.
+  const emergencyMonthly = Math.max(0, Number(r.emergencyMonthly ?? 0));
+  const committed = goalsMonthly + funTotal + emergencyMonthly;
+  // Extra income is subtracted straight back out, exactly as computeBudget()
+  // does it. The pool is divided by the period's FULL week count, which is
+  // right for money that was there from the start and wrong for a lump that
+  // lands midway: dividing a week-3 bonus by four hands half of it to weeks
+  // that are already over and frozen. It is applied per week instead, by
+  // extraIncomePerWeek() below. Written in this redundant-looking form so it
+  // stays a visible mirror of the client's own line.
+  const plannedForWeeks = Math.max(0, totalIncome - extraTotal - plannedFixed - committed);
   return Math.round((plannedForWeeks / Math.max(1, weeksInPeriod)) * 100) / 100;
+}
+
+/** 'YYYY-MM-01' for the month containing an ISO date. Mirrors monthOf(). */
+export function monthOf(iso: string): string {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+/** Start of the week containing an ISO date. Mirrors weekStartFor(). */
+export function weekStartFor(iso: string, weekStartDay: number): string {
+  const d = anchorDay(iso);
+  const back = (d.getUTCDay() - weekStartDay + 7) % 7;
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The share of one-off extra income belonging to a given week. Mirrors
+ * src/lib/money.ts's extraIncomePerWeek().
+ *
+ * Two bugs used to live in the version of this that didn't exist here at all,
+ * because extra income was simply folded into the pool. It divided by the
+ * period's full week count, so a $2,000 bonus arriving with two weeks left
+ * gave $1,000 of itself to weeks already finished. And nothing filtered by
+ * date, so an August bonus went on inflating the quoted balance in September,
+ * October and every month after, forever. The app fixed both; this file did
+ * not follow, so the push and the Week screen disagreed for any household that
+ * had ever logged a bonus.
+ *
+ * Both fall out of dividing at ARRIVAL: a row is split across the weeks that
+ * were left when it landed, and rows outside this week's own funding month are
+ * ignored.
+ */
+export function extraIncomePerWeek(args: {
+  extraIncome: { amount: number; occurred_on: string }[];
+  weekStart: string; // the week being asked about, YYYY-MM-DD
+  weekStartDay: number;
+}): number {
+  const { extraIncome, weekStart, weekStartDay } = args;
+  const period = monthOf(weekStart);
+
+  const total = (extraIncome ?? []).reduce((sum, row) => {
+    if (!row?.occurred_on) return sum;
+    const rowWeek = weekStartFor(row.occurred_on, weekStartDay);
+    // Only this week's own funding period, and only money that had already
+    // arrived by then.
+    if (monthOf(rowWeek) !== period) return sum;
+    if (rowWeek > weekStart) return sum;
+    // currentPeriod(...).weeksRemaining is this file's weeksRemainingInPeriod().
+    const weeksLeftAtArrival = Math.max(1, currentPeriod(weekStartDay, row.occurred_on).weeksRemaining);
+    return sum + Number(row.amount) / weeksLeftAtArrival;
+  }, 0);
+
+  return Math.round(total * 100) / 100;
 }
 
 /** Σ(actual − estimate) over paid bills — mirrors computeBudget's billVariance. */
@@ -150,15 +226,25 @@ export function billVarianceFrom(r: Pick<BudgetRows, 'bills'>): number {
   return Math.round((totalFixed - plannedFixed) * 100) / 100;
 }
 
-/** Mirrors src/lib/money.ts's adjustedWeeklyAllowance(). */
+/**
+ * Mirrors src/lib/money.ts's adjustedWeeklyAllowance().
+ *
+ * The early `return plannedWeekly` this used to open with was a second way for
+ * extra income to go missing: on a week where bills came in exactly on
+ * estimate, it returned before extraPerWeek could be added, and skipped the
+ * rounding the client applies. There is no shortcut here now, for the same
+ * reason there isn't one in the client.
+ */
 export function adjustedWeeklyAllowance(args: {
   plannedWeekly: number;
   billVariance: number;
   weeksRemaining: number;
+  /** This week's share of one-off extra income, from extraIncomePerWeek(). */
+  extraPerWeek?: number;
 }): number {
-  const { plannedWeekly, billVariance, weeksRemaining } = args;
-  if (billVariance === 0 || weeksRemaining <= 0) return plannedWeekly;
-  return Math.round((plannedWeekly - billVariance / weeksRemaining) * 100) / 100;
+  const { plannedWeekly, billVariance, weeksRemaining, extraPerWeek = 0 } = args;
+  const variance = billVariance === 0 || weeksRemaining <= 0 ? 0 : billVariance / weeksRemaining;
+  return Math.round((plannedWeekly - variance + extraPerWeek) * 100) / 100;
 }
 
 export type EnvelopeInput = { category: string; weekly_amount: number; skipped: boolean };
@@ -173,7 +259,16 @@ export type EnvelopeInput = { category: string; weekly_amount: number; skipped: 
  */
 export function weekFreeToSpend(args: {
   weeklyAllowance: number;
-  weekTxns: { amount: number; type: string; is_fun_money: boolean; category: string | null; income_destination?: string | null }[];
+  weekTxns: {
+    amount: number;
+    type: string;
+    is_fun_money: boolean;
+    category: string | null;
+    income_destination?: string | null;
+    /** Moved rather than spent. Counts against the week, never against a
+     *  planned-spending envelope. Mirrors isVariableExpense() in the client. */
+    transfer?: boolean;
+  }[];
   envelopes: EnvelopeInput[];
   /**
    * Signed total carried into this week by a settled rollover (Σ
@@ -195,8 +290,14 @@ export function weekFreeToSpend(args: {
     .filter((t) => t.type === 'income' && (t.income_destination ?? 'this_week') === 'this_week')
     .reduce((a, t) => a + Number(t.amount), 0);
 
+  // Transfers stay in totalNonFunExpense above (the money did leave the week)
+  // but are kept out of the per-category totals, so moving $200 to the
+  // emergency fund comes out of free money rather than eating the Groceries
+  // budget. Same split the client makes between isWeekExpense and
+  // isVariableExpense.
   const spentByCategory: Record<string, number> = {};
   for (const t of expenses) {
+    if (t.transfer) continue;
     const key = t.category ?? 'other';
     spentByCategory[key] = (spentByCategory[key] ?? 0) + Number(t.amount);
   }
@@ -222,9 +323,24 @@ export function buildSpendAlertBody(args: {
   amount: number;
   category: string | null;
   remaining: number;
+  /** Moved rather than spent — into the emergency fund, or onto catch-up. */
+  transfer?: boolean;
+  /** The transfer's own label, e.g. "To emergency fund". Ignored otherwise. */
+  label?: string | null;
 }): string {
-  const categoryName = CATEGORY_NAME[args.category ?? 'other'] ?? 'spending';
   const balanceText =
     args.remaining < 0 ? `${fmt(-args.remaining)} over budget` : `${fmt(args.remaining)} left this week`;
+
+  // A transfer still deserves a push — the week really did drop, and the other
+  // half of the household should know — but calling it "spent on Other" was
+  // wrong twice over: it wasn't spending, and "Other" is just the fallback for
+  // the category a transfer deliberately doesn't have.
+  if (args.transfer) {
+    const where = (args.label ?? '').trim().toLowerCase();
+    const destination = where.startsWith('to') || where.startsWith('toward') ? where : `to ${where}`;
+    return `${args.spenderName} moved ${fmt(Number(args.amount))} ${destination} — ${balanceText}`;
+  }
+
+  const categoryName = CATEGORY_NAME[args.category ?? 'other'] ?? 'spending';
   return `${args.spenderName} spent ${fmt(Number(args.amount))} on ${categoryName} — ${balanceText}`;
 }

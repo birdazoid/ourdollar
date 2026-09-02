@@ -150,10 +150,31 @@ export type EmergencyFundEntry = {
   id: string;
   household_id: string;
   amount: number;
-  kind: 'deposit' | 'withdrawal' | 'adjustment';
+  /**
+   * 'monthly' is the planned contribution, already held back from the weekly
+   * allowance before the week was divided. It's kept apart from 'deposit' —
+   * money moved in by hand out of a week that had already been given it —
+   * because only the second one costs the household a week's spending.
+   */
+  kind: 'deposit' | 'withdrawal' | 'adjustment' | 'monthly';
+  /** 'YYYY-MM' on a 'monthly' entry, null on every other kind. */
+  month_key: string | null;
   note: string | null;
   created_by_member_id: string | null;
   created_at: string;
+};
+
+/**
+ * The fund's target and monthly amount. Absent until a household sets one, so
+ * every reader treats a missing row as zeros rather than as an error.
+ */
+export type EmergencyFundSettings = {
+  household_id: string;
+  /** What they're aiming for. 0 = no target set. Never a ceiling. */
+  target_amount: number;
+  /** Held back from the plan each month, like a goal's monthly amount. */
+  monthly_amount: number;
+  updated_at: string;
 };
 
 // A closed month's full budget plan + bill outcome — the only durable record of
@@ -170,11 +191,38 @@ export type MonthSnapshot = {
   goals_monthly: number;
   goals_saved_total: number; // point-in-time sum of goals.saved_amount at close
   fun_total: number;
+  emergency_monthly: number; // the fund's monthly amount as it stood at close
   weekly_allowance: number;
   bills_paid_amount: number;
   bills_total_amount: number;
   bills_paid_count: number;
   bills_total_count: number;
+  created_at: string;
+};
+
+/**
+ * What one bill cost in one closed month.
+ *
+ * Written by close_month, at the only moment it can be: bills reset every
+ * month, so after the close the per-bill outcome exists nowhere else. Name and
+ * category are COPIED rather than joined, so renaming a bill doesn't rewrite
+ * what last March's record says it was called.
+ *
+ * `bill_id` goes null if the bill is later deleted — the history of what a
+ * household paid stays true even once they stop paying it.
+ */
+export type BillMonthLine = {
+  id: string;
+  household_id: string;
+  month: string; // 'YYYY-MM-01', the month that closed
+  bill_id: string | null;
+  name: string;
+  category: string;
+  /** What it was budgeted at. Null for a `varies` bill, which has no estimate. */
+  estimate: number | null;
+  /** What it actually cost — the paid figure where known, else the estimate. */
+  actual: number | null;
+  paid: boolean;
   created_at: string;
 };
 
@@ -209,6 +257,13 @@ export type Transaction = {
    * which is how every row behaved before destinations existed.
    */
   income_destination: IncomeDestination | null;
+  /**
+   * True for an expense that moved money rather than spent it: into the
+   * emergency fund, or onto the catch-up balance. It still reduces the week,
+   * but it is not spending on anything, so the category breakdown and the
+   * monthly trend leave it out. See isWeekExpense / isVariableExpense.
+   */
+  transfer: boolean;
   occurred_on: string;
   created_at: string;
 };

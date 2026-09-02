@@ -39,6 +39,7 @@ import {
 import { buildMonthComparison, monthBefore, monthLabel, monthStartISO } from '@/lib/month-review';
 import {
   useBills,
+  useEmergencyFundSettings,
   useExtraIncome,
   useFunPeople,
   useFunSettings,
@@ -62,6 +63,7 @@ export default function OverviewScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
   const transactions = useTransactions(householdId);
   const snapshots = useMonthSnapshots(householdId);
 
@@ -93,6 +95,7 @@ export default function OverviewScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    emergencyMonthly: fundSettings.data?.monthly_amount ?? 0,
     weeksInPeriod: weeksInPeriod(monthStartISO(new Date()), weekStartDay),
   });
 
@@ -112,6 +115,7 @@ export default function OverviewScreen() {
         totalFixed: budget.totalFixed,
         goalsMonthly: budget.goalsMonthly,
         funTotal: budget.funTotal,
+        emergencyMonthly: budget.emergencyMonthly,
         weeklyAllowance: budget.weeklyAllowance,
         monthlyPool: budget.monthlyPool,
         weeks: budget.weeksInPeriod,
@@ -126,6 +130,7 @@ export default function OverviewScreen() {
           totalFixed: viewedSnapshot.total_fixed,
           goalsMonthly: viewedSnapshot.goals_monthly,
           funTotal: viewedSnapshot.fun_total,
+          emergencyMonthly: viewedSnapshot.emergency_monthly,
           weeklyAllowance: viewedSnapshot.weekly_allowance,
           monthlyPool: viewedSnapshot.weekly_allowance * weeksInPeriod(viewedMonth, weekStartDay),
           weeks: weeksInPeriod(viewedMonth, weekStartDay),
@@ -162,7 +167,14 @@ export default function OverviewScreen() {
    * so it gets its own row rather than being left as an unexplained gap.
    */
   const unallocated = glance
-    ? Math.round((glance.variablePool - glance.monthlyPool - glance.goalsMonthly - glance.funTotal) * 100) / 100
+    ? Math.round(
+        (glance.variablePool -
+          glance.monthlyPool -
+          glance.goalsMonthly -
+          glance.funTotal -
+          glance.emergencyMonthly) *
+          100
+      ) / 100
     : 0;
 
   const comparison =
@@ -205,6 +217,7 @@ export default function OverviewScreen() {
             glance.monthlyPool -
             glance.goalsMonthly -
             glance.funTotal -
+            glance.emergencyMonthly -
             glance.extraTotal) *
             100
         ) / 100
@@ -217,6 +230,7 @@ export default function OverviewScreen() {
         { name: 'Weekly allowance', value: glance.monthlyPool, color: Palette.sage },
         { name: 'Savings goals', value: glance.goalsMonthly, color: Palette.terracotta },
         { name: 'Fun money', value: glance.funTotal, color: Palette.sandDeep },
+        { name: 'Emergency fund', value: glance.emergencyMonthly, color: Palette.sage },
         // Its own slice, so the ring still totals the income in its centre.
         // Extra income no longer joins the monthly pool: it's split across the
         // weeks that were left when it arrived.
@@ -239,6 +253,44 @@ export default function OverviewScreen() {
       .sort((a, b) => b.value - a.value);
   }, [transactions.data, viewedMonthKey]);
   const catGrand = catTotals.reduce((a, c) => a + c.value, 0);
+
+  /**
+   * What fixed bills cost each month.
+   *
+   * Read from month snapshots, which are the only durable record: bills reset
+   * every month at close, so today's bill rows describe this month and nothing
+   * before it. The current month isn't closed yet, so it comes from the live
+   * plan instead — the same `totalFixed` the card above shows.
+   *
+   * A month with no snapshot is null, NOT zero. The household either didn't
+   * exist yet or never closed that month, and drawing a $0 bar would claim
+   * they paid no bills at all. BarChart renders those as a faint gap.
+   */
+  // Deliberately not memoised. It reads from `budget`, which is rebuilt every
+  // render, and naming that in a dependency array blocks the React Compiler
+  // from optimising this whole component — a worse trade than recomputing a
+  // twelve-item loop.
+  const billsTrend: Bar[] = (() => {
+    const n = Number(range);
+    const byMonth: Record<string, number> = {};
+    (snapshots.data ?? []).forEach((snap) => {
+      byMonth[snap.month.slice(0, 7)] = Number(snap.total_fixed);
+    });
+    const out: Bar[] = [];
+    const now = new Date();
+    const thisMonthKey = monthKey(now);
+    const monthStyle = n >= 12 ? 'narrow' : 'short';
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = monthKey(d);
+      const value = key === thisMonthKey ? budget.totalFixed : byMonth[key] ?? null;
+      out.push({ label: d.toLocaleDateString('en-US', { month: monthStyle }), value });
+    }
+    return out;
+  })();
+
+  /** How many months of the chosen range actually have a bills figure. */
+  const billsMonthsWithData = billsTrend.filter((b) => b.value != null).length;
 
   // Real monthly variable-spend totals for the trend (fills in as history grows).
   const trend: Bar[] = useMemo(() => {
@@ -382,6 +434,15 @@ export default function OverviewScreen() {
               </View>
               <MoneyRow label="Savings goals" value={`−${fmt(glance.goalsMonthly)}`} sub color={Palette.terracottaDeep} dot={Palette.terracotta} />
               <MoneyRow label="Fun money" value={`−${fmt(glance.funTotal)}`} sub color={Palette.terracottaDeep} dot={Palette.sandDeep} />
+              {glance.emergencyMonthly > 0 && (
+                <MoneyRow
+                  label="Emergency fund"
+                  value={`−${fmt(glance.emergencyMonthly)}`}
+                  sub
+                  color={Palette.terracottaDeep}
+                  dot={Palette.sage}
+                />
+              )}
               {glance.extraTotal > 0 && (
                 <>
                   <MoneyRow
@@ -463,14 +524,20 @@ export default function OverviewScreen() {
               )}
 
               <View style={styles.divider} />
-              {comparison.changed.map((c) => (
-                <CompareRow key={c.label} label={c.label} delta={c.delta} invert={c.invert} />
+              {/* Each row carries its own figure now. "$686 less" never said
+                  less than what, and dropping the rows that hadn't moved meant
+                  a household with steady bills couldn't see the total here at
+                  all. */}
+              {comparison.items.map((c) => (
+                <CompareRow
+                  key={c.label}
+                  label={c.label}
+                  value={fmt(c.value)}
+                  delta={c.delta}
+                  invert={c.invert}
+                  compact
+                />
               ))}
-              {comparison.unchangedNote && (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.allowanceNote}>
-                  {comparison.unchangedNote}
-                </ThemedText>
-              )}
             </Card>
           )}
 
@@ -494,6 +561,30 @@ export default function OverviewScreen() {
           <Card style={styles.trendCard}>
             <BarChart data={trend} />
           </Card>
+
+          {/* Bills trend. Shares the range control above rather than carrying
+              a second identical one, so the two charts always cover the same
+              months and can be read against each other. */}
+          <SectionHeader title="Bills trend" />
+          <ThemedText type="small" themeColor="textSecondary" style={styles.trendNote}>
+            What your fixed bills came to each month, over the same range as above. A month with no
+            bar is one that was never closed, so there is no record of it.
+          </ThemedText>
+          <Card style={styles.trendCard}>
+            {billsMonthsWithData === 0 ? (
+              <ThemedText type="body" themeColor="textSecondary" style={styles.trendEmpty}>
+                No months recorded yet. Your bills total is saved when a month closes, so this fills
+                in from your first full month onward.
+              </ThemedText>
+            ) : (
+              <BarChart data={billsTrend} color={Palette.ink} />
+            )}
+          </Card>
+          {billsMonthsWithData === 1 && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.trendNote}>
+              One month so far. There will be something to compare from next month&apos;s close.
+            </ThemedText>
+          )}
 
           {/* Where the money went */}
           <SectionHeader
@@ -565,19 +656,22 @@ function CompareRow({
   delta,
   invert,
   divider,
+  compact,
 }: {
   label: string;
   value?: string;
   delta: number;
   invert?: boolean;
   divider?: boolean;
+  /** Smaller figure, for the supporting rows below the two headline ones. */
+  compact?: boolean;
 }) {
   return (
     <View style={[styles.compareRow, divider && styles.compareDivider]}>
       <ThemedText type="body" style={styles.compareLabel}>
         {label}
       </ThemedText>
-      {value && <ThemedText type="subtitle">{value}</ThemedText>}
+      {value && <ThemedText type={compact ? 'bodyBold' : 'subtitle'}>{value}</ThemedText>}
       <View style={value ? styles.compareDelta : undefined}>
         <DeltaText delta={delta} invert={invert} type={value ? 'body' : 'bodyBold'} />
       </View>
@@ -655,6 +749,7 @@ const styles = StyleSheet.create({
   allowanceNote: { marginTop: Spacing.one, lineHeight: 22 },
   trendNote: { marginTop: -Spacing.two, marginBottom: Spacing.three, marginLeft: Spacing.one },
   rangeWrap: { marginBottom: Spacing.three },
+  trendEmpty: { paddingVertical: Spacing.three, textAlign: 'center' },
   trendCard: { paddingVertical: Spacing.three },
   emptyCats: { textAlign: 'center', paddingVertical: Spacing.three },
   stack: { flexDirection: 'row', height: 16, borderRadius: Radius.pill, overflow: 'hidden', marginBottom: Spacing.three },

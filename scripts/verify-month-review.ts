@@ -91,6 +91,7 @@ function pureChecks() {
   check('buckets cover all 31 days of July with no leakage', covered.size === 31 && !covered.has('OUT'), `covered ${covered.size}`);
 
   comparisonChecks();
+  billsTrendChecks();
   deltaWordingChecks();
 }
 
@@ -152,15 +153,34 @@ function comparisonChecks() {
   check('the MONTH is down $171', reported.poolDelta === -171, `got ${reported.poolDelta}`);
   check('the two figures are flagged as opposed', reported.opposed, 'weekly up while the month shrank');
   check('the week-count change is flagged', reported.weeksChanged);
+  // Every row is reported now, movement or not, each carrying its own figure.
+  // The card used to drop the steady ones and summarise them in a sentence,
+  // which meant "$99 more" never said more than WHAT — and a household whose
+  // bills held steady lost the total from the card altogether.
+  check('all three rows are reported', reported.items.length === 3, JSON.stringify(reported.items.map((i) => i.label)));
+
+  const billsRow = reported.items.find((i) => i.label === 'Fixed bills');
+  check('the bills row still carries its movement', billsRow?.delta === 99, `got ${billsRow?.delta}`);
+  check('and now carries the figure itself', billsRow?.value === 6535, `got ${billsRow?.value}`);
+  // A rise in bills is bad news, unlike a rise in income — this is what
+  // colours it terracotta instead of green.
+  check('and is still marked as one where up is bad', billsRow?.invert === true);
+
+  const incomeRow = reported.items.find((i) => i.label === 'Income');
+  check('a steady row survives instead of vanishing', !!incomeRow && incomeRow.delta === 0);
+  check('and still shows what income actually is', incomeRow?.value === 8504, `got ${incomeRow?.value}`);
+
+  const goalsRow = reported.items.find((i) => i.label === 'Saved toward goals');
+  check('the goals row reports its own total', goalsRow?.value === 0 && goalsRow?.delta === 0);
+
+  // Every value must be the CURRENT month's figure, never the previous one.
+  // Reading them off `prev` would be invisible whenever nothing moved.
   check(
-    'only the bills row survives, income and goals collapse',
-    reported.changed.length === 1 && reported.changed[0].label === 'Fixed bills' && reported.changed[0].delta === 99,
-    JSON.stringify(reported.changed)
-  );
-  check(
-    'unchanged items read as one sentence',
-    reported.unchangedNote === 'Income and saved toward goals are unchanged.',
-    `got "${reported.unchangedNote}"`
+    'every value comes from the month being viewed',
+    reported.items.every((i) =>
+      i.label === 'Income' ? i.value === 8504 : i.label === 'Fixed bills' ? i.value === 6535 : i.value === 0
+    ),
+    JSON.stringify(reported.items)
   );
 
   // Same week count both months: the two deltas must agree in direction, and
@@ -182,12 +202,82 @@ function comparisonChecks() {
     now: { weeklyAllowance: 450, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
     prev: { weeklyAllowance: 450, totalIncome: 8504, totalFixed: 6535, goalsSaved: 100 },
   });
-  check('a flat month lists no changed rows', flat.changed.length === 0);
+  // The case that motivated the change: nothing moved, so the old card showed
+  // no figures at all and the household could not see what their bills were.
+  check('a flat month still reports all three rows', flat.items.length === 3);
+  check('all of them read as no change', flat.items.every((i) => i.delta === 0));
   check(
-    'and says so in one line',
-    flat.unchangedNote === 'Income, fixed bills and saved toward goals are unchanged.',
-    `got "${flat.unchangedNote}"`
+    'and every figure is still there to read',
+    flat.items.find((i) => i.label === 'Fixed bills')?.value === 6535 &&
+      flat.items.find((i) => i.label === 'Income')?.value === 8504 &&
+      flat.items.find((i) => i.label === 'Saved toward goals')?.value === 100,
+    JSON.stringify(flat.items)
   );
+}
+
+/**
+ * The bills trend series on Overview: what fixed bills cost each month.
+ *
+ * Bills reset at month close, so a closed month's snapshot is the only record
+ * that survives. The distinction this pins is between a month with no snapshot
+ * and a month that genuinely cost nothing — the first must be null so the
+ * chart leaves a gap, because drawing $0 would claim the household paid no
+ * bills at all that month.
+ */
+function billsTrendChecks() {
+  console.log('\nA3. Bills trend series');
+
+  // Mirrors the builder in overview.tsx: snapshots for closed months, the live
+  // plan for the current one, null for anything unrecorded.
+  const build = (args: {
+    snapshots: { month: string; total_fixed: number }[];
+    liveTotalFixed: number;
+    months: string[]; // 'YYYY-MM', oldest first, last one being "this month"
+  }) => {
+    const byMonth: Record<string, number> = {};
+    args.snapshots.forEach((s) => {
+      byMonth[s.month.slice(0, 7)] = s.total_fixed;
+    });
+    const thisMonth = args.months[args.months.length - 1];
+    return args.months.map((m) => (m === thisMonth ? args.liveTotalFixed : byMonth[m] ?? null));
+  };
+
+  const snapshots = [
+    { month: '2026-07-01', total_fixed: 6436 },
+    { month: '2026-08-01', total_fixed: 6778 },
+  ];
+
+  const three = build({ snapshots, liveTotalFixed: 6092, months: ['2026-07', '2026-08', '2026-09'] });
+  check('closed months come from their snapshot', three[0] === 6436 && three[1] === 6778, JSON.stringify(three));
+  check('the current month comes from the live plan', three[2] === 6092, `got ${three[2]}`);
+  // The $686 the household saw on the comparison card is exactly this gap.
+  check('the drop matches the comparison card', (three[1] as number) - (three[2] as number) === 686, `${three[1]} - ${three[2]}`);
+
+  const wide = build({
+    snapshots,
+    liveTotalFixed: 6092,
+    months: ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'],
+  });
+  check('months before any snapshot are null, not zero', wide.slice(0, 3).every((v) => v === null), JSON.stringify(wide));
+  check('and the recorded ones are unaffected', wide[3] === 6436 && wide[4] === 6778 && wide[5] === 6092);
+  // A null must never be read as a number anywhere downstream.
+  check('nulls are absent from the recorded count', wide.filter((v) => v != null).length === 3);
+
+  // A brand-new household: nothing closed yet, so only the live month has a
+  // figure. The chart says so rather than drawing a lone bar with no context.
+  const fresh = build({ snapshots: [], liveTotalFixed: 6092, months: ['2026-07', '2026-08', '2026-09'] });
+  check('a household with no closed months has one figure', fresh.filter((v) => v != null).length === 1);
+  check('and it is the live one', fresh[2] === 6092);
+
+  // A month that genuinely cost nothing is still a real, recorded zero, and
+  // must be drawn as a bar rather than treated as missing.
+  const zero = build({
+    snapshots: [{ month: '2026-07-01', total_fixed: 0 }],
+    liveTotalFixed: 6092,
+    months: ['2026-07', '2026-08', '2026-09'],
+  });
+  check('a real $0 month is recorded, not a gap', zero[0] === 0 && zero[0] !== null, JSON.stringify(zero));
+  check('while the unrecorded month beside it stays null', zero[1] === null);
 }
 
 async function dbChecks() {
@@ -291,6 +381,64 @@ async function dbChecks() {
     const { data: autoCarry } = await u1.from('bill_carryovers').select('name, amount').eq('household_id', hid).eq('from_month', MONTH);
     check('unpaid bills auto-flagged as carryovers (Rent + Water)', (autoCarry ?? []).length === 2, `got ${(autoCarry ?? []).length}`);
 
+    // ---- per-bill history ----
+    // The reset above has already wiped paid/paid_amount and promoted 421 to
+    // 483, so if these lines weren't captured before it, June's per-bill
+    // outcome would be gone for good. Everything below reads what survived.
+    const { data: lines } = await u1
+      .from('bill_month_lines')
+      .select('*')
+      .eq('household_id', hid)
+      .eq('month', MONTH);
+    const line = (name: string) => (lines ?? []).find((l: any) => l.name === name);
+    check('a line was written for every bill', (lines ?? []).length === 4, `got ${(lines ?? []).length}`);
+
+    // The whole point: the estimate and the actual are BOTH kept, so "$62 more
+    // than we planned" stays answerable after the bill row has moved on.
+    check(
+      'the over-estimate bill kept both figures (est 421, actual 483)',
+      Number(line('Electric')?.estimate) === 421 && Number(line('Electric')?.actual) === 483,
+      JSON.stringify(line('Electric'))
+    );
+    check(
+      'and the bill row itself has already moved on to 483',
+      Number(electricAfter?.amount) === 483,
+      `got ${electricAfter?.amount}`
+    );
+    check('a bill paid at estimate records the same figure twice', Number(line('Gym')?.estimate) === 40 && Number(line('Gym')?.actual) === 40);
+    check('and is recorded as paid', line('Gym')?.paid === true);
+
+    // An unpaid bill's "actual" is its estimate — the same rule
+    // billMonthlyCost() follows, so a line and the snapshot total it fed are
+    // always derived the same way.
+    check('an unpaid bill falls back to its estimate', Number(line('Rent')?.actual) === 1500 && line('Rent')?.paid === false);
+    // A varies bill with no estimate has nothing honest to record, so it
+    // records nothing rather than a zero that would read as "cost nothing".
+    check('a varies bill with no estimate records null, not 0', line('Water')?.estimate === null && line('Water')?.actual === null, JSON.stringify(line('Water')));
+
+    // Name and category are copied, not joined: renaming a bill later must not
+    // rewrite what June's record says it was.
+    check('the line copies name and category', line('Electric')?.category === 'Utilities');
+    await u1.from('bills').update({ name: 'Electric (OG&E)' }).eq('id', electricBill!.id);
+    const { data: afterRename } = await u1
+      .from('bill_month_lines')
+      .select('name')
+      .eq('household_id', hid)
+      .eq('month', MONTH)
+      .eq('bill_id', electricBill!.id)
+      .single();
+    check('renaming the bill does not rewrite history', afterRename?.name === 'Electric', `got ${afterRename?.name}`);
+    await u1.from('bills').update({ name: 'Electric' }).eq('id', electricBill!.id);
+
+    // The lines must add up to the total the snapshot recorded, or the chart
+    // and the breakdown explaining it would disagree.
+    const linesTotal = (lines ?? []).reduce((a: number, l: any) => a + Number(l.actual ?? 0), 0);
+    check(
+      'the lines sum to the snapshot total (2023)',
+      linesTotal === Number(snap?.bills_total_amount),
+      `${linesTotal} vs ${snap?.bills_total_amount}`
+    );
+
     console.log('\n2. close_month is idempotent + authorization-checked');
     const { data: reclose } = await u1.rpc('close_month', {
       p_household_id: hid, p_month: MONTH, p_total_income: 9999, p_total_fixed: 0,
@@ -301,6 +449,8 @@ async function dbChecks() {
     check('re-closing did NOT duplicate carryovers', (carryStill ?? []).length === 2, `got ${(carryStill ?? []).length}`);
     const { data: snapUnchanged } = await u1.from('month_snapshots').select('total_income').eq('household_id', hid).eq('month', MONTH).single();
     check('re-closing did NOT overwrite the snapshot', Number(snapUnchanged?.total_income) === 5000, `got ${snapUnchanged?.total_income}`);
+    const { data: linesStill } = await u1.from('bill_month_lines').select('id').eq('household_id', hid).eq('month', MONTH);
+    check('re-closing did NOT duplicate the bill lines', (linesStill ?? []).length === 4, `got ${(linesStill ?? []).length}`);
 
     const { data: strangerClose } = await u2.rpc('close_month', {
       p_household_id: hid, p_month: '2026-05-01', p_total_income: 1, p_total_fixed: 0,
@@ -320,6 +470,18 @@ async function dbChecks() {
     const { data: snapAfter } = await u1.from('month_snapshots').select('bills_paid_amount, bills_paid_count').eq('household_id', hid).eq('month', MONTH).single();
     check('June credited: paid_amount 523→2023', Number(snapAfter?.bills_paid_amount) === 2023, `got ${snapAfter?.bills_paid_amount}`);
     check('June credited: paid_count 2→3', snapAfter?.bills_paid_count === 3, `got ${snapAfter?.bills_paid_count}`);
+    // The bill's own line has to be corrected too. Without this the per-bill
+    // history would say "not paid" forever for a bill the month total counts
+    // as paid — two records of one fact, disagreeing.
+    const { data: rentLine } = await u1
+      .from('bill_month_lines')
+      .select('paid, actual')
+      .eq('household_id', hid)
+      .eq('month', MONTH)
+      .eq('bill_id', rentBill!.id)
+      .single();
+    check('the bill line now reads as paid', rentLine?.paid === true, JSON.stringify(rentLine));
+    check('and carries what was actually paid', Number(rentLine?.actual) === 1500, `got ${rentLine?.actual}`);
 
     console.log('\n4. BUGFIX: a varies-amount bill can be marked PAID (not silently dismissed)');
     const { data: waterCo } = await u1.from('bill_carryovers').select('id, amount').eq('household_id', hid).eq('name', 'Water').eq('resolved', false).single();
@@ -334,6 +496,16 @@ async function dbChecks() {
     const { data: snapVaries } = await u1.from('month_snapshots').select('bills_paid_amount, bills_paid_count').eq('household_id', hid).eq('month', MONTH).single();
     check('paid COUNT credited for the unknown amount (3→4)', snapVaries?.bills_paid_count === 4, `got ${snapVaries?.bills_paid_count}`);
     check('paid AMOUNT unchanged (honest: amount is unknown)', Number(snapVaries?.bills_paid_amount) === 2023, `got ${snapVaries?.bills_paid_amount}`);
+    // Same for the line: paid becomes true, but an unknown amount must not
+    // overwrite the null with a zero that would read as "cost nothing".
+    const { data: waterLines } = await u1
+      .from('bill_month_lines')
+      .select('name, paid, actual')
+      .eq('household_id', hid)
+      .eq('month', MONTH);
+    const water = (waterLines ?? []).find((l: any) => l.name === 'Water');
+    check('the varies line reads as paid', water?.paid === true, JSON.stringify(water));
+    check('with its amount still unknown, not zeroed', water?.actual === null, `got ${water?.actual}`);
 
     console.log('\n5. Dismissing does NOT credit history');
     const { data: co2 } = await u1

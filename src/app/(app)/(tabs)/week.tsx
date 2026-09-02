@@ -33,6 +33,7 @@ import {
   fmt,
   funMoneyUsed,
   isVariableExpense,
+  isWeekExpense,
   isWeekIncome,
   splitAllowancePots,
   type EnvelopeStatus,
@@ -44,6 +45,7 @@ import {
   useEnvelopeMutations,
   useExtraIncome,
   useFunPeople,
+  useEmergencyFundSettings,
   useFunSettings,
   useGoals,
   useIncome,
@@ -99,6 +101,7 @@ export default function WeekScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
   const envelopes = useEnvelopes(householdId);
   const envMut = useEnvelopeMutations(householdId);
   const catchUp = useCatchUpEntries(householdId);
@@ -128,6 +131,7 @@ export default function WeekScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    emergencyMonthly: fundSettings.data?.monthly_amount ?? 0,
   };
   const budget = computeBudget({
     ...budgetInputs,
@@ -187,8 +191,11 @@ export default function WeekScreen() {
   const weekTxns = (transactions.data ?? []).filter(
     (t) => t.occurred_on >= week.start && t.occurred_on <= week.end
   );
+  // isWeekExpense, not isVariableExpense: money moved into the emergency fund
+  // or onto catch-up really did leave this week, and the whole point of those
+  // flows charging the week is that the allowance reflects it.
   const spent = weekTxns
-    .filter(isVariableExpense)
+    .filter(isWeekExpense)
     .reduce((a, t) => a + t.amount, 0);
   const incomeBack = weekTxns.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0);
 
@@ -211,8 +218,10 @@ export default function WeekScreen() {
   const lastWeekTxns = (transactions.data ?? []).filter(
     (t) => t.occurred_on >= lastWeek.start && t.occurred_on <= lastWeek.end
   );
+  // Same reason as `spent` above — a transfer out of last week has to be in
+  // last week's figure, or the rollover prompt offers up money already gone.
   const lastSpent = lastWeekTxns
-    .filter(isVariableExpense)
+    .filter(isWeekExpense)
     .reduce((a, t) => a + t.amount, 0);
   const lastIncomeBack = lastWeekTxns.filter(isWeekIncome).reduce((a, t) => a + t.amount, 0);
   // Measured against what last week was PLANNED at, not this week's allowance:
@@ -304,6 +313,11 @@ export default function WeekScreen() {
 
   // Envelopes ("planned spending") reshape the CURRENT week only — past weeks
   // keep the plain "money left" view (budgets/skip aren't tracked historically).
+  // isVariableExpense here, so a transfer never eats a planned-spending
+  // budget: moving $200 to the fund should come out of free money, not out of
+  // Groceries. It stays inside `spent` above, so computeEnvelopes counts it in
+  // the un-enveloped remainder — which is exactly where it belongs, and keeps
+  // the spent + reserved + free invariant intact.
   const spentByCategory: Record<string, number> = {};
   for (const t of weekTxns) {
     if (isVariableExpense(t)) {
@@ -794,7 +808,9 @@ export default function WeekScreen() {
                         )
                       }
                       title={t.label ?? cat.name}
-                      subtitle={`${isIncome ? incomeWentTo(t.income_destination) : cat.name} · ${memberName(t.member_id)}`}
+                      // A transfer has no category, so naming one would be a
+                      // lie. It says what it is instead.
+                      subtitle={`${isIncome ? incomeWentTo(t.income_destination) : t.transfer ? 'Moved, not spent' : cat.name} · ${memberName(t.member_id)}`}
                       badge={
                         t.is_fun_money ? (
                           <View style={styles.funBadge}>
@@ -804,7 +820,20 @@ export default function WeekScreen() {
                           </View>
                         ) : undefined
                       }
-                      onPress={isCurrent ? () => router.push(`/add-expense?id=${t.id}`) : undefined}
+                      /**
+                       * Transfers are deliberately not editable. The row is
+                       * one half of a pair — the other half is an entry on the
+                       * emergency fund or the catch-up balance — and
+                       * add-expense only knows about this half, so editing or
+                       * deleting it here would leave the two permanently
+                       * disagreeing with no sign anything had happened.
+                       * Reverse one from its own sheet instead.
+                       */
+                      onPress={
+                        isCurrent && !t.transfer
+                          ? () => router.push(`/add-expense?id=${t.id}`)
+                          : undefined
+                      }
                       right={
                         <ThemedText
                           type="bodyBold"

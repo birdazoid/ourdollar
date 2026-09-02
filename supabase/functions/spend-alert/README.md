@@ -18,9 +18,11 @@ because Deno can't import `src/lib/*`:
 
 | Input | Source |
 | --- | --- |
-| Income, incl. biweekly (26/12) and weekly (52/12) | `income_sources`, `extra_income` |
+| Income, incl. biweekly (26/12) and weekly (52/12) | `income_sources` |
+| **One-off income, divided at arrival across the weeks left then** | `extra_income` (needs `occurred_on`) |
 | Bills at their **estimate**, variance spread over the weeks left | `bills` |
 | Goals and fun money | `goals`, `fun_money_settings`, `fun_money_people` |
+| **The emergency fund's monthly amount** | `emergency_fund_settings` |
 | Weeks in the period (4 or 5, never a fixed 4) | derived, see `logic.ts` |
 | Planned-category reservations and overages | `weekly_envelopes` |
 | **Money carried in from settling last week** | `week_rollovers.applied_amount` |
@@ -34,6 +36,15 @@ period, quoted a different week than the app was showing.
 `npm run verify:spend-alert` pins every one of these to the client's own
 functions and fails on any drift. Add a guard there before changing this math.
 
+**And make the guard actually bite.** Every parity check in that script used to
+pass `extraIncome: []` to both sides. With no extra income the two formulas
+agree by definition, so when `src/lib/money.ts` changed how one-off income
+works (`0df89fb`, `4dc81f5`) and this file didn't follow, the suite kept
+passing. The push went on folding a bonus into the divided pool and never
+filtering it by date, which for a $2,000 bonus meant a planned week of $800
+against the app's $400, and $500 a week too high in every month afterwards,
+forever. A check that exercises only the zero case is not a check.
+
 ## Status
 
 - ✅ Logic verified against the live DB via `npm run verify:spend-alert`
@@ -42,6 +53,15 @@ functions and fails on any drift. Add a guard there before changing this math.
 - ✅ Deployed, with the Database Webhook live.
 - ⚠️ `logic.ts` changes need a **redeploy** to take effect (see below) — the
   verify script exercises the local copy, not what Supabase is running.
+- ⚠️ **Redeploy pending**: extra-income parity, the emergency fund's monthly
+  amount, and the `adjustedWeeklyAllowance` short-circuit that swallowed
+  `extraPerWeek` are all fixed in this directory but NOT yet live.
+- ℹ️ Safe to deploy before or after the emergency-fund-target migration: a
+  missing `emergency_fund_settings` table reads as 0, not as an error.
+- ℹ️ A test row with a null `member_id` sends "Someone spent …" AND defeats the
+  rule that stops the spender notifying themselves, so it reaches everyone.
+  Nothing but this function's own verify script should ever insert an expense
+  into a live household.
 - ⬜ True multi-device delivery (a genuinely separate recipient) needs a 2nd
   account signed in on a 2nd device.
 

@@ -7,8 +7,10 @@ import type {
   Account,
   Bill,
   BillCarryover,
+  BillMonthLine,
   CatchUpEntry,
   EmergencyFundEntry,
+  EmergencyFundSettings,
   ExtraIncome,
   FunMoneyPerson,
   FunMoneySettings,
@@ -369,6 +371,7 @@ export type CloseMonthInput = {
   goalsSavedTotal: number;
   funTotal: number;
   weeklyAllowance: number;
+  emergencyMonthly: number;
 };
 
 /**
@@ -397,6 +400,7 @@ export function useCloseMonth(householdId: string | null) {
         p_goals_saved_total: input.goalsSavedTotal,
         p_fun_total: input.funTotal,
         p_weekly_allowance: input.weeklyAllowance,
+        p_emergency_monthly: input.emergencyMonthly,
       });
       if (error) throw error;
       return (data as string) ?? 'closed';
@@ -1013,7 +1017,95 @@ export function useCatchUpMutations(householdId: string | null) {
     onSuccess: settle,
   });
 
-  return { add, remove };
+  /**
+   * Pays catch-up down out of this week's allowance.
+   *
+   * There used to be a bare "pay some off" button here, and it was removed
+   * because it dropped the balance with nothing behind it. This is the thing
+   * that button should have been: the balance comes down AND an ordinary
+   * expense row charges the week, which is the same real money as finishing a
+   * week under budget and putting the leftover toward it. The only difference
+   * is that it's committed on the day rather than discovered on Sunday.
+   *
+   * It also can't be used to wish the debt away. Charge the week $40 and then
+   * spend the whole week anyway, and the week finishes $40 over — which the
+   * rollover prompt offers to send straight back to catch-up. The debt
+   * survives everything except actually going without.
+   *
+   * Both halves in one mutation so a failure is reported once, rather than
+   * leaving the household to guess which half landed.
+   */
+  const payFromWeek = useMutation({
+    mutationFn: async (args: {
+      amount: number;
+      owed: number;
+      occurredOn: string;
+      memberId: string | null;
+    }) => {
+      // Never more than is owed. Paying past zero would leave a credit that
+      // reads as the household being owed money by itself, and the balance
+      // floors at zero anyway, so the excess would simply vanish.
+      const amount = Math.round(Math.min(Math.abs(args.amount), args.owed) * 100) / 100;
+      if (amount <= 0) return;
+
+      const { error } = await supabase.from('catchup_entries').insert({
+        household_id: householdId,
+        amount: -amount,
+        kind: 'payment',
+        note: 'From this week',
+        created_by_member_id: args.memberId,
+      });
+      if (error) throw error;
+
+      const { error: tErr } = await supabase.from('transactions').insert({
+        household_id: householdId,
+        member_id: args.memberId,
+        amount,
+        // No category, the same as a deposit into the emergency fund. Making
+        // up lost ground isn't spending on anything, and filing it under a
+        // category would put it in the "where did the week go" breakdown as
+        // though the household had bought something with it.
+        category: null,
+        label: 'Toward catch-up',
+        type: 'expense',
+        is_fun_money: false,
+        // Charges the week, but never counts as spending on anything.
+        transfer: true,
+        occurred_on: args.occurredOn,
+      });
+      if (tErr) throw tErr;
+    },
+    onSuccess: () => {
+      settle();
+      qc.invalidateQueries({ queryKey: ['transactions', householdId] });
+    },
+  });
+
+  return { add, remove, payFromWeek };
+}
+
+/**
+ * What one bill has cost in each closed month, newest first.
+ *
+ * Scoped to a single bill and only fetched while its sheet is open, because a
+ * household with 31 bills and a year of history has ~370 of these and none of
+ * them are needed until someone asks about one bill.
+ */
+export function useBillHistory(householdId: string | null, billId: string | null) {
+  return useQuery({
+    queryKey: ['bill_month_lines', householdId, billId],
+    enabled: !!householdId && !!billId,
+    queryFn: async (): Promise<BillMonthLine[]> => {
+      const { data, error } = await supabase
+        .from('bill_month_lines')
+        .select('*')
+        .eq('household_id', householdId!)
+        .eq('bill_id', billId!)
+        .order('month', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as BillMonthLine[];
+    },
+  });
 }
 
 // ---- Emergency fund ----
@@ -1035,8 +1127,36 @@ export function useEmergencyFund(householdId: string | null) {
   });
 }
 
+/**
+ * The fund's target and monthly amount, or null until one is set.
+ *
+ * maybeSingle rather than single: a household that has never opened the fund
+ * has no row, and that's the normal state, not a failure. Every caller reads
+ * `?? 0` off both figures, which is also what keeps the budget correct for
+ * every household that existed before the fund had a target at all.
+ */
+export function useEmergencyFundSettings(householdId: string | null) {
+  return useQuery({
+    queryKey: ['emergency_fund_settings', householdId],
+    enabled: !!householdId,
+    queryFn: async (): Promise<EmergencyFundSettings | null> => {
+      const { data, error } = await supabase
+        .from('emergency_fund_settings')
+        .select('*')
+        .eq('household_id', householdId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as EmergencyFundSettings | null;
+    },
+  });
+}
+
 export function useEmergencyFundMutations(householdId: string | null) {
   const qc = useQueryClient();
+  const settleFund = () => {
+    qc.invalidateQueries({ queryKey: ['emergency_fund_entries', householdId] });
+    qc.invalidateQueries({ queryKey: ['transactions', householdId] });
+  };
 
   /**
    * Takes money out, and puts it into the week it was taken in.
@@ -1082,13 +1202,119 @@ export function useEmergencyFundMutations(householdId: string | null) {
       });
       if (tErr) throw tErr;
     },
+    onSuccess: settleFund,
+  });
+
+  /**
+   * Puts money in by hand, out of the week it's put in.
+   *
+   * The exact mirror of withdraw(), for the same reason: money can't appear in
+   * the fund from nowhere. This week has already been handed its allowance, so
+   * moving some of it into the fund has to cost the week that much, which an
+   * ordinary expense row does.
+   *
+   * No cap on the amount. A household is allowed to decide the fund matters
+   * more than the rest of their week, and a week that ends short is a state
+   * the app already explains at the rollover prompt rather than one to
+   * prevent here.
+   *
+   * Deliberately NOT the same thing as contributeMonthly() below: that money
+   * was held back from the plan before the week was divided, so charging a
+   * week for it would take it twice.
+   */
+  const deposit = useMutation({
+    mutationFn: async (args: {
+      amount: number;
+      note: string;
+      occurredOn: string;
+      memberId: string | null;
+    }) => {
+      const amount = Math.round(Math.abs(args.amount) * 100) / 100;
+      if (amount <= 0) return;
+
+      const { error } = await supabase.from('emergency_fund_entries').insert({
+        household_id: householdId,
+        amount,
+        kind: 'deposit',
+        note: args.note || 'Put in',
+        created_by_member_id: args.memberId,
+      });
+      if (error) throw error;
+
+      const { error: tErr } = await supabase.from('transactions').insert({
+        household_id: householdId,
+        member_id: args.memberId,
+        amount,
+        // No category on purpose. It isn't spending on anything, and giving it
+        // one would file savings inside the "where did the week go" breakdown
+        // as though the household had bought something with it.
+        category: null,
+        // Constant, not derived from the note: this is the ledger row's title
+        // and the phrase the spend-alert push reads out, so it has to name the
+        // destination in both places regardless of what the note says.
+        label: 'To the emergency fund',
+        type: 'expense',
+        is_fun_money: false,
+        // Charges the week, but never counts as spending on anything.
+        transfer: true,
+        occurred_on: args.occurredOn,
+      });
+      if (tErr) throw tErr;
+    },
+    onSuccess: settleFund,
+  });
+
+  /**
+   * Records the month's planned amount.
+   *
+   * No transaction, on purpose. computeBudget() already held this back before
+   * dividing the weekly allowance, so the week never had the money; charging a
+   * week for it would take the same amount twice. This is the same rule "Mark
+   * paid" follows on a savings goal, which only moves saved_amount.
+   *
+   * A duplicate is a no-op rather than an error: the unique index means two
+   * devices tapping at once can't double-count, and the second one has nothing
+   * to report.
+   */
+  const contributeMonthly = useMutation({
+    mutationFn: async (args: { amount: number; monthKey: string; memberId: string | null }) => {
+      const amount = Math.round(Math.abs(args.amount) * 100) / 100;
+      if (amount <= 0) return;
+
+      const { error } = await supabase.from('emergency_fund_entries').insert({
+        household_id: householdId,
+        amount,
+        kind: 'monthly',
+        month_key: args.monthKey,
+        note: "This month's amount",
+        created_by_member_id: args.memberId,
+      });
+      // 23505 is a unique violation — this month's amount is already in.
+      if (error && error.code !== '23505') throw error;
+    },
+    onSuccess: settleFund,
+  });
+
+  /** Sets the target and the monthly amount. Upsert: the row may not exist. */
+  const saveSettings = useMutation({
+    mutationFn: async (args: { targetAmount: number; monthlyAmount: number }) => {
+      const { error } = await supabase.from('emergency_fund_settings').upsert(
+        {
+          household_id: householdId,
+          target_amount: Math.max(0, Math.round(args.targetAmount * 100) / 100),
+          monthly_amount: Math.max(0, Math.round(args.monthlyAmount * 100) / 100),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'household_id' }
+      );
+      if (error) throw error;
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['emergency_fund_entries', householdId] });
-      qc.invalidateQueries({ queryKey: ['transactions', householdId] });
+      qc.invalidateQueries({ queryKey: ['emergency_fund_settings', householdId] });
     },
   });
 
-  return { withdraw };
+  return { withdraw, deposit, contributeMonthly, saveSettings };
 }
 
 // ---- Week results (what a week was actually worth) ----

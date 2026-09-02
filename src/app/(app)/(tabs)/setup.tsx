@@ -31,6 +31,7 @@ import {
   useExtraIncome,
   useFunMoneyMutations,
   useFunPeople,
+  useEmergencyFundSettings,
   useFunSettings,
   useGoals,
   useHouseholdMutations,
@@ -53,6 +54,7 @@ export default function SetupScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
 
   const incomeMut = useIncomeMutations(householdId);
   const extraMut = useExtraIncomeMutations(householdId);
@@ -89,6 +91,7 @@ export default function SetupScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    emergencyMonthly: fundSettings.data?.monthly_amount ?? 0,
     weeksInPeriod: period.weeks,
   });
   const weeksLeft = weeksRemainingInPeriod(weekStartDay);

@@ -44,7 +44,13 @@ export type MonthFigures = {
   goalsSaved: number;
 };
 
-export type CompareItem = { label: string; delta: number; invert: boolean };
+export type CompareItem = {
+  label: string;
+  /** The figure itself for the month being viewed, not just the movement. */
+  value: number;
+  delta: number;
+  invert: boolean;
+};
 
 export type MonthComparison = {
   thisName: string;
@@ -56,8 +62,11 @@ export type MonthComparison = {
   poolDelta: number;
   /** The two headline figures moved in opposite directions. */
   opposed: boolean;
-  changed: CompareItem[];
-  unchangedNote: string | null;
+  /**
+   * Income, fixed bills and money saved toward goals — always all three, each
+   * with its own figure alongside the movement.
+   */
+  items: CompareItem[];
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -86,21 +95,40 @@ export function buildMonthComparison(args: {
   const weeklyDelta = round2(now.weeklyAllowance - prev.weeklyAllowance);
   const poolDelta = round2(now.weeklyAllowance * weeks - prev.weeklyAllowance * prevWeeks);
 
-  // Only what actually moved earns a row. Rows reading "No change" took the
-  // same space as the one that mattered, so nothing stood out.
-  const candidates: CompareItem[] = [
-    { label: 'Income', delta: round2(now.totalIncome - prev.totalIncome), invert: false },
-    { label: 'Fixed bills', delta: round2(now.totalFixed - prev.totalFixed), invert: true },
-    { label: 'Saved toward goals', delta: round2(now.goalsSaved - prev.goalsSaved), invert: false },
+  /**
+   * All three rows, always, each carrying its own figure.
+   *
+   * This used to drop any row that hadn't moved, and summarise them in a
+   * sentence underneath, because a row reading "No change" took the same space
+   * as the one that mattered. That was right while a row was ONLY a movement.
+   * Now that each carries the figure itself, a steady row still answers a
+   * question the card couldn't answer before: "$686 less" never said less than
+   * WHAT, and a household whose bills happened to hold steady would have had
+   * the total vanish from the card entirely.
+   *
+   * Changed rows still stand out: DeltaText mutes a "No change" to secondary
+   * text while colouring real movement green or terracotta.
+   */
+  const items: CompareItem[] = [
+    {
+      label: 'Income',
+      value: now.totalIncome,
+      delta: round2(now.totalIncome - prev.totalIncome),
+      invert: false,
+    },
+    {
+      label: 'Fixed bills',
+      value: now.totalFixed,
+      delta: round2(now.totalFixed - prev.totalFixed),
+      invert: true,
+    },
+    {
+      label: 'Saved toward goals',
+      value: now.goalsSaved,
+      delta: round2(now.goalsSaved - prev.goalsSaved),
+      invert: false,
+    },
   ];
-  const changed = candidates.filter((c) => c.delta !== 0);
-  const still = candidates.filter((c) => c.delta === 0).map((c) => c.label.toLowerCase());
-  const list =
-    still.length === 3
-      ? `${still[0]}, ${still[1]} and ${still[2]}`
-      : still.length === 2
-        ? `${still[0]} and ${still[1]}`
-        : still[0];
 
   return {
     thisName: monthName(month),
@@ -111,10 +139,7 @@ export function buildMonthComparison(args: {
     weeklyDelta,
     poolDelta,
     opposed: weeklyDelta !== 0 && poolDelta !== 0 && weeklyDelta > 0 !== poolDelta > 0,
-    changed,
-    unchangedNote: still.length
-      ? `${list.charAt(0).toUpperCase()}${list.slice(1)} ${still.length === 1 ? 'is' : 'are'} unchanged.`
-      : null,
+    items,
   };
 }
 

@@ -12,20 +12,42 @@ import type {
   Transaction,
 } from '@/lib/types';
 
-type TxKind = Pick<Transaction, 'type' | 'is_fun_money'>;
+type TxKind = Pick<Transaction, 'type' | 'is_fun_money'> & { transfer?: boolean };
 
 /**
- * The spending the budget is measured against: expenses excluding each
- * person's fun money, which is committed separately as its own monthly bucket
- * and would otherwise be counted twice.
+ * Money that left the week: expenses excluding each person's fun money, which
+ * is committed separately as its own monthly bucket and would otherwise be
+ * counted twice.
+ *
+ * INCLUDES transfers. Moving money into the emergency fund or onto the
+ * catch-up balance costs the week exactly what it says, and the whole reason
+ * those flows charge the week is so the allowance reflects it.
  *
  * Shared deliberately. Three screens each wrote this filter by hand and
  * Overview's copy left out the fun-money clause, so its "variable spending"
  * trend and category breakdown reported bigger numbers than Month Review's
  * identically-labelled figures.
  */
-export function isVariableExpense(t: TxKind): boolean {
+export function isWeekExpense(t: TxKind): boolean {
   return t.type === 'expense' && !t.is_fun_money;
+}
+
+/**
+ * Spending ON something: what the category breakdown, the monthly trend and
+ * the month review are built from.
+ *
+ * EXCLUDES transfers, which is the only difference from isWeekExpense(). Money
+ * put into the emergency fund by hand, or used to pay down catch-up, really
+ * does leave the week, but it was not spent on anything and reporting it as
+ * such made saving look like consumption: a household moving $200 a month into
+ * their fund read as spending $200 a month more than they did, filed under
+ * "Other" because a transfer carries no category.
+ *
+ * Use isWeekExpense() for anything measuring the allowance, and this for
+ * anything describing where the money went.
+ */
+export function isVariableExpense(t: TxKind): boolean {
+  return isWeekExpense(t) && !t.transfer;
 }
 
 /**
@@ -133,6 +155,22 @@ export function catchUpBalance(entries: { amount: number }[] | undefined): numbe
 export function balanceFromEntries(entries: { amount: number }[] | undefined): number {
   const total = (entries ?? []).reduce((a, e) => a + Number(e.amount), 0);
   return Math.max(0, Math.round(total * 100) / 100);
+}
+
+/**
+ * Whether the emergency fund's planned amount for a month has already gone in.
+ *
+ * Read off the entries rather than a stored flag. Goals keep the same fact in
+ * `paid_this_month`, which had to be reset by the month close and, for a while,
+ * wasn't — so every goal in every household read as already paid, forever.
+ * A question answered from the history can't have that bug, and the unique
+ * index on (household_id, month_key) means the answer is never ambiguous.
+ */
+export function monthlyContributionMade(
+  entries: { kind: string; month_key?: string | null }[] | undefined,
+  monthKey: string
+): boolean {
+  return (entries ?? []).some((e) => e.kind === 'monthly' && e.month_key === monthKey);
 }
 
 /**
@@ -313,6 +351,13 @@ export type BudgetInputs = {
   funMoneyEnabled: boolean;
   funPeople: Pick<FunMoneyPerson, 'monthly_amount'>[];
   /**
+   * The emergency fund's monthly amount, held back with the goals and fun
+   * money. Optional and zero by default: a household that has never set one
+   * has nothing to hold back, and a wrong default here can only ever be zero,
+   * unlike weeksInPeriod below where a silent fallback hid a real bug.
+   */
+  emergencyMonthly?: number;
+  /**
    * Whole weeks the month's pool is split across, from
    * weeksInPeriod() in lib/period.ts. Always 4 or 5.
    *
@@ -330,6 +375,7 @@ export type Budget = {
   variablePool: number;
   goalsMonthly: number;
   funTotal: number;
+  emergencyMonthly: number;
   committed: number;
   extraTotal: number; // one-off income; applied per week, not to the pool
   weeksInPeriod: number; // echoed back so callers can label "split N ways"
@@ -504,7 +550,12 @@ export function computeBudget(inp: BudgetInputs): Budget {
   const variablePool = totalIncome - totalFixed;
   const goalsMonthly = inp.goals.reduce((a, g) => a + g.monthly_amount, 0);
   const funTotal = inp.funMoneyEnabled ? inp.funPeople.reduce((a, p) => a + p.monthly_amount, 0) : 0;
-  const committed = goalsMonthly + funTotal;
+  // The emergency fund's monthly amount is committed on exactly the same terms
+  // as a savings goal's: set aside before the weekly allowance is divided, so
+  // the fund grows out of the plan rather than out of whatever happens to be
+  // left at the end of a week.
+  const emergencyMonthly = Math.max(0, inp.emergencyMonthly ?? 0);
+  const committed = goalsMonthly + funTotal + emergencyMonthly;
   // Derived from the ESTIMATES, so the weekly figure a household budgets
   // against doesn't shift retroactively the moment one bill comes in high.
   // The difference is applied to the weeks that are left, in
@@ -531,6 +582,7 @@ export function computeBudget(inp: BudgetInputs): Budget {
     variablePool,
     goalsMonthly,
     funTotal,
+    emergencyMonthly,
     committed,
     extraTotal,
     weeksInPeriod: weeks,
