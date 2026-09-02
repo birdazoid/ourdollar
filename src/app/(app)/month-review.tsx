@@ -2,12 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
 import IconGraph from '@/assets/icons/icon-graph.svg';
 import IconWeek from '@/assets/icons/icon-week.svg';
-import { BarChart, type Bar } from '@/components/bar-chart';
+import { BarChart } from '@/components/bar-chart';
 import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -36,6 +36,7 @@ import {
   useBills,
   useExtraIncome,
   useFunPeople,
+  useEmergencyFundSettings,
   useFunSettings,
   useGoals,
   useIncome,
@@ -64,6 +65,7 @@ export default function MonthReviewScreen() {
   const goals = useGoals(householdId);
   const funPeople = useFunPeople(householdId);
   const funSettings = useFunSettings(householdId);
+  const fundSettings = useEmergencyFundSettings(householdId);
   const members = useMembers(householdId);
   const snapshots = useMonthSnapshots(householdId);
   const carryovers = useBillCarryovers(householdId);
@@ -126,13 +128,14 @@ export default function MonthReviewScreen() {
     goals: goals.data ?? [],
     funMoneyEnabled: funEnabled,
     funPeople: funPeople.data ?? [],
+    emergencyMonthly: fundSettings.data?.monthly_amount ?? 0,
     // The month under review, not today's, so a reopened review still shows
     // the week count that month was actually planned against.
     weeksInPeriod: weeksInPeriod(targetMonth, weekStart),
   });
   const weeklyAllowanceForCharts = hasClosed ? targetSnapshot!.weekly_allowance : budget.weeklyAllowance;
 
-  const weekBars: (Bar & { isFull: boolean })[] = useMemo(() => {
+  const weekBars: { label: string; value: number; isFull: boolean }[] = useMemo(() => {
     const buckets = weekBucketsInMonth(targetMonth, weekStart);
     return buckets.map((b) => {
       const value = transactions
@@ -171,226 +174,241 @@ export default function MonthReviewScreen() {
     exitWizard();
   }
 
+  /*
+   * Its own SafeAreaProvider, not the app's.
+   *
+   * This screen is presented as a modal, which react-native-screens renders in
+   * a separate native container. The root provider measures the ROOT hierarchy,
+   * so its insets don't describe this one — which is why the header sat
+   * underneath the status bar while every ordinary screen was fine. A nested
+   * provider seeds from the parent and then re-measures against the container
+   * it is actually in. The Expo docs call for exactly this: a provider "at the
+   * root of any modals" when using react-native-screens.
+   *
+   * It wraps the sheets below as well, which take their own insets from it.
+   */
   return (
-    <ThemedView style={styles.fill}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <ThemedText type="label" themeColor="textSecondary">
-              {isPreview ? 'Preview · ' : ''}Step {step + 1} of {STEPS.length} · {STEPS[step]}
-            </ThemedText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              onPress={exitWizard}
-              style={styles.closeBtn}>
-              <X size={16} color={Palette.ink} />
-            </Pressable>
-          </View>
-          <View style={styles.progressRow}>
-            {STEPS.map((s, i) => (
-              <View key={s} style={[styles.progressSeg, i <= step && styles.progressOn]} />
-            ))}
-          </View>
-          {isPreview && (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.previewNote}>
-              Preview only — finishing this won&apos;t change any data.
-            </ThemedText>
-          )}
-        </View>
-
-        {loading ? null : (
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-            {step === 0 && (
-              <View>
-                <StepHeader
-                  Icon={IconGraph}
-                  title={`${monthLabel(targetMonth)} wrapped up`}
-                  desc="Here's how the month went before you move on."
-                />
-
-                <Card style={styles.summaryCard}>
-                  <ThemedText type="bodyBold">Bills</ThemedText>
-                  <ThemedText type="title">
-                    {fmt(billsPaidAmount)} <ThemedText type="body" themeColor="textSecondary">of {fmt(billsTotalAmount)} paid</ThemedText>
-                  </ThemedText>
-                  {billsDelta != null ? (
-                    <DeltaText delta={billsDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
-                  ) : (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      First month tracked, nothing to compare yet.
-                    </ThemedText>
-                  )}
-                </Card>
-
-                <Card style={styles.summaryCard}>
-                  <ThemedText type="bodyBold">Variable spending</ThemedText>
-                  <ThemedText type="title">{fmt(thisMonthSpend)}</ThemedText>
-                  {spendDelta != null ? (
-                    <DeltaText delta={spendDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
-                  ) : (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      No prior month to compare yet.
-                    </ThemedText>
-                  )}
-                  {fullWeeks.length > 0 && (
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.overNote}>
-                      {overWeekCount > 0
-                        ? `Over budget in ${overWeekCount} of ${fullWeeks.length} full week${fullWeeks.length === 1 ? '' : 's'}.`
-                        : `On budget every full week this month.`}
-                    </ThemedText>
-                  )}
-                </Card>
-
-                <ThemedText type="label" themeColor="textSecondary" style={styles.chartLabel}>
-                  Spending by week
-                </ThemedText>
-                <Card style={styles.chartCard}>
-                  <BarChart data={weekBars} highlightLast={false} />
-                  {/* A month rarely starts and ends on a week boundary, so the
-                      first and last bars can cover two or three days. They look
-                      like unusually good weeks unless the chart says otherwise,
-                      which is also why the count above only uses whole ones. */}
-                  {partWeekCount > 0 && (
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.chartNote}>
-                      {partWeekCount === 1 ? 'One bar covers' : `${partWeekCount} bars cover`} only
-                      part of a week, where {monthName(targetMonth)} starts or ends mid-week. They
-                      sit low for that reason and aren&apos;t counted above.
-                    </ThemedText>
-                  )}
-                </Card>
-              </View>
+    <SafeAreaProvider>
+      <ThemedView style={styles.fill}>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <ThemedText type="label" themeColor="textSecondary">
+                {isPreview ? 'Preview · ' : ''}Step {step + 1} of {STEPS.length} · {STEPS[step]}
+              </ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={exitWizard}
+                style={styles.closeBtn}>
+                <X size={16} color={Palette.ink} />
+              </Pressable>
+            </View>
+            <View style={styles.progressRow}>
+              {STEPS.map((s, i) => (
+                <View key={s} style={[styles.progressSeg, i <= step && styles.progressOn]} />
+              ))}
+            </View>
+            {isPreview && (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.previewNote}>
+                Preview only — finishing this won&apos;t change any data.
+              </ThemedText>
             )}
+          </View>
 
-            {step === 1 && (
-              <View>
-                <StepHeader
-                  Icon={IconBills}
-                  title="Anything change?"
-                  desc="A quick check on your fixed bills — tap one to update its amount, or continue if nothing's different."
-                />
-                {fixedBills.length === 0 ? (
-                  <ThemedText type="body" themeColor="textSecondary" style={styles.emptyNote}>
-                    No fixed bills to review.
+          {loading ? null : (
+            <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+              {step === 0 && (
+                <View>
+                  <StepHeader
+                    Icon={IconGraph}
+                    title={`${monthLabel(targetMonth)} wrapped up`}
+                    desc="Here's how the month went before you move on."
+                  />
+
+                  <Card style={styles.summaryCard}>
+                    <ThemedText type="bodyBold">Bills</ThemedText>
+                    <ThemedText type="title">
+                      {fmt(billsPaidAmount)} <ThemedText type="body" themeColor="textSecondary">of {fmt(billsTotalAmount)} paid</ThemedText>
+                    </ThemedText>
+                    {billsDelta != null ? (
+                      <DeltaText delta={billsDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
+                    ) : (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        First month tracked, nothing to compare yet.
+                      </ThemedText>
+                    )}
+                  </Card>
+
+                  <Card style={styles.summaryCard}>
+                    <ThemedText type="bodyBold">Variable spending</ThemedText>
+                    <ThemedText type="title">{fmt(thisMonthSpend)}</ThemedText>
+                    {spendDelta != null ? (
+                      <DeltaText delta={spendDelta} invert suffix={`vs ${monthName(prevMonthKey)}`} />
+                    ) : (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        No prior month to compare yet.
+                      </ThemedText>
+                    )}
+                    {fullWeeks.length > 0 && (
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.overNote}>
+                        {overWeekCount > 0
+                          ? `Over budget in ${overWeekCount} of ${fullWeeks.length} full week${fullWeeks.length === 1 ? '' : 's'}.`
+                          : `On budget every full week this month.`}
+                      </ThemedText>
+                    )}
+                  </Card>
+
+                  <ThemedText type="label" themeColor="textSecondary" style={styles.chartLabel}>
+                    Spending by week
                   </ThemedText>
-                ) : (
-                  fixedBills.map((b) => (
-                    <ListRow
-                      key={b.id}
-                      emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
-                      title={b.name}
-                      subtitle={b.category}
-                      onPress={() => setBillSheet({ bill: b })}
-                      right={<ThemedText type="label">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>}
-                    />
-                  ))
-                )}
-              </View>
-            )}
+                  <Card style={styles.chartCard}>
+                    <BarChart data={weekBars} highlightLast={false} />
+                    {/* A month rarely starts and ends on a week boundary, so the
+                        first and last bars can cover two or three days. They look
+                        like unusually good weeks unless the chart says otherwise,
+                        which is also why the count above only uses whole ones. */}
+                    {partWeekCount > 0 && (
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.chartNote}>
+                        {partWeekCount === 1 ? 'One bar covers' : `${partWeekCount} bars cover`} only
+                        part of a week, where {monthName(targetMonth)} starts or ends mid-week. They
+                        sit low for that reason and aren&apos;t counted above.
+                      </ThemedText>
+                    )}
+                  </Card>
+                </View>
+              )}
 
-            {step === 2 && (
-              <View>
-                <StepHeader
-                  Icon={IconBills}
-                  title="Anything still unpaid?"
-                  desc={
-                    hasClosed
-                      ? 'Anything left unpaid was automatically flagged below as a reminder. Dismiss any you don’t need to track.'
-                      : "These will automatically become reminders once the month closes — nothing to do here."
-                  }
-                />
-                {hasClosed ? (
-                  targetCarryovers.length === 0 ? (
-                    <Card style={styles.allPaidCard}>
-                      <ThemedText type="subtitle">Nothing left unpaid — nice!</ThemedText>
-                    </Card>
+              {step === 1 && (
+                <View>
+                  <StepHeader
+                    Icon={IconBills}
+                    title="Anything change?"
+                    desc="A quick check on your fixed bills — tap one to update its amount, or continue if nothing's different."
+                  />
+                  {fixedBills.length === 0 ? (
+                    <ThemedText type="body" themeColor="textSecondary" style={styles.emptyNote}>
+                      No fixed bills to review.
+                    </ThemedText>
                   ) : (
-                    targetCarryovers.map((c) => (
+                    fixedBills.map((b) => (
                       <ListRow
-                        key={c.id}
-                        emoji={<CategoryGlyph billCategory={c.category} emoji={billEmoji(c.category)} />}
-                        title={c.name}
-                        subtitle={c.amount != null ? fmt(c.amount) : 'Amount varies'}
-                        right={
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Dismiss ${c.name}`}
-                            onPress={() => dismissCarryover(c.id)}
-                            style={styles.dismissBtn}>
-                            <ThemedText type="small">Dismiss</ThemedText>
-                          </Pressable>
-                        }
+                        key={b.id}
+                        emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
+                        title={b.name}
+                        subtitle={b.category}
+                        onPress={() => setBillSheet({ bill: b })}
+                        right={<ThemedText type="label">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>}
                       />
                     ))
-                  )
-                ) : liveUnpaidBills.length === 0 ? (
-                  <Card style={styles.allPaidCard}>
-                    <ThemedText type="subtitle">Nothing unpaid — nice!</ThemedText>
-                  </Card>
-                ) : (
-                  liveUnpaidBills.map((b) => (
-                    <ListRow
-                      key={b.id}
-                      emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
-                      title={b.name}
-                      subtitle={b.amount != null ? fmt(b.amount) : 'Amount varies'}
-                    />
-                  ))
-                )}
-              </View>
-            )}
+                  )}
+                </View>
+              )}
 
-            {step === 3 && (
-              <View>
-                <StepHeader
-                  Icon={IconWeek}
-                  title={`Start ${monthLabel(currentMonth)}`}
-                  desc="Bills are reset for a fresh cycle. Anything left unpaid stays as a reminder on your Bills screen."
-                />
-                <Card style={styles.recapCard}>
-                  <RecapRow label="Bills paid" value={`${billsPaidCount} of ${billsTotalCount} (${fmt(billsPaidAmount)})`} />
-                  <RecapRow
-                    label="Still tracked as unpaid"
-                    value={`${hasClosed ? targetCarryovers.length : liveUnpaidBills.length} bill${
-                      (hasClosed ? targetCarryovers.length : liveUnpaidBills.length) === 1 ? '' : 's'
-                    }`}
+              {step === 2 && (
+                <View>
+                  <StepHeader
+                    Icon={IconBills}
+                    title="Anything still unpaid?"
+                    desc={
+                      hasClosed
+                        ? 'Anything left unpaid was automatically flagged below as a reminder. Dismiss any you don’t need to track.'
+                        : "These will automatically become reminders once the month closes — nothing to do here."
+                    }
                   />
-                </Card>
-              </View>
-            )}
-          </ScrollView>
-        )}
+                  {hasClosed ? (
+                    targetCarryovers.length === 0 ? (
+                      <Card style={styles.allPaidCard}>
+                        <ThemedText type="subtitle">Nothing left unpaid — nice!</ThemedText>
+                      </Card>
+                    ) : (
+                      targetCarryovers.map((c) => (
+                        <ListRow
+                          key={c.id}
+                          emoji={<CategoryGlyph billCategory={c.category} emoji={billEmoji(c.category)} />}
+                          title={c.name}
+                          subtitle={c.amount != null ? fmt(c.amount) : 'Amount varies'}
+                          right={
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Dismiss ${c.name}`}
+                              onPress={() => dismissCarryover(c.id)}
+                              style={styles.dismissBtn}>
+                              <ThemedText type="small">Dismiss</ThemedText>
+                            </Pressable>
+                          }
+                        />
+                      ))
+                    )
+                  ) : liveUnpaidBills.length === 0 ? (
+                    <Card style={styles.allPaidCard}>
+                      <ThemedText type="subtitle">Nothing unpaid — nice!</ThemedText>
+                    </Card>
+                  ) : (
+                    liveUnpaidBills.map((b) => (
+                      <ListRow
+                        key={b.id}
+                        emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
+                        title={b.name}
+                        subtitle={b.amount != null ? fmt(b.amount) : 'Amount varies'}
+                      />
+                    ))
+                  )}
+                </View>
+              )}
 
-        <View style={styles.footer}>
-          {step > 0 && (
-            <Pressable accessibilityRole="button" onPress={() => setStep((s) => s - 1)} style={styles.backBtn}>
-              <ThemedText type="bodyBold">Back</ThemedText>
-            </Pressable>
+              {step === 3 && (
+                <View>
+                  <StepHeader
+                    Icon={IconWeek}
+                    title={`Start ${monthLabel(currentMonth)}`}
+                    desc="Bills are reset for a fresh cycle. Anything left unpaid stays as a reminder on your Bills screen."
+                  />
+                  <Card style={styles.recapCard}>
+                    <RecapRow label="Bills paid" value={`${billsPaidCount} of ${billsTotalCount} (${fmt(billsPaidAmount)})`} />
+                    <RecapRow
+                      label="Still tracked as unpaid"
+                      value={`${hasClosed ? targetCarryovers.length : liveUnpaidBills.length} bill${
+                        (hasClosed ? targetCarryovers.length : liveUnpaidBills.length) === 1 ? '' : 's'
+                      }`}
+                    />
+                  </Card>
+                </View>
+              )}
+            </ScrollView>
           )}
-          <View style={styles.flex}>
-            <Button
-              title={
-                step === STEPS.length - 1
-                  ? isPreview
-                    ? 'Done previewing'
-                    : `Start ${monthLabel(currentMonth)}`
-                  : 'Continue'
-              }
-              onPress={() => (step === STEPS.length - 1 ? finish() : setStep((s) => s + 1))}
-            />
-          </View>
-        </View>
-      </SafeAreaView>
 
-      <BillSheet
-        visible={!!billSheet}
-        bill={billSheet?.bill ?? null}
-        onClose={() => setBillSheet(null)}
-        onSave={saveBill}
-        onDelete={() => setBillSheet(null)}
-        saving={billMut.update.isPending}
-      />
-    </ThemedView>
+          <View style={styles.footer}>
+            {step > 0 && (
+              <Pressable accessibilityRole="button" onPress={() => setStep((s) => s - 1)} style={styles.backBtn}>
+                <ThemedText type="bodyBold">Back</ThemedText>
+              </Pressable>
+            )}
+            <View style={styles.flex}>
+              <Button
+                title={
+                  step === STEPS.length - 1
+                    ? isPreview
+                      ? 'Done previewing'
+                      : `Start ${monthLabel(currentMonth)}`
+                    : 'Continue'
+                }
+                onPress={() => (step === STEPS.length - 1 ? finish() : setStep((s) => s + 1))}
+              />
+            </View>
+          </View>
+        </SafeAreaView>
+
+        <BillSheet
+          visible={!!billSheet}
+          bill={billSheet?.bill ?? null}
+          onClose={() => setBillSheet(null)}
+          onSave={saveBill}
+          onDelete={() => setBillSheet(null)}
+          saving={billMut.update.isPending}
+        />
+      </ThemedView>
+    </SafeAreaProvider>
   );
 }
 

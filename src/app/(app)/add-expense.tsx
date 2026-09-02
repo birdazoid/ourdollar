@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2, X } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
 import { Button } from '@/components/button';
@@ -291,242 +291,257 @@ export default function AddExpenseScreen() {
     });
   }
 
+  /*
+   * Its own SafeAreaProvider, not the app's.
+   *
+   * This screen is presented as a modal, which react-native-screens renders in
+   * a separate native container. The root provider measures the ROOT hierarchy,
+   * so its insets don't describe this one — which is why the header sat
+   * underneath the status bar while every ordinary screen was fine. A nested
+   * provider seeds from the parent and then re-measures against the container
+   * it is actually in. The Expo docs call for exactly this: a provider "at the
+   * root of any modals" when using react-native-screens.
+   *
+   * It wraps the sheets below as well, which take their own insets from it.
+   */
   return (
-    <ThemedView style={styles.fill}>
-      <SafeAreaView style={styles.fill}>
-        <View style={styles.header}>
-          <ThemedText type="title">{isEdit ? 'Edit expense' : 'Add expense'}</ThemedText>
-          <Pressable accessibilityLabel="Close" onPress={goBack} style={styles.close}>
-            <X size={22} color={Palette.ink} />
-          </Pressable>
-        </View>
+    <SafeAreaProvider>
+      <ThemedView style={styles.fill}>
+        <SafeAreaView style={styles.fill}>
+          <View style={styles.header}>
+            <ThemedText type="title">{isEdit ? 'Edit expense' : 'Add expense'}</ThemedText>
+            <Pressable accessibilityLabel="Close" onPress={goBack} style={styles.close}>
+              <X size={22} color={Palette.ink} />
+            </Pressable>
+          </View>
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          automaticallyAdjustKeyboardInsets
-          showsVerticalScrollIndicator={false}>
-          <Segmented
-            value={type}
-            onChange={(v) => setType(v as TxType)}
-            options={[
-              { value: 'expense', label: 'Expense' },
-              { value: 'income', label: 'Income' },
-            ]}
-          />
-
-          <View style={styles.gap} />
-          <MoneyInput value={amount} onChangeText={setAmount} size={34} autoFocus={!isEdit} />
-
-          <View style={styles.labelWrap}>
-            <TextField
-              placeholder={type === 'income' ? "What's it from? (refund…)" : 'Where? (Walmart, QuikTrip…)'}
-              value={label}
-              onChangeText={(t) => {
-                setLabel(t);
-                setShowSug(true);
-              }}
-              onFocus={() => setShowSug(true)}
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}>
+            <Segmented
+              value={type}
+              onChange={(v) => setType(v as TxType)}
+              options={[
+                { value: 'expense', label: 'Expense' },
+                { value: 'income', label: 'Income' },
+              ]}
             />
-            {showSug && suggestions.length > 0 && (
-              <Card style={styles.sugBox}>
-                {suggestions.map((m) => (
-                  <Pressable
-                    key={m.label}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Use ${m.label}, ${fmt(m.amount)}`}
-                    style={styles.sugRow}
-                    onPress={() => {
-                      setLabel(m.label);
-                      if (!category) setCategory(m.category);
-                      if (!amount) setAmount(String(m.amount));
-                      setShowSug(false);
-                    }}>
-                    <View style={styles.sugLabel}>
-                      <CategoryGlyph
-                        txId={txCategoryById(m.category).id}
-                        emoji={txCategoryById(m.category).emoji}
-                        size={20}
-                      />
-                      <ThemedText type="body" numberOfLines={1} style={styles.sugLabelText}>
-                        {m.label}
+
+            <View style={styles.gap} />
+            <MoneyInput value={amount} onChangeText={setAmount} size={34} autoFocus={!isEdit} />
+
+            <View style={styles.labelWrap}>
+              <TextField
+                placeholder={type === 'income' ? "What's it from? (refund…)" : 'Where? (Walmart, QuikTrip…)'}
+                value={label}
+                onChangeText={(t) => {
+                  setLabel(t);
+                  setShowSug(true);
+                }}
+                onFocus={() => setShowSug(true)}
+              />
+              {showSug && suggestions.length > 0 && (
+                <Card style={styles.sugBox}>
+                  {suggestions.map((m) => (
+                    <Pressable
+                      key={m.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Use ${m.label}, ${fmt(m.amount)}`}
+                      style={styles.sugRow}
+                      onPress={() => {
+                        setLabel(m.label);
+                        if (!category) setCategory(m.category);
+                        if (!amount) setAmount(String(m.amount));
+                        setShowSug(false);
+                      }}>
+                      <View style={styles.sugLabel}>
+                        <CategoryGlyph
+                          txId={txCategoryById(m.category).id}
+                          emoji={txCategoryById(m.category).emoji}
+                          size={20}
+                        />
+                        <ThemedText type="body" numberOfLines={1} style={styles.sugLabelText}>
+                          {m.label}
+                        </ThemedText>
+                      </View>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {fmt(m.amount)}
                       </ThemedText>
-                    </View>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {fmt(m.amount)}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </Card>
-            )}
-          </View>
+                    </Pressable>
+                  ))}
+                </Card>
+              )}
+            </View>
 
-          <FieldLabel>Category</FieldLabel>
-          <View style={styles.grid}>
-            {TX_CATEGORIES.map((c) => {
-              const on = category === c.id;
-              return (
-                <Pressable
-                  key={c.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={c.name}
-                  onPress={() => setCategory(c.id)}
-                  style={[styles.catTile, on && styles.catTileOn]}>
-                  <CategoryGlyph txId={c.id} emoji={c.emoji} />
-                  <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
-                    {c.name}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Income has to be given a job. Money arriving and money left over
-              are the same question, and the rollover prompt already asks it
-              well, so these options mirror it. */}
-          {type === 'income' && (
-            <>
-              <FieldLabel>Where should this go?</FieldLabel>
-              {destinations.map((d) => {
-                const on = incomeDest === d.value;
+            <FieldLabel>Category</FieldLabel>
+            <View style={styles.grid}>
+              {TX_CATEGORIES.map((c) => {
+                const on = category === c.id;
                 return (
                   <Pressable
-                    key={d.value}
+                    key={c.id}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
-                    accessibilityLabel={`${d.label}. ${d.sub}`}
-                    onPress={() => setIncomeDest(d.value)}
-                    style={[styles.destRow, on && styles.destRowOn]}>
-                    <ThemedText type="bodyBold">{d.label}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
-                      {d.sub}
+                    accessibilityLabel={c.name}
+                    onPress={() => setCategory(c.id)}
+                    style={[styles.catTile, on && styles.catTileOn]}>
+                    <CategoryGlyph txId={c.id} emoji={c.emoji} />
+                    <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
+                      {c.name}
                     </ThemedText>
                   </Pressable>
                 );
               })}
-              {incomeDest === 'goal' && (
-                <>
-                  <FieldLabel>Which goal?</FieldLabel>
-                  {(goals.data ?? []).map((g) => {
-                    const on = destGoalId === g.id;
-                    return (
-                      <Pressable
-                        key={g.id}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={`${g.name}, ${fmt(g.saved_amount)} of ${fmt(g.target_amount)} saved`}
-                        onPress={() => setDestGoalId(g.id)}
-                        style={[styles.destRow, on && styles.destRowOn]}>
-                        <ThemedText type="bodyBold">{g.name}</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
-                          {fmt(g.saved_amount)} of {fmt(g.target_amount)} saved
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })}
-                </>
-              )}
-            </>
-          )}
-
-          {spendSource && (
-            <View
-              style={[
-                styles.envHint,
-                spendSource.tone === 'planned' && styles.envHintPlanned,
-                spendSource.tone === 'over' && styles.envHintOver,
-              ]}>
-              <ThemedText type="bodyBold" style={styles[`${spendSource.tone}Text`]}>
-                {spendSource.title}
-              </ThemedText>
-              <ThemedText type="small" style={styles[`${spendSource.tone}Sub`]}>
-                {spendSource.detail}
-              </ThemedText>
             </View>
-          )}
 
-          {(members.data ?? []).length > 0 && (
-            <>
-              <FieldLabel>Who?</FieldLabel>
-              <Segmented
-                value={memberId ?? members.data![0].id}
-                onChange={setMemberId}
-                options={(members.data ?? []).map((m) => ({
-                  value: m.id,
-                  label: m.account_id === session?.user.id ? `${m.name} (me)` : m.name,
-                }))}
-              />
-            </>
-          )}
+            {/* Income has to be given a job. Money arriving and money left over
+                are the same question, and the rollover prompt already asks it
+                well, so these options mirror it. */}
+            {type === 'income' && (
+              <>
+                <FieldLabel>Where should this go?</FieldLabel>
+                {destinations.map((d) => {
+                  const on = incomeDest === d.value;
+                  return (
+                    <Pressable
+                      key={d.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`${d.label}. ${d.sub}`}
+                      onPress={() => setIncomeDest(d.value)}
+                      style={[styles.destRow, on && styles.destRowOn]}>
+                      <ThemedText type="bodyBold">{d.label}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
+                        {d.sub}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+                {incomeDest === 'goal' && (
+                  <>
+                    <FieldLabel>Which goal?</FieldLabel>
+                    {(goals.data ?? []).map((g) => {
+                      const on = destGoalId === g.id;
+                      return (
+                        <Pressable
+                          key={g.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={`${g.name}, ${fmt(g.saved_amount)} of ${fmt(g.target_amount)} saved`}
+                          onPress={() => setDestGoalId(g.id)}
+                          style={[styles.destRow, on && styles.destRowOn]}>
+                          <ThemedText type="bodyBold">{g.name}</ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
+                            {fmt(g.saved_amount)} of {fmt(g.target_amount)} saved
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            )}
 
-          <FieldLabel>Which day?</FieldLabel>
-          <View style={styles.dayRow}>
-            {weekDays.map((d) => {
-              const on = day === d.date;
-              return (
-                <Pressable
-                  key={d.date}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={dayHeading(d.date)}
-                  onPress={() => setDay(d.date)}
-                  style={[styles.dayBtn, on && styles.dayBtnOn]}>
-                  <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={on ? styles.dayOnText : undefined}>
-                    {d.short}
-                  </ThemedText>
-                  <ThemedText type="label" style={on ? styles.dayOnText : undefined}>
-                    {d.dayNum}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {type === 'expense' && funEnabled && (
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: isFun }}
-              accessibilityLabel="Count this as fun money"
-              onPress={() => setIsFun(!isFun)}
-              style={[styles.funRow, isFun && styles.funOn]}>
-              <IconCelebrate width={23} height={23} color={Palette.ink} />
-              <View style={styles.flex}>
-                <ThemedText type="bodyBold">Fun money</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {isFun ? 'From a personal stash' : 'Counts against the weekly budget'}
+            {spendSource && (
+              <View
+                style={[
+                  styles.envHint,
+                  spendSource.tone === 'planned' && styles.envHintPlanned,
+                  spendSource.tone === 'over' && styles.envHintOver,
+                ]}>
+                <ThemedText type="bodyBold" style={styles[`${spendSource.tone}Text`]}>
+                  {spendSource.title}
+                </ThemedText>
+                <ThemedText type="small" style={styles[`${spendSource.tone}Sub`]}>
+                  {spendSource.detail}
                 </ThemedText>
               </View>
-              <Switch value={isFun} onValueChange={setIsFun} onColor={Palette.sand} />
-            </Pressable>
-          )}
+            )}
 
-          <View style={styles.actions}>
-            {isEdit && (
-              <Pressable accessibilityLabel="Delete entry" onPress={askDelete} style={styles.deleteBtn}>
-                <Trash2 size={20} color={Palette.terracottaDeep} />
+            {(members.data ?? []).length > 0 && (
+              <>
+                <FieldLabel>Who?</FieldLabel>
+                <Segmented
+                  value={memberId ?? members.data![0].id}
+                  onChange={setMemberId}
+                  options={(members.data ?? []).map((m) => ({
+                    value: m.id,
+                    label: m.account_id === session?.user.id ? `${m.name} (me)` : m.name,
+                  }))}
+                />
+              </>
+            )}
+
+            <FieldLabel>Which day?</FieldLabel>
+            <View style={styles.dayRow}>
+              {weekDays.map((d) => {
+                const on = day === d.date;
+                return (
+                  <Pressable
+                    key={d.date}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={dayHeading(d.date)}
+                    onPress={() => setDay(d.date)}
+                    style={[styles.dayBtn, on && styles.dayBtnOn]}>
+                    <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={on ? styles.dayOnText : undefined}>
+                      {d.short}
+                    </ThemedText>
+                    <ThemedText type="label" style={on ? styles.dayOnText : undefined}>
+                      {d.dayNum}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {type === 'expense' && funEnabled && (
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: isFun }}
+                accessibilityLabel="Count this as fun money"
+                onPress={() => setIsFun(!isFun)}
+                style={[styles.funRow, isFun && styles.funOn]}>
+                <IconCelebrate width={23} height={23} color={Palette.ink} />
+                <View style={styles.flex}>
+                  <ThemedText type="bodyBold">Fun money</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {isFun ? 'From a personal stash' : 'Counts against the weekly budget'}
+                  </ThemedText>
+                </View>
+                <Switch value={isFun} onValueChange={setIsFun} onColor={Palette.sand} />
               </Pressable>
             )}
-            <View style={styles.flex}>
-              <Button
-                title={
-                  isEdit
-                    ? 'Save changes'
-                    : `${type === 'income' ? 'Add income' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
-                }
-                disabled={!valid}
-                // The screen now waits for the write, so the button has to say
-                // it's working or the tap reads as having done nothing.
-                loading={txMut.create.isPending || txMut.update.isPending || txMut.logIncome.isPending}
-                onPress={save}
-              />
+
+            <View style={styles.actions}>
+              {isEdit && (
+                <Pressable accessibilityLabel="Delete entry" onPress={askDelete} style={styles.deleteBtn}>
+                  <Trash2 size={20} color={Palette.terracottaDeep} />
+                </Pressable>
+              )}
+              <View style={styles.flex}>
+                <Button
+                  title={
+                    isEdit
+                      ? 'Save changes'
+                      : `${type === 'income' ? 'Add income' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
+                  }
+                  disabled={!valid}
+                  // The screen now waits for the write, so the button has to say
+                  // it's working or the tap reads as having done nothing.
+                  loading={txMut.create.isPending || txMut.update.isPending || txMut.logIncome.isPending}
+                  onPress={save}
+                />
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
-    </ThemedView>
+          </ScrollView>
+        </SafeAreaView>
+        <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+      </ThemedView>
+    </SafeAreaProvider>
   );
 }
 

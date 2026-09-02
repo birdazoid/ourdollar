@@ -3,7 +3,7 @@ import { ChevronRight, Plus, X } from 'lucide-react-native';
 import type { ComponentType, ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { SvgProps } from 'react-native-svg';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
@@ -181,266 +181,281 @@ export default function OnboardingScreen() {
     else setStep((s) => s + 1);
   }
 
+  /*
+   * Its own SafeAreaProvider, not the app's.
+   *
+   * This screen is presented as a modal, which react-native-screens renders in
+   * a separate native container. The root provider measures the ROOT hierarchy,
+   * so its insets don't describe this one — which is why the header sat
+   * underneath the status bar while every ordinary screen was fine. A nested
+   * provider seeds from the parent and then re-measures against the container
+   * it is actually in. The Expo docs call for exactly this: a provider "at the
+   * root of any modals" when using react-native-screens.
+   *
+   * It wraps the sheets below as well, which take their own insets from it.
+   */
   return (
-    <ThemedView style={styles.fill}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        {/* Progress header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <ThemedText type="label" themeColor="textSecondary">
-              Step {step + 1} of {STEPS.length} · {STEPS[step]}
-            </ThemedText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close setup"
-              onPress={exitWizard}
-              style={styles.closeBtn}>
-              <X size={16} color={Palette.ink} />
-            </Pressable>
-          </View>
-          <View style={styles.progressRow}>
-            {STEPS.map((s, i) => (
-              <View key={s} style={[styles.progressSeg, i <= step && styles.progressOn]} />
-            ))}
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {step === 0 && <Welcome />}
-
-          {step === 1 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationHousehold}
-                illustrationSize={{ width: 130, height: 118 }}
-                title="Who's in your household?"
-                desc="Add the people you share money with — a partner, roommates, or kids. You'll be able to set who earns what and give each person a fun-money stash."
-              />
-              {(members.data ?? []).map((m) => (
-                <ListRow
-                  key={m.id}
-                  emoji={<AvatarGlyph value={m.avatar} size={44} />}
-                  title={m.account_id === session?.user.id ? `${m.name} (you)` : m.name}
-                  subtitle={m.is_admin ? 'Admin' : m.invite_pending ? `Invite sent · ${m.invite_email ?? ''}` : m.has_account ? 'Member' : 'Fun money only'}
-                />
+    <SafeAreaProvider>
+      <ThemedView style={styles.fill}>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          {/* Progress header */}
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <ThemedText type="label" themeColor="textSecondary">
+                Step {step + 1} of {STEPS.length} · {STEPS[step]}
+              </ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close setup"
+                onPress={exitWizard}
+                style={styles.closeBtn}>
+                <X size={16} color={Palette.ink} />
+              </Pressable>
+            </View>
+            <View style={styles.progressRow}>
+              {STEPS.map((s, i) => (
+                <View key={s} style={[styles.progressSeg, i <= step && styles.progressOn]} />
               ))}
-              <DashedAdd label="Add a household member" onPress={() => setAddingMember(true)} />
-
-              <View style={styles.weekBlock}>
-                <ThemedText type="bodyBold">When does your week start?</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.weekNote}>
-                  Your weekly spending resets each {weekdayName(household?.week_start_day ?? 0)}.
-                </ThemedText>
-                <WeekStartPicker
-                  value={household?.week_start_day ?? 0}
-                  onChange={(d) => householdMut.setWeekStart.mutate(d)}
-                />
-              </View>
             </View>
-          )}
+          </View>
 
-          {step === 2 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationIncome}
-                illustrationSize={{ width: 127, height: 130 }}
-                title="What comes in?"
-                desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit it."
-              />
-              {(income.data ?? []).map((s) => {
-                const m = memberById(s.member_id);
-                return (
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            {step === 0 && <Welcome />}
+
+            {step === 1 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationHousehold}
+                  illustrationSize={{ width: 130, height: 118 }}
+                  title="Who's in your household?"
+                  desc="Add the people you share money with — a partner, roommates, or kids. You'll be able to set who earns what and give each person a fun-money stash."
+                />
+                {(members.data ?? []).map((m) => (
                   <ListRow
-                    key={s.id}
-                    emoji={
-                      m ? (
-                        <AvatarGlyph value={m.avatar} size={44} />
-                      ) : (
-                        <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
-                      )
-                    }
-                    title={m?.name ?? 'Household'}
-                    subtitle={`${fmt(s.amount)} · ${FREQ[s.frequency].label}`}
-                    onPress={() => openIncomeSheet({ kind: 'recurring', source: s })}
-                    right={
-                      <View style={styles.rightRow}>
-                        <ThemedText type="bodyBold">{fmt(Math.round(monthlyEquiv(s)))}</ThemedText>
-                        <ChevronRight size={16} color="#B7B8C4" />
-                      </View>
-                    }
+                    key={m.id}
+                    emoji={<AvatarGlyph value={m.avatar} size={44} />}
+                    title={m.account_id === session?.user.id ? `${m.name} (you)` : m.name}
+                    subtitle={m.is_admin ? 'Admin' : m.invite_pending ? `Invite sent · ${m.invite_email ?? ''}` : m.has_account ? 'Member' : 'Fun money only'}
                   />
-                );
-              })}
-              {(income.data ?? []).length === 0 ? (
-                <EmptyCard
-                  emoji={<IconGiftBox width={26} height={26} color={Palette.sageDeep} />}
-                  text="No income added yet."
-                  cta="Add income"
-                  onPress={() => openIncomeSheet(null)}
-                />
-              ) : (
-                <DashedAdd label="Add another income source" onPress={() => openIncomeSheet(null)} />
-              )}
-              <TotalCard label="Total monthly income" value={fmt(budget.totalIncome)} tone="sage" />
-            </View>
-          )}
+                ))}
+                <DashedAdd label="Add a household member" onPress={() => setAddingMember(true)} />
 
-          {step === 3 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationFixedExpenses}
-                illustrationSize={{ width: 130, height: 99 }}
-                title="What's already spoken for?"
-                desc="Add the bills that come out no matter what — rent or mortgage, loans, utilities, subscriptions. We set this aside before figuring your weekly spending money."
-              />
-              {(bills.data ?? []).length === 0 ? (
-                <EmptyCard emoji={<IconBills width={26} height={26} color={Palette.ink} />} text="No bills added yet." cta="Add a bill" onPress={() => setBillSheet({ bill: null })} />
-              ) : (
-                <>
-                  <DashedAdd label="Add another bill" onPress={() => setBillSheet({ bill: null })} />
-                  {(bills.data ?? []).map((b) => (
+                <View style={styles.weekBlock}>
+                  <ThemedText type="bodyBold">When does your week start?</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.weekNote}>
+                    Your weekly spending resets each {weekdayName(household?.week_start_day ?? 0)}.
+                  </ThemedText>
+                  <WeekStartPicker
+                    value={household?.week_start_day ?? 0}
+                    onChange={(d) => householdMut.setWeekStart.mutate(d)}
+                  />
+                </View>
+              </View>
+            )}
+
+            {step === 2 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationIncome}
+                  illustrationSize={{ width: 127, height: 130 }}
+                  title="What comes in?"
+                  desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit it."
+                />
+                {(income.data ?? []).map((s) => {
+                  const m = memberById(s.member_id);
+                  return (
                     <ListRow
-                      key={b.id}
-                      emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
-                      title={b.name}
-                      subtitle={`${b.category} · due the ${ordinal(b.due_day ?? 0)}`}
-                      onPress={() => setBillSheet({ bill: b })}
+                      key={s.id}
+                      emoji={
+                        m ? (
+                          <AvatarGlyph value={m.avatar} size={44} />
+                        ) : (
+                          <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
+                        )
+                      }
+                      title={m?.name ?? 'Household'}
+                      subtitle={`${fmt(s.amount)} · ${FREQ[s.frequency].label}`}
+                      onPress={() => openIncomeSheet({ kind: 'recurring', source: s })}
                       right={
                         <View style={styles.rightRow}>
-                          <ThemedText type="bodyBold">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>
+                          <ThemedText type="bodyBold">{fmt(Math.round(monthlyEquiv(s)))}</ThemedText>
                           <ChevronRight size={16} color="#B7B8C4" />
                         </View>
                       }
                     />
-                  ))}
-                </>
-              )}
-              <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-                Don&apos;t worry about getting every bill exactly right — tap one to edit or remove it, and you can always add more later from Setup.
-              </ThemedText>
-              <TotalCard label="Total fixed expenses" value={fmt(budget.totalFixed)} tone="terracotta" />
-            </View>
-          )}
+                  );
+                })}
+                {(income.data ?? []).length === 0 ? (
+                  <EmptyCard
+                    emoji={<IconGiftBox width={26} height={26} color={Palette.sageDeep} />}
+                    text="No income added yet."
+                    cta="Add income"
+                    onPress={() => openIncomeSheet(null)}
+                  />
+                ) : (
+                  <DashedAdd label="Add another income source" onPress={() => openIncomeSheet(null)} />
+                )}
+                <TotalCard label="Total monthly income" value={fmt(budget.totalIncome)} tone="sage" />
+              </View>
+            )}
 
-          {step === 4 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationSavingsGoals}
-                illustrationSize={{ width: 116, height: 140 }}
-                title="What are you saving toward?"
-                desc="Optional, but this is how consistent saving happens automatically — set a target and a monthly amount, and we fold it into your budget before the weekly number is calculated."
-              />
-              {(goals.data ?? []).map((g) => (
-                <ListRow
-                  key={g.id}
-                  emoji={<GoalGlyph emoji={g.emoji} />}
-                  title={g.name}
-                  subtitle={`${fmt(g.monthly_amount)}/mo toward ${fmt(g.target_amount)}`}
-                  onPress={() => setGoalSheet({ goal: g })}
-                  right={<ChevronRight size={16} color="#B7B8C4" />}
+            {step === 3 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationFixedExpenses}
+                  illustrationSize={{ width: 130, height: 99 }}
+                  title="What's already spoken for?"
+                  desc="Add the bills that come out no matter what — rent or mortgage, loans, utilities, subscriptions. We set this aside before figuring your weekly spending money."
                 />
-              ))}
-              {(goals.data ?? []).length === 0 ? (
-                <EmptyCard emoji={<GoalGlyph emoji={null} />} text="No goals yet — totally optional." cta="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
-              ) : (
-                <DashedAdd label="Add another goal" onPress={() => setGoalSheet({ goal: null })} />
-              )}
-            </View>
-          )}
-
-          {step === 5 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationPlannedSpending}
-                illustrationSize={{ width: 130, height: 118 }}
-                title="What do you spend every week?"
-                desc="Optional — set aside your constant weekly costs like groceries and gas. They'll be reserved from your weekly money so your Week screen shows what's truly free to spend after them."
-              />
-              <PlannedSpending householdId={householdId} />
-            </View>
-          )}
-
-          {step === 6 && (
-            <View>
-              <StepHeader
-                illustration={IllustrationReview}
-                illustrationSize={{ width: 127, height: 130 }}
-                title="You're set up"
-                desc="Here's how your money breaks down each month, calculated from everything you just entered."
-              />
-              <Card style={styles.reviewCard}>
-                <MoneyRow label="Total income" value={fmt(budget.totalIncome)} strong color={Palette.sageDeep} />
-                <Dashed />
-                <MoneyRow label="Fixed expenses" value={'−' + fmt(budget.totalFixed)} strong color={Palette.terracottaDeep} />
-                <MoneyRow label="Savings goals" value={'−' + fmt(budget.goalsMonthly)} sub color={Palette.terracottaDeep} />
-                <MoneyRow label="Fun money" value={'−' + fmt(budget.funTotal)} sub color={Palette.terracottaDeep} />
-                <Dashed />
-                <MoneyRow label="Weekly allowance" value={fmt(budget.weeklyAllowance)} strong color={Palette.sageDeep} />
-              </Card>
-              {(envelopes.data ?? []).length > 0 && (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
-                  You&apos;ve planned{' '}
-                  {fmt((envelopes.data ?? []).reduce((a, e) => a + e.weekly_amount, 0))}/week across{' '}
-                  {(envelopes.data ?? []).length}{' '}
-                  {(envelopes.data ?? []).length === 1 ? 'category' : 'categories'} — you&apos;ll see
-                  them fill up on your Week screen.
+                {(bills.data ?? []).length === 0 ? (
+                  <EmptyCard emoji={<IconBills width={26} height={26} color={Palette.ink} />} text="No bills added yet." cta="Add a bill" onPress={() => setBillSheet({ bill: null })} />
+                ) : (
+                  <>
+                    <DashedAdd label="Add another bill" onPress={() => setBillSheet({ bill: null })} />
+                    {(bills.data ?? []).map((b) => (
+                      <ListRow
+                        key={b.id}
+                        emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
+                        title={b.name}
+                        subtitle={`${b.category} · due the ${ordinal(b.due_day ?? 0)}`}
+                        onPress={() => setBillSheet({ bill: b })}
+                        right={
+                          <View style={styles.rightRow}>
+                            <ThemedText type="bodyBold">{b.amount != null ? fmt(b.amount) : '—'}</ThemedText>
+                            <ChevronRight size={16} color="#B7B8C4" />
+                          </View>
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+                <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
+                  Don&apos;t worry about getting every bill exactly right — tap one to edit or remove it, and you can always add more later from Setup.
                 </ThemedText>
-              )}
-              <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
-                You can always adjust income, bills, goals, or your week from Setup.
-              </ThemedText>
+                <TotalCard label="Total fixed expenses" value={fmt(budget.totalFixed)} tone="terracotta" />
+              </View>
+            )}
+
+            {step === 4 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationSavingsGoals}
+                  illustrationSize={{ width: 116, height: 140 }}
+                  title="What are you saving toward?"
+                  desc="Optional, but this is how consistent saving happens automatically — set a target and a monthly amount, and we fold it into your budget before the weekly number is calculated."
+                />
+                {(goals.data ?? []).map((g) => (
+                  <ListRow
+                    key={g.id}
+                    emoji={<GoalGlyph emoji={g.emoji} />}
+                    title={g.name}
+                    subtitle={`${fmt(g.monthly_amount)}/mo toward ${fmt(g.target_amount)}`}
+                    onPress={() => setGoalSheet({ goal: g })}
+                    right={<ChevronRight size={16} color="#B7B8C4" />}
+                  />
+                ))}
+                {(goals.data ?? []).length === 0 ? (
+                  <EmptyCard emoji={<GoalGlyph emoji={null} />} text="No goals yet — totally optional." cta="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
+                ) : (
+                  <DashedAdd label="Add another goal" onPress={() => setGoalSheet({ goal: null })} />
+                )}
+              </View>
+            )}
+
+            {step === 5 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationPlannedSpending}
+                  illustrationSize={{ width: 130, height: 118 }}
+                  title="What do you spend every week?"
+                  desc="Optional — set aside your constant weekly costs like groceries and gas. They'll be reserved from your weekly money so your Week screen shows what's truly free to spend after them."
+                />
+                <PlannedSpending householdId={householdId} />
+              </View>
+            )}
+
+            {step === 6 && (
+              <View>
+                <StepHeader
+                  illustration={IllustrationReview}
+                  illustrationSize={{ width: 127, height: 130 }}
+                  title="You're set up"
+                  desc="Here's how your money breaks down each month, calculated from everything you just entered."
+                />
+                <Card style={styles.reviewCard}>
+                  <MoneyRow label="Total income" value={fmt(budget.totalIncome)} strong color={Palette.sageDeep} />
+                  <Dashed />
+                  <MoneyRow label="Fixed expenses" value={'−' + fmt(budget.totalFixed)} strong color={Palette.terracottaDeep} />
+                  <MoneyRow label="Savings goals" value={'−' + fmt(budget.goalsMonthly)} sub color={Palette.terracottaDeep} />
+                  <MoneyRow label="Fun money" value={'−' + fmt(budget.funTotal)} sub color={Palette.terracottaDeep} />
+                  <Dashed />
+                  <MoneyRow label="Weekly allowance" value={fmt(budget.weeklyAllowance)} strong color={Palette.sageDeep} />
+                </Card>
+                {(envelopes.data ?? []).length > 0 && (
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
+                    You&apos;ve planned{' '}
+                    {fmt((envelopes.data ?? []).reduce((a, e) => a + e.weekly_amount, 0))}/week across{' '}
+                    {(envelopes.data ?? []).length}{' '}
+                    {(envelopes.data ?? []).length === 1 ? 'category' : 'categories'} — you&apos;ll see
+                    them fill up on your Week screen.
+                  </ThemedText>
+                )}
+                <ThemedText type="small" themeColor="textSecondary" style={styles.reviewNote}>
+                  You can always adjust income, bills, goals, or your week from Setup.
+                </ThemedText>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Footer nav */}
+          <View style={styles.footer}>
+            {step > 0 && (
+              <Pressable accessibilityRole="button" onPress={() => setStep((s) => s - 1)} style={styles.backBtn}>
+                <ThemedText type="bodyBold">Back</ThemedText>
+              </Pressable>
+            )}
+            <View style={styles.flex}>
+              <Button
+                title={step === 0 ? "Let's go" : step === STEPS.length - 1 ? 'Finish setup' : 'Continue'}
+                onPress={next}
+              />
             </View>
-          )}
-        </ScrollView>
-
-        {/* Footer nav */}
-        <View style={styles.footer}>
-          {step > 0 && (
-            <Pressable accessibilityRole="button" onPress={() => setStep((s) => s - 1)} style={styles.backBtn}>
-              <ThemedText type="bodyBold">Back</ThemedText>
-            </Pressable>
-          )}
-          <View style={styles.flex}>
-            <Button
-              title={step === 0 ? "Let's go" : step === STEPS.length - 1 ? 'Finish setup' : 'Continue'}
-              onPress={next}
-            />
           </View>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
 
-      <AddMemberSheet
-        visible={addingMember}
-        onClose={() => setAddingMember(false)}
-        onAdd={addMember}
-        saving={memberMut.add.isPending}
-      />
-      <IncomeSheet
-        visible={incomeSheetOpen}
-        target={incomeTarget}
-        members={members.data ?? []}
-        onClose={closeIncomeSheet}
-        onSave={saveIncome}
-        onDelete={deleteIncome}
-        saving={incomeMut.create.isPending || incomeMut.update.isPending}
-      />
-      <BillSheet
-        visible={!!billSheet}
-        bill={billSheet?.bill ?? null}
-        onClose={() => setBillSheet(null)}
-        onSave={saveBill}
-        onDelete={deleteBill}
-        saving={billMut.create.isPending || billMut.update.isPending}
-      />
-      <GoalSheet
-        visible={!!goalSheet}
-        goal={goalSheet?.goal ?? null}
-        onClose={() => setGoalSheet(null)}
-        onSave={saveGoal}
-        onDelete={deleteGoal}
-        saving={goalMut.create.isPending || goalMut.update.isPending}
-      />
-    </ThemedView>
+        <AddMemberSheet
+          visible={addingMember}
+          onClose={() => setAddingMember(false)}
+          onAdd={addMember}
+          saving={memberMut.add.isPending}
+        />
+        <IncomeSheet
+          visible={incomeSheetOpen}
+          target={incomeTarget}
+          members={members.data ?? []}
+          onClose={closeIncomeSheet}
+          onSave={saveIncome}
+          onDelete={deleteIncome}
+          saving={incomeMut.create.isPending || incomeMut.update.isPending}
+        />
+        <BillSheet
+          visible={!!billSheet}
+          bill={billSheet?.bill ?? null}
+          onClose={() => setBillSheet(null)}
+          onSave={saveBill}
+          onDelete={deleteBill}
+          saving={billMut.create.isPending || billMut.update.isPending}
+        />
+        <GoalSheet
+          visible={!!goalSheet}
+          goal={goalSheet?.goal ?? null}
+          onClose={() => setGoalSheet(null)}
+          onSave={saveGoal}
+          onDelete={deleteGoal}
+          saving={goalMut.create.isPending || goalMut.update.isPending}
+        />
+      </ThemedView>
+    </SafeAreaProvider>
   );
 }
 
