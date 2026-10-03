@@ -9,6 +9,7 @@ import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { groupAmountInput } from '@/lib/money';
+import { useSession } from '@/lib/auth';
 import type { NewMemberInput } from '@/lib/queries';
 
 type Props = {
@@ -25,6 +26,7 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
   const [email, setEmail] = useState('');
   const [funOn, setFunOn] = useState(false);
   const [funMonthly, setFunMonthly] = useState('100');
+  const { session } = useSession();
 
   useEffect(() => {
     if (visible) {
@@ -35,8 +37,11 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
     }
   }, [visible]);
 
-  // Every new member is invited, so a valid email is always required.
-  const valid = name.trim() !== '' && emailValid(email);
+  // Every new member is invited, so a valid email is always required. Your own
+  // email is refused here: you're already in the household. The database also
+  // refuses anyone else who's already in it (see describeWriteError).
+  const isOwnEmail = email.trim().toLowerCase() === session?.user.email?.toLowerCase();
+  const valid = name.trim() !== '' && emailValid(email) && !isOwnEmail;
 
   return (
     <Sheet visible={visible} title="Add a household member" onClose={onClose}>
@@ -51,11 +56,15 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
         keyboardType="email-address"
         inputMode="email"
         autoCapitalize="none"
-        style={email !== '' && !emailValid(email) ? styles.emailError : undefined}
+        style={(email !== '' && !emailValid(email)) || isOwnEmail ? styles.emailError : undefined}
       />
       {email !== '' && !emailValid(email) ? (
         <ThemedText type="small" themeColor="warningDeep" style={styles.errText}>
           Enter a valid email so we can send their invite.
+        </ThemedText>
+      ) : isOwnEmail ? (
+        <ThemedText type="small" themeColor="warningDeep" style={styles.errText}>
+          That&apos;s your email. You&apos;re already in this household.
         </ThemedText>
       ) : (
         <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>

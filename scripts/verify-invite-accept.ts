@@ -14,6 +14,8 @@
  *   5. U2 declines invite B — it disappears from their list and the row is gone.
  *   6. U2 accepts invite A — they become a member, the household is now visible,
  *      and the row is linked (account set, not pending). The list is now empty.
+ *   7. Nobody can be in a household twice: inviting yourself, inviting someone
+ *      who already joined, or inviting the same email twice is refused.
  *
  * Three throwaway users are created and deleted (cascade) at the end.
  *
@@ -220,6 +222,39 @@ async function main() {
     );
     const { data: afterAccept } = await u2.rpc('list_my_pending_invites');
     check('U2 has no pending invites left', (afterAccept ?? []).length === 0, `saw ${(afterAccept ?? []).length}`);
+
+    // 7. Nobody ends up in the same household twice (20261003000028).
+    console.log('\n6. Nobody can be in a household twice');
+    const refused = async (email: string) => {
+      try {
+        await inviteByEmail(u1, a.householdId, a.ownerMemberId, email);
+        return 'allowed';
+      } catch (e) {
+        return (e as { code?: string }).code ?? 'other error';
+      }
+    };
+    check('U1 cannot invite their own email', (await refused(U1_EMAIL)) === 'OD002');
+    check('U1 cannot invite U2, who already joined', (await refused(U2_EMAIL)) === 'OD002');
+    check('first invite to U3 goes through', (await refused(U3_EMAIL)) === 'allowed');
+    check('a second waiting invite to U3 is refused', (await refused(U3_EMAIL)) === 'OD002');
+    check(
+      'the refusal reads in plain words',
+      await inviteByEmail(u1, a.householdId, a.ownerMemberId, U2_EMAIL).then(
+        () => false,
+        (e) => (e as { message?: string }).message === 'That person is already in this household.'
+      )
+    );
+    // Even a path that skips the invite check can't link a second row.
+    const { data: spare } = await u1
+      .from('household_members')
+      .insert({ household_id: a.householdId, name: 'Spare', has_account: false })
+      .select()
+      .single();
+    const { error: dupLink } = await admin
+      .from('household_members')
+      .update({ account_id: u2Id })
+      .eq('id', spare!.id);
+    check('a second row for U2 in House A is refused', (dupLink as { code?: string } | null)?.code === '23505');
   } finally {
     console.log('\nCleaning up test users (cascades their households)…');
     await admin.auth.admin.deleteUser(u1Id).catch(() => {});
