@@ -1164,25 +1164,41 @@ export function useWeekAdjustment(householdId: string | null, weekStart: string 
   });
 }
 
-/** Whether the week that ended on `fromWeekStart` has already been settled. */
-export function useRolloverSettled(householdId: string | null, fromWeekStart: string | null) {
+export type RolloverResolution = 'carry_forward' | 'goal' | 'dismiss' | 'catch_up';
+
+/** How the week that ended on a given start date was settled. */
+export type WeekRollover = {
+  amount: number; // signed: + leftover, − overage
+  resolution: RolloverResolution;
+  goalId: string | null;
+};
+
+/**
+ * The settlement for the week that ended on `fromWeekStart`, or null if that
+ * week hasn't been settled yet. Returned whole, not as a yes/no, so the Week
+ * screen can say what was decided and offer to change it.
+ */
+export function useWeekRollover(householdId: string | null, fromWeekStart: string | null) {
   return useQuery({
     queryKey: ['week_rollovers', 'settled', householdId, fromWeekStart],
     enabled: !!householdId && !!fromWeekStart,
-    queryFn: async (): Promise<boolean> => {
+    queryFn: async (): Promise<WeekRollover | null> => {
       const { data, error } = await supabase
         .from('week_rollovers')
-        .select('id')
+        .select('amount, resolution, goal_id')
         .eq('household_id', householdId!)
         .eq('from_week_start', fromWeekStart!)
         .maybeSingle();
       if (error) throw error;
-      return !!data;
+      if (!data) return null;
+      return {
+        amount: Number(data.amount),
+        resolution: data.resolution as RolloverResolution,
+        goalId: data.goal_id,
+      };
     },
   });
 }
-
-export type RolloverResolution = 'carry_forward' | 'goal' | 'dismiss' | 'catch_up';
 
 export type SettleRolloverInput = {
   fromWeekStart: string;
@@ -1190,40 +1206,57 @@ export type SettleRolloverInput = {
   amount: number; // signed: + leftover, − overage
   resolution: RolloverResolution;
   goalId?: string;
-  goalSavedAmount?: number;
-  goalTargetAmount?: number;
+  /** Written on the catch-up entry, when the resolution makes one. */
+  note?: string;
   settledByMemberId?: string | null;
 };
 
-/** Records how a just-ended week's leftover/overage was resolved (once per week). */
+function invalidateSettlement(qc: ReturnType<typeof useQueryClient>, householdId: string | null) {
+  qc.invalidateQueries({ queryKey: ['week_rollovers'] });
+  qc.invalidateQueries({ queryKey: ['goals', householdId] });
+  qc.invalidateQueries({ queryKey: ['catchup_entries', householdId] });
+}
+
+/**
+ * Records how a just-ended week's leftover/overage was resolved (once per
+ * week). One database call, so the goal or catch-up change and the
+ * settlement land together or not at all.
+ */
 export function useSettleRollover(householdId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: SettleRolloverInput) => {
-      const applied = input.resolution === 'carry_forward' ? input.amount : 0;
-      const { error } = await supabase.from('week_rollovers').insert({
-        household_id: householdId,
-        from_week_start: input.fromWeekStart,
-        to_week_start: input.toWeekStart,
-        amount: input.amount,
-        resolution: input.resolution,
-        applied_amount: applied,
-        goal_id: input.resolution === 'goal' ? (input.goalId ?? null) : null,
-        settled_by_member_id: input.settledByMemberId ?? null,
+      const { error } = await supabase.rpc('settle_week_rollover', {
+        p_household_id: householdId,
+        p_from: input.fromWeekStart,
+        p_to: input.toWeekStart,
+        p_amount: input.amount,
+        p_resolution: input.resolution,
+        p_goal_id: input.resolution === 'goal' ? (input.goalId ?? null) : null,
+        p_member_id: input.settledByMemberId ?? null,
+        p_note: input.note ?? null,
       });
       if (error) throw error;
+    },
+    onSuccess: () => invalidateSettlement(qc, householdId),
+  });
+}
 
-      if (input.resolution === 'goal' && input.goalId && input.goalSavedAmount != null) {
-        const cap = input.goalTargetAmount ?? Infinity;
-        const next = Math.max(0, Math.min(cap, input.goalSavedAmount + input.amount));
-        const { error: gErr } = await supabase.from('goals').update({ saved_amount: next }).eq('id', input.goalId);
-        if (gErr) throw gErr;
-      }
+/**
+ * Undoes a week's settlement: takes the money back out of the goal or
+ * catch-up it went to (or out of this week), and lets the week ask again.
+ */
+export function useReopenRollover(householdId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fromWeekStart: string) => {
+      const { error } = await supabase.rpc('reopen_week_rollover', {
+        p_household_id: householdId,
+        p_from: fromWeekStart,
+      });
+      if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['week_rollovers'] });
-      qc.invalidateQueries({ queryKey: ['goals', householdId] });
-    },
+    onSuccess: () => invalidateSettlement(qc, householdId),
   });
 }
 

@@ -119,6 +119,78 @@ async function main() {
     const { data: none } = await u1.from('week_rollovers').select('applied_amount').eq('household_id', hid).eq('to_week_start', '2099-01-01');
     const noneSum = (none ?? []).reduce((a, r) => a + Number(r.applied_amount), 0);
     check('untouched week sums to 0', noneSum === 0, `got ${noneSum}`);
+
+    // ---- 4. Settling through settle_week_rollover, and changing your mind ----
+    console.log('\n4. Every choice can be undone, and undoing puts the money back exactly');
+    const { data: g2 } = await u1
+      .from('goals')
+      .insert({ household_id: hid, name: 'Car', target_amount: 500, monthly_amount: 20, saved_amount: 30 })
+      .select()
+      .single();
+    const settle = (from: string, amount: number, resolution: string, goalId: string | null = null) =>
+      u1.rpc('settle_week_rollover', {
+        p_household_id: hid,
+        p_from: from,
+        p_to: '2026-09-07',
+        p_amount: amount,
+        p_resolution: resolution,
+        p_goal_id: goalId,
+        p_member_id: m!.id,
+        p_note: 'test week',
+      });
+    const reopen = (from: string) => u1.rpc('reopen_week_rollover', { p_household_id: hid, p_from: from });
+    const rowFor = async (from: string) =>
+      (await u1.from('week_rollovers').select('*').eq('household_id', hid).eq('from_week_start', from).maybeSingle()).data;
+    const goalSaved = async () => Number((await u1.from('goals').select('saved_amount').eq('id', g2!.id).single()).data?.saved_amount);
+    const owed = async () =>
+      ((await u1.from('catchup_entries').select('amount').eq('household_id', hid)).data ?? []).reduce((a, r) => a + Number(r.amount), 0);
+
+    // Goal clamped at zero: $80 over taken from a goal holding $30.
+    let r = await settle('2026-08-03', -80, 'goal', g2!.id);
+    check('settle to goal succeeds', !r.error, r.error?.message);
+    check('goal floored at 0', (await goalSaved()) === 0, `got ${await goalSaved()}`);
+    check('goal_applied records what actually moved (-30)', Number((await rowFor('2026-08-03'))?.goal_applied) === -30);
+    r = await reopen('2026-08-03');
+    check('reopen goal succeeds', !r.error, r.error?.message);
+    check('goal back to exactly 30, not 110', (await goalSaved()) === 30, `got ${await goalSaved()}`);
+    check('settlement removed, so the week asks again', (await rowFor('2026-08-03')) === null);
+
+    // Catch-up overage.
+    r = await settle('2026-08-10', -120, 'catch_up');
+    check('settle to catch-up succeeds', !r.error, r.error?.message);
+    check('catch-up owes 120', (await owed()) === 120, `got ${await owed()}`);
+    check('settlement points at its catch-up entry', !!(await rowFor('2026-08-10'))?.catchup_entry_id);
+    await reopen('2026-08-10');
+    check('undo removes the catch-up entry', (await owed()) === 0, `got ${await owed()}`);
+
+    // Leftover toward catch-up when nothing is owed writes no entry.
+    r = await settle('2026-08-17', 25, 'catch_up');
+    check('leftover to empty catch-up settles', !r.error, r.error?.message);
+    check('no payment written when nothing is owed', (await owed()) === 0, `got ${await owed()}`);
+    await reopen('2026-08-17');
+
+    // Let it go, then change your mind.
+    await settle('2026-08-24', -60, 'dismiss');
+    check('let-it-go is recorded', (await rowFor('2026-08-24'))?.resolution === 'dismiss');
+    await reopen('2026-08-24');
+    check('let-it-go can be undone', (await rowFor('2026-08-24')) === null);
+
+    // Carry into the week, then undo: the target week's adjustment returns to 0.
+    await settle('2026-08-31', -50, 'carry_forward');
+    const adj = async () =>
+      ((await u1.from('week_rollovers').select('applied_amount').eq('household_id', hid).eq('to_week_start', '2026-09-07')).data ?? []).reduce(
+        (a, x) => a + Number(x.applied_amount),
+        0
+      );
+    check('carry lowers the target week by 50', (await adj()) === -50, `got ${await adj()}`);
+    await reopen('2026-08-31');
+    check('undoing the carry restores the week', (await adj()) === 0, `got ${await adj()}`);
+
+    // A second settle for the same week fails and leaves the goal alone.
+    await settle('2026-09-07', 10, 'goal', g2!.id);
+    const dup = await settle('2026-09-07', 10, 'goal', g2!.id);
+    check('settling the same week twice is refused', !!dup.error);
+    check('the refused settle moved no money (goal 40, not 50)', (await goalSaved()) === 40, `got ${await goalSaved()}`);
   } finally {
     await admin.auth.admin.deleteUser(u1Id).catch(() => {});
   }
