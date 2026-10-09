@@ -50,6 +50,13 @@ function readErrorText(error: unknown): string {
  * message says.
  */
 export function describeWriteError(error: unknown): string {
+  // OD002 is raised with a message already written for the household (see
+  // the one_membership_per_person migration), so it's shown as is.
+  if (typeof error === 'object' && error !== null) {
+    const e = error as { code?: unknown; message?: unknown };
+    if (e.code === 'OD002' && typeof e.message === 'string') return e.message;
+  }
+
   const raw = readErrorText(error);
 
   if (/network|fetch|timeout|timed out|offline|econn/i.test(raw)) {

@@ -7,6 +7,7 @@ import { FieldLabel, TextField } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
+import { useSession } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
 import { useCreateHousehold } from '@/lib/queries';
 
@@ -22,6 +23,7 @@ const emailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 export function CreateHouseholdSheet({ visible, onClose, onCreated }: Props) {
   const { setActiveHousehold } = useHousehold();
   const create = useCreateHousehold();
+  const { session } = useSession();
 
   const [householdName, setHouseholdName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,7 +39,9 @@ export function CreateHouseholdSheet({ visible, onClose, onCreated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const canAddEmail = emailValid(email) && !invites.includes(email.trim().toLowerCase());
+  // You're added as the owner, so inviting yourself would only make a copy.
+  const isOwnEmail = email.trim().toLowerCase() === session?.user.email?.toLowerCase();
+  const canAddEmail = emailValid(email) && !isOwnEmail && !invites.includes(email.trim().toLowerCase());
   const valid = householdName.trim() !== '';
 
   function addEmail() {
@@ -96,6 +100,11 @@ export function CreateHouseholdSheet({ visible, onClose, onCreated }: Props) {
           </ThemedText>
         </Pressable>
       </View>
+      {isOwnEmail && (
+        <ThemedText type="small" themeColor="warningDeep" style={styles.err}>
+          That&apos;s your email. You&apos;re already in the household as its owner.
+        </ThemedText>
+      )}
 
       {invites.length > 0 && (
         <View style={styles.chips}>
