@@ -23,12 +23,18 @@ type Props = {
   goals: Goal[];
   loading?: boolean;
   onResolve: (resolution: RolloverResolution, goalId?: string) => void;
+  /** Closed without choosing. Nothing is recorded; the question stays open. */
+  onLater: () => void;
 };
 
 /**
- * Appears once when a new week starts and the just-ended week finished with
- * money left over or over budget. Asks what to do with it rather than silently
+ * Appears when a new week starts and the just-ended week finished with money
+ * left over or over budget. Asks what to do with it rather than silently
  * folding it into the new week (design-brief: household stays in control).
+ *
+ * Closing it is "not now", never a choice. The X used to record "just move
+ * on", which wrote a real overage off without anyone choosing to. Every choice
+ * here can also be changed later from the Week screen.
  */
 export function RolloverPrompt({
   visible,
@@ -41,6 +47,7 @@ export function RolloverPrompt({
   goals,
   loading,
   onResolve,
+  onLater,
 }: Props) {
   const [pickingGoal, setPickingGoal] = useState(false);
   const over = amount < 0;
@@ -87,7 +94,7 @@ export function RolloverPrompt({
   }
 
   return (
-    <Sheet visible={visible} title="Last week wrapped up" onClose={() => close('dismiss')}>
+    <Sheet visible={visible} title="Last week wrapped up" onClose={onLater}>
       <View style={styles.headline}>
         <ThemedText type="display" style={over ? styles.overColor : styles.underColor}>
           {over ? '-' : '+'}
@@ -140,11 +147,18 @@ export function RolloverPrompt({
         />
       )}
       <Option
-        label={over ? 'Just move on' : 'Just start fresh'}
-        sub="This week resets clean, no adjustment."
+        label={over ? 'Let it go' : 'Just start fresh'}
+        sub={
+          over
+            ? `The ${fmt(abs)} isn't counted anywhere. This week starts clean.`
+            : `The ${fmt(abs)} isn't kept anywhere. This week starts clean.`
+        }
         onPress={() => close('dismiss')}
         loading={loading}
       />
+      <ThemedText type="small" themeColor="textSecondary" style={styles.later}>
+        Not sure yet? Close this and decide later. You can change your choice any time this week.
+      </ThemedText>
     </Sheet>
   );
 }
@@ -179,6 +193,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { textAlign: 'center', marginTop: Spacing.one },
   working: { textAlign: 'center', marginTop: Spacing.two, opacity: 0.75 },
+  later: { textAlign: 'center', marginTop: Spacing.two },
   headline: { alignItems: 'center', marginBottom: Spacing.four },
   overColor: { color: Palette.terracottaDeep },
   underColor: { color: Palette.sageDeep },

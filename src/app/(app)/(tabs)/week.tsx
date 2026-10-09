@@ -48,18 +48,19 @@ import {
   useGoals,
   useIncome,
   useCatchUpEntries,
-  useCatchUpMutations,
   useMembers,
   useRecordWeekResult,
-  useRolloverSettled,
+  useReopenRollover,
   useSettleRollover,
   useTransactions,
   useWeekAdjustment,
   useWeekResult,
+  useWeekRollover,
   type EnvelopeDraft,
   type RolloverResolution,
+  type WeekRollover,
 } from '@/lib/queries';
-import type { Transaction, WeeklyEnvelope } from '@/lib/types';
+import type { Goal, Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 
 /**
@@ -102,7 +103,6 @@ export default function WeekScreen() {
   const envelopes = useEnvelopes(householdId);
   const envMut = useEnvelopeMutations(householdId);
   const catchUp = useCatchUpEntries(householdId);
-  const catchUpMut = useCatchUpMutations(householdId);
 
   const [offset, setOffset] = useState(0);
   const [envSheet, setEnvSheet] = useState<{ envelope: WeeklyEnvelope | null } | null>(null);
@@ -246,8 +246,13 @@ export default function WeekScreen() {
   const lastRemaining =
     Math.round((lastPlannedWeekly - lastSpent + lastIncomeBack + lastAdjustment) * 100) / 100;
 
-  const rolloverSettled = useRolloverSettled(householdId, isCurrent ? lastWeek.start : null);
+  const rollover = useWeekRollover(householdId, isCurrent ? lastWeek.start : null);
   const settleRollover = useSettleRollover(householdId);
+  const reopenRollover = useReopenRollover(householdId);
+  // Closing the sheet without choosing means "not now". Remembered per week,
+  // so it doesn't pop straight back up, but the question stays open on screen.
+  const [laterFor, setLaterFor] = useState<string | null>(null);
+  const askedLater = laterFor === lastWeek.start;
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id) ?? null;
 
   // A week the household didn't exist for has no transactions to subtract, so
@@ -255,51 +260,38 @@ export default function WeekScreen() {
   // as real money. Nobody rolls over from before they signed up.
   const existedLastWeek = !!household && household.created_at.slice(0, 10) <= lastWeek.start;
 
-  const showRolloverPrompt =
+  // Last week ended with something to decide and nobody has decided yet.
+  const rolloverOpen =
     isCurrent &&
     existedLastWeek &&
     lastPlannedWeekly > 0 &&
     lastRemaining !== 0 &&
-    rolloverSettled.data === false;
+    rollover.data === null;
+  const showRolloverPrompt = rolloverOpen && !askedLater && !reopenRollover.isPending;
+  const lastSettlement = isCurrent ? (rollover.data ?? null) : null;
 
   function resolveRollover(resolution: RolloverResolution, goalId?: string) {
-    const goal = goalId ? (goals.data ?? []).find((g) => g.id === goalId) : undefined;
-
     // Catch-up records the money on its own balance instead of moving it into
     // a week or a goal, so `applied_amount` stays 0 and no allowance shifts.
-    if (resolution === 'catch_up') {
-      const owed = catchUpBalance(catchUp.data);
-      catchUpMut.add.mutate(
-        lastRemaining < 0
-          ? {
-              amount: -lastRemaining, // overage becomes a positive debt
-              kind: 'week_overage',
-              note: `Week of ${weekRangeLabel(lastWeek.days)}`,
-              sourceWeekStart: lastWeek.start,
-              memberId: me?.id ?? null,
-            }
-          : {
-              // Never pay off more than is owed, or the balance would go
-              // negative and read as the household being owed money.
-              amount: -Math.min(lastRemaining, owed),
-              kind: 'payment',
-              note: `Left over from the week of ${weekRangeLabel(lastWeek.days)}`,
-              sourceWeekStart: lastWeek.start,
-              memberId: me?.id ?? null,
-            }
-      );
-    }
-
+    // The database caps a catch-up payment at what's owed.
     settleRollover.mutate({
       fromWeekStart: lastWeek.start,
       toWeekStart: week.start,
       amount: lastRemaining,
       resolution,
       goalId,
-      goalSavedAmount: goal?.saved_amount,
-      goalTargetAmount: goal?.target_amount,
+      note:
+        lastRemaining < 0
+          ? `Week of ${weekRangeLabel(lastWeek.days)}`
+          : `Left over from the week of ${weekRangeLabel(lastWeek.days)}`,
       settledByMemberId: me?.id ?? null,
     });
+  }
+
+  /** Undo last week's choice and ask again. */
+  function changeRollover() {
+    setLaterFor(null);
+    reopenRollover.mutate(lastWeek.start);
   }
 
   // Envelopes ("planned spending") reshape the CURRENT week only — past weeks
@@ -460,6 +452,33 @@ export default function WeekScreen() {
               ringLabel={over ? 'over' : 'left'}
               ringCenter=""
             />
+          )}
+
+          {/* Last week's result is still waiting for a decision. The sheet
+              was closed with "not now", so the question stays on screen until
+              it's answered rather than vanishing with the sheet. */}
+          {rolloverOpen && askedLater && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Last week ${lastRemaining < 0 ? 'went' : 'finished'} ${fmt(Math.abs(lastRemaining))} ${lastRemaining < 0 ? 'over' : 'under'}. Decide what to do with it.`}
+              onPress={() => setLaterFor(null)}
+              style={styles.pendingBanner}>
+              <View style={styles.flex}>
+                <ThemedText type="bodyBold" style={styles.pastBannerText}>
+                  {lastRemaining < 0
+                    ? `Last week went ${fmt(-lastRemaining)} over`
+                    : `Last week had ${fmt(lastRemaining)} left`}
+                </ThemedText>
+                <ThemedText type="small" style={styles.pastBannerSub}>
+                  You haven&apos;t decided what to do with it yet.
+                </ThemedText>
+              </View>
+              <View style={styles.pastBannerBtn}>
+                <ThemedText type="small" style={styles.pastBannerBtnText}>
+                  Decide
+                </ThemedText>
+              </View>
+            </Pressable>
           )}
 
           {/* Only during the days a new calendar month has started but this
@@ -747,7 +766,17 @@ export default function WeekScreen() {
               would deduct it a second time and make the week look twice as bad
               as it is. Hence the dashed outline and no tap target: it reads as
               context, not as something logged. */}
-          {adjustment !== 0 && (
+          {/* On this week, the row says what was decided about last week,
+              whatever it was, and lets it be changed. A choice that isn't
+              shown can't be questioned: "let it go" used to leave no trace. */}
+          {lastSettlement ? (
+            <SettlementRow
+              settlement={lastSettlement}
+              goals={goals.data ?? []}
+              changing={reopenRollover.isPending}
+              onChange={changeRollover}
+            />
+          ) : adjustment !== 0 && (
             <View style={styles.carryRow}>
               <View style={styles.carryTile}>
                 <CornerDownRight
@@ -859,8 +888,106 @@ export default function WeekScreen() {
         goals={goals.data ?? []}
         loading={settleRollover.isPending}
         onResolve={resolveRollover}
+        onLater={() => setLaterFor(lastWeek.start)}
       />
     </Screen>
+  );
+}
+
+/** Plain words for what a settlement did, so the household can check it. */
+function settlementWords(s: WeekRollover, goals: Goal[]): { title: string; body: string } {
+  const amt = fmt(Math.abs(s.amount));
+  const over = s.amount < 0;
+  const goalName = goals.find((g) => g.id === s.goalId)?.name ?? 'a savings goal';
+  switch (s.resolution) {
+    case 'carry_forward':
+      return over
+        ? {
+            title: 'Started short from last week',
+            body: `Last week went ${amt} over and you chose to take it from this week, so this week began with ${amt} less to spend.`,
+          }
+        : {
+            title: 'Started ahead from last week',
+            body: `Last week had ${amt} left and you chose to add it to this week, so this week began with ${amt} more to spend.`,
+          };
+    case 'catch_up':
+      return over
+        ? {
+            title: 'Last week moved to catch-up',
+            body: `Last week went ${amt} over. It's on your catch-up balance to pay off later, so this week wasn't touched.`,
+          }
+        : {
+            title: 'Last week paid down catch-up',
+            body: `Last week had ${amt} left and you put it toward what you owe on catch-up.`,
+          };
+    case 'goal':
+      return over
+        ? {
+            title: `Last week covered by ${goalName}`,
+            body: `Last week went ${amt} over and you took it from ${goalName}. This week wasn't touched.`,
+          }
+        : {
+            title: `Last week saved to ${goalName}`,
+            body: `Last week had ${amt} left and you put it toward ${goalName}.`,
+          };
+    default:
+      return over
+        ? {
+            title: 'Last week let go',
+            body: `Last week went ${amt} over and you chose to let it go. It isn't counted anywhere, and this week started clean.`,
+          }
+        : {
+            title: 'Last week started fresh',
+            body: `Last week had ${amt} left and you chose to start fresh. It isn't kept anywhere.`,
+          };
+  }
+}
+
+function SettlementRow({
+  settlement,
+  goals,
+  changing,
+  onChange,
+}: {
+  settlement: WeekRollover;
+  goals: Goal[];
+  changing: boolean;
+  onChange: () => void;
+}) {
+  const over = settlement.amount < 0;
+  const { title, body } = settlementWords(settlement, goals);
+  // Only a carry changes this week's number, so only a carry gets a figure in
+  // the money column. The others are context, not money in or out of this week.
+  const carried = settlement.resolution === 'carry_forward';
+  return (
+    <View style={styles.carryRow}>
+      <View style={styles.carryTile}>
+        <CornerDownRight size={20} color={over ? Palette.terracottaDeep : Palette.sageDeep} />
+      </View>
+      <View style={styles.flex}>
+        <ThemedText type="bodyBold">{title}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.carrySub}>
+          {body}
+        </ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Change what happens to last week's money"
+          onPress={onChange}
+          disabled={changing}
+          hitSlop={8}
+          style={styles.changeBtn}>
+          <ThemedText type="small" style={styles.changeText}>
+            {changing ? 'Undoing...' : 'Change this'}
+          </ThemedText>
+        </Pressable>
+      </View>
+      {carried && (
+        <ThemedText type="bodyBold" style={over ? styles.overageText : styles.freeText}>
+          {over ? '-' : '+'}
+          {fmt(Math.abs(settlement.amount))}
+        </ThemedText>
+      )}
+    </View>
   );
 }
 
@@ -997,6 +1124,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     marginBottom: Spacing.two,
   },
+  // Same look as the past-week banner, but sits below the hero rather than
+  // above it, so it needs space on top instead of underneath.
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: 'rgba(242,204,143,0.35)',
+    borderWidth: 1,
+    borderColor: Palette.sand,
+    borderRadius: Radius.large,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    marginTop: Spacing.three,
+  },
   pastBannerText: { color: '#8A6A2A' },
   pastBannerSub: { color: 'rgba(138,106,42,0.85)', marginTop: 1 },
   pastBannerBtn: {
@@ -1030,6 +1171,8 @@ const styles = StyleSheet.create({
   },
   carryTile: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   carrySub: { lineHeight: 22 },
+  changeBtn: { alignSelf: 'flex-start', marginTop: Spacing.two },
+  changeText: { color: Palette.sageDeep, fontWeight: '600' },
   allowCard: { marginBottom: Spacing.three, gap: Spacing.two + 2 },
   allowBar: {
     flexDirection: 'row',
