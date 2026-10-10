@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { splitIncome } from '@/lib/money';
 import { supabase } from '@/lib/supabase';
 import { todayISO } from '@/lib/week';
 import type {
