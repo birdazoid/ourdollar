@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
 import IconGraph from '@/assets/icons/icon-graph.svg';
@@ -52,6 +52,7 @@ import type { Bill } from '@/lib/types';
 const STEPS = ['Summary', 'Confirm bills', 'Unpaid bills', 'Start month'];
 
 export default function MonthReviewScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preview } = useLocalSearchParams<{ preview?: string }>();
   const isPreview = preview === '1';
@@ -193,7 +194,10 @@ export default function MonthReviewScreen() {
 
   return (
     <ThemedView style={styles.fill}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      {/* Padded from the root window's insets rather than a SafeAreaView:
+          inside an iOS full-screen modal SafeAreaView can measure no inset,
+          and the progress header ended up under the status bar. */}
+      <View style={[styles.fill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <ThemedText type="label" themeColor="textSecondary">
@@ -404,7 +408,7 @@ export default function MonthReviewScreen() {
             />
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       <BillSheet
         visible={!!billSheet}
