@@ -202,15 +202,7 @@ export default function BillsScreen() {
     });
   }
   function contribute(g: Goal) {
-    goalMut.contribute.mutate(
-      {
-        id: g.id,
-        saved_amount: g.saved_amount,
-        target_amount: g.target_amount,
-        monthly_amount: g.monthly_amount,
-      },
-      { onSuccess: haptic.success }
-    );
+    goalMut.contribute.mutate({ id: g.id }, { onSuccess: haptic.success });
     setGoalDetail(null);
   }
 

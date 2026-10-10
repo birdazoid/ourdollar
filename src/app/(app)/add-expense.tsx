@@ -33,6 +33,7 @@ import {
 } from '@/lib/queries';
 import type { IncomeDestination } from '@/lib/types';
 import { dayHeading, getWeek, todayISO } from '@/lib/week';
+import { newId } from '@/lib/ids';
 
 type TxType = 'expense' | 'income';
 
@@ -40,6 +41,9 @@ export default function AddExpenseScreen() {
   const router = useRouter();
   // Fall back to Week when there's no history to pop (e.g. a web reload).
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/week'));
+  // This entry's id, fixed for as long as the form is open. A save whose reply
+  // was lost can then be retried without logging the money twice.
+  const [draftId] = useState(newId);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { householdId, household } = useHousehold();
   const { session } = useSession();
@@ -267,9 +271,9 @@ export default function AddExpenseScreen() {
         // logIncome writes the transaction AND applies the destination as one
         // operation, so a failure can't leave the money recorded but unassigned.
         const goal = (goals.data ?? []).find((g) => g.id === destGoalId);
-        await txMut.logIncome.mutateAsync({ input, goal, catchUpOwed, memberId });
+        await txMut.logIncome.mutateAsync({ id: draftId, input, goal, memberId });
       } else {
-        await txMut.create.mutateAsync(input);
+        await txMut.create.mutateAsync({ ...input, id: draftId });
       }
       haptic.success();
       goBack();
