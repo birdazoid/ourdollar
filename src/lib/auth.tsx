@@ -16,6 +16,8 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string) => Promise<AuthResult & { needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  /** Emails a fresh sign-up confirmation link, for one that expired or never arrived. */
+  resendConfirmation: (email: string) => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   updateEmail: (email: string) => Promise<AuthResult>;
@@ -92,6 +94,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
       // until the email link is clicked.
       const needsConfirmation = !error && !data.session;
       return { error, needsConfirmation };
+    },
+    resendConfirmation: async (email) => {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      return { error };
     },
     signOut: async () => {
       await supabase.auth.signOut();

@@ -25,7 +25,7 @@ type Mode = 'signIn' | 'signUp';
 export default function SignInScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { signIn, signUp } = useSession();
+  const { signIn, signUp, resendConfirmation } = useSession();
   const [mode, setMode] = useState<Mode>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,11 +33,31 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  // Sign-in was refused because the email isn't confirmed yet. Without a way
+  // to ask for a new link, someone whose link expired was simply stuck.
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+
+  async function sendNewLink(to: string) {
+    setResending(true);
+    const { error } = await resendConfirmation(to);
+    setResending(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setResent(true);
+    setUnconfirmed(false);
+    setError(null);
+    setSentTo(to);
+  }
 
   const isSignIn = mode === 'signIn';
 
   async function handleSubmit() {
     setError(null);
+    setUnconfirmed(false);
     if (!email.trim() || !password) {
       setError('Enter your email and password.');
       return;
@@ -45,7 +65,9 @@ export default function SignInScreen() {
     setLoading(true);
     if (isSignIn) {
       const { error } = await signIn(email.trim(), password);
-      if (error) setError(error.message);
+      if (error && (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message))) {
+        setUnconfirmed(true);
+      } else if (error) setError(error.message);
       // On success, the session listener flips the app into the protected group.
     } else {
       // Stash the consent choice — it's written to the account on first authed
@@ -83,7 +105,18 @@ export default function SignInScreen() {
                 Tap the link in that email to verify your account, then sign in. Check spam if it
                 hasn&apos;t arrived in a minute.
               </ThemedText>
+              {resent && (
+                <ThemedText type="small" style={[styles.tagline, { color: Palette.sageDeep }]}>
+                  New link sent.
+                </ThemedText>
+              )}
             </View>
+            <Button
+              variant="secondary"
+              title="Send it again"
+              loading={resending}
+              onPress={() => sendNewLink(sentTo)}
+            />
             <Button
               title="Back to sign in"
               onPress={() => {
@@ -183,6 +216,21 @@ export default function SignInScreen() {
                 </ThemedText>
               )}
 
+              {unconfirmed && (
+                <View style={styles.unconfirmed}>
+                  <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
+                    Your email isn&apos;t confirmed yet. Tap the link we emailed you, or get a new
+                    one.
+                  </ThemedText>
+                  <Button
+                    variant="secondary"
+                    title="Send a new link"
+                    loading={resending}
+                    onPress={() => sendNewLink(email.trim())}
+                  />
+                </View>
+              )}
+
               <Button
                 title={isSignIn ? 'Sign in' : 'Create account'}
                 onPress={handleSubmit}
@@ -214,6 +262,7 @@ function Perk({ icon: Icon, text }: { icon: ComponentType<SvgProps>; text: strin
 }
 
 const styles = StyleSheet.create({
+  unconfirmed: { gap: Spacing.two },
   container: { flex: 1 },
   flex: { flex: 1 },
   safeArea: { flex: 1 },
