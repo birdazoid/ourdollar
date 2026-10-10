@@ -1,7 +1,14 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, CornerDownRight, Plus, TrendingDown } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  LayoutAnimationConfig,
+  LinearTransition,
+} from 'react-native-reanimated';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
 import IconFreeToSpend from '@/assets/icons/icon-free-to-spend.svg';
@@ -19,9 +26,12 @@ import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
+import { ProgressFill } from '@/components/progress-fill';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
+import { haptic } from '@/lib/haptics';
 import { txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import {
@@ -62,6 +72,7 @@ import {
 } from '@/lib/queries';
 import type { Goal, Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
+import { screenData } from '@/lib/screen-data';
 
 /**
  * Where a logged income row was assigned.
@@ -367,16 +378,52 @@ export default function WeekScreen() {
       .map((date) => ({ date, heading: dayHeading(date), items: byDay[date] }));
   }, [weekTxns]);
 
-  const loading = !householdId || transactions.isLoading || income.isLoading;
-  // A failed fetch left `data` undefined, the `?? []` fallbacks took over, and
-  // this screen rendered "Nothing logged for this week yet" on a week with
-  // plenty logged. Report the failure instead of inventing an empty week.
-  const loadFailed = transactions.isError || income.isError || bills.isError;
-  const retryLoad = () => {
-    transactions.refetch();
-    income.refetch();
-    bills.refetch();
-  };
+  // Every query this screen's figures are built from. Nothing is drawn until
+  // all of them have answered: the free-to-spend figure used to appear as soon
+  // as the ledger and income landed, then change seconds later when planned
+  // spending and bills arrived on a slow connection. And a failed fetch used
+  // to fall back to `?? []`, rendering "Nothing logged for this week yet" on a
+  // week with plenty logged, so any failure shows the error state instead.
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [
+    members,
+    transactions,
+    income,
+    extraIncome,
+    bills,
+    goals,
+    funPeople,
+    funSettings,
+    envelopes,
+    catchUp,
+    weekResult,
+    weekAdjustment,
+    lastWeekResult,
+    lastWeekAdjustment,
+    rollover,
+  ]);
+  // Once everything has landed, the hero may count changes (an expense just
+  // logged). Before that it only ever shows the finished figure.
+  const figureReady = !loading;
+
+  // One buzz at the moment this week tips from inside its money to over it,
+  // whatever caused it: an expense here, or one a partner logged that arrived
+  // on refetch. Not on load (an already-over week isn't news) and not while
+  // paging through past weeks.
+  const heroFigure = showEnvelopes ? envFree : remaining;
+  const wasOver = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!isCurrent || !figureReady) {
+      wasOver.current = null;
+      return;
+    }
+    const nowOver = heroFigure < 0;
+    if (wasOver.current === false && nowOver) haptic.warning();
+    wasOver.current = nowOver;
+  }, [heroFigure, isCurrent, figureReady]);
 
   return (
     <Screen>
@@ -421,8 +468,12 @@ export default function WeekScreen() {
         <>
           {showEnvelopes ? (
             <HeroCard
+              key="free-to-spend"
               eyebrow="This week's free-to-spend"
               big={envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
+              bigValue={envFree}
+              formatBig={signedMoney}
+              jumpKey={figureReady ? `${householdId}:${offset}` : 'loading'}
               bigColor={envFree < 0 ? Palette.terracottaDeep : Palette.ink}
               // Not "$56 spent", which sat under the free-to-spend figure and
               // implied the spending had come out of it. Money in a planned
@@ -440,10 +491,14 @@ export default function WeekScreen() {
             />
           ) : (
             <HeroCard
+              key="spending-money"
               eyebrow={
                 isCurrent ? "This week's spending money" : `Past week · ${weekRangeLabel(week.days)}`
               }
               big={over ? '-' + fmt(-remaining) : fmt(remaining)}
+              bigValue={remaining}
+              formatBig={signedMoney}
+              jumpKey={figureReady ? `${householdId}:${offset}` : 'loading'}
               bigColor={over ? Palette.terracottaDeep : Palette.ink}
               sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
               subColor={over ? Palette.terracottaDeep : undefined}
@@ -689,7 +744,7 @@ export default function WeekScreen() {
                 </ThemedText>
               </View>
 
-              <Pressable
+              <PressableScale scaleTo={0.98}
                 accessibilityRole="button"
                 accessibilityLabel="Add a planned category"
                 onPress={() => setEnvSheet({ envelope: null })}
@@ -698,7 +753,7 @@ export default function WeekScreen() {
                   <Plus size={16} color={Palette.card} strokeWidth={3} />
                 </View>
                 <ThemedText type="label">Add a planned category</ThemedText>
-              </Pressable>
+              </PressableScale>
             </>
           )}
 
@@ -748,7 +803,7 @@ export default function WeekScreen() {
             action={weekTxns.length ? `${weekTxns.length} logged` : undefined}
           />
           {isCurrent && (
-            <Pressable
+            <PressableScale scaleTo={0.98}
               accessibilityRole="button"
               accessibilityLabel="Add an expense"
               onPress={() => router.push('/add-expense')}
@@ -757,7 +812,7 @@ export default function WeekScreen() {
                 <Plus size={16} color={Palette.card} strokeWidth={3} />
               </View>
               <ThemedText type="label">Add an expense</ThemedText>
-            </Pressable>
+            </PressableScale>
           )}
           {/* The week's opening position, shown wherever money went.
 
@@ -803,9 +858,18 @@ export default function WeekScreen() {
             </View>
           )}
 
+          {/* Rows that arrive later (an expense just logged, or a partner's on
+              refetch) slide in, and deleted ones fold away. Nothing animates on
+              first load or when paging weeks: the key remounts this boundary,
+              which skips both, so a whole week never cascades in. */}
+          <LayoutAnimationConfig key={`${householdId}:${offset}`} skipEntering skipExiting>
           {dayGroups.length ? (
             dayGroups.map((g) => (
-              <View key={g.date}>
+              <Animated.View
+                key={g.date}
+                entering={FadeIn.duration(220)}
+                exiting={FadeOut.duration(160)}
+                layout={LinearTransition.duration(240)}>
                 <ThemedText type="label" themeColor="textSecondary" style={styles.dayHeading}>
                   {g.heading}
                 </ThemedText>
@@ -813,8 +877,12 @@ export default function WeekScreen() {
                   const cat = txCategoryById(t.category);
                   const isIncome = t.type === 'income';
                   return (
-                    <ListRow
+                    <Animated.View
                       key={t.id}
+                      entering={FadeInDown.duration(260)}
+                      exiting={FadeOut.duration(160)}
+                      layout={LinearTransition.duration(240)}>
+                    <ListRow
                       emoji={
                         isIncome ? (
                           <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
@@ -843,9 +911,10 @@ export default function WeekScreen() {
                         </ThemedText>
                       }
                     />
+                    </Animated.View>
                   );
                 })}
-              </View>
+              </Animated.View>
             ))
           ) : (
             <Card style={styles.empty}>
@@ -865,6 +934,7 @@ export default function WeekScreen() {
               )}
             </Card>
           )}
+          </LayoutAnimationConfig>
         </>
       )}
 
@@ -1065,7 +1135,7 @@ function EnvelopeRow({
       footer={
         <View style={styles.envFooter}>
           <View style={styles.envTrack}>
-            <View style={[styles.envFill, { width: `${frac * 100}%`, backgroundColor: barColor }]} />
+            <ProgressFill value={frac} style={[styles.envFill, { backgroundColor: barColor }]} />
           </View>
           <Pressable
             accessibilityRole="button"
@@ -1084,6 +1154,9 @@ function EnvelopeRow({
     />
   );
 }
+
+/** A money figure that may be negative, written the way the hero shows it. */
+const signedMoney = (n: number) => (n < 0 ? '-' + fmt(-n) : fmt(n));
 
 const styles = StyleSheet.create({
   loading: { marginTop: Spacing.six },

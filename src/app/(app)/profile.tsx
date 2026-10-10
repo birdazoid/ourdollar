@@ -33,6 +33,7 @@ import { Sheet } from '@/components/sheet';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import {
@@ -914,12 +915,17 @@ function SettingRow({
 
 function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.dashedAdd}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={styles.dashedAdd}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

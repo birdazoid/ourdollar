@@ -26,6 +26,7 @@ import {
 } from '@/lib/money';
 import { monthOf, periodFor, weekStartFor, weeksRemainingInPeriod } from '@/lib/period';
 import { todayISO, weekdayName } from '@/lib/week';
+import { screenData } from '@/lib/screen-data';
 import {
   useBills,
   useExtraIncome,
@@ -40,6 +41,7 @@ import {
   useMembers,
 } from '@/lib/queries';
 import { WeekStartPicker } from '@/components/week-start-picker';
+import { PressableScale } from '@/components/pressable-scale';
 
 export default function SetupScreen() {
   const router = useRouter();
@@ -105,15 +107,13 @@ export default function SetupScreen() {
     }),
   });
 
-  const loading = !householdId || income.isLoading || members.isLoading;
   // Setup is the screen people edit from. Showing an empty income list after a
   // failed fetch invites re-adding income that already exists.
-  const loadFailed = income.isError || members.isError || bills.isError;
-  const retryLoad = () => {
-    income.refetch();
-    members.refetch();
-    bills.refetch();
-  };
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [members, income, extraIncome, bills, goals, funPeople, funSettings]);
 
   // The sheet reports which kind it saved, so a one-off routes to extra_income
   // and a recurring source to income_sources. Switching cadence to or from
@@ -371,12 +371,17 @@ export default function SetupScreen() {
 
 function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={styles.dashedAdd}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={styles.dashedAdd}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

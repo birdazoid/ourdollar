@@ -8,15 +8,15 @@ import type { SvgProps } from 'react-native-svg';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
 import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
-import IllustrationFixedExpenses from '@/assets/illustrations/onboarding-fixed-expenses.svg';
-import IllustrationHousehold from '@/assets/illustrations/onboarding-household.svg';
-import IllustrationIncome from '@/assets/illustrations/onboarding-income.svg';
-import IllustrationPlannedSpending from '@/assets/illustrations/onboarding-planned-spending.svg';
-import IllustrationReview from '@/assets/illustrations/onboarding-review.svg';
-import IllustrationSavingsGoals from '@/assets/illustrations/onboarding-savings-goals.svg';
-import IllustrationWelcome from '@/assets/illustrations/onboarding-welcome.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
 import { AvatarGlyph } from '@/components/avatar-glyph';
+import { FixedExpensesIllustration } from '@/components/illustrations/fixed-expenses';
+import { HouseholdIllustration } from '@/components/illustrations/household';
+import { IncomeIllustration } from '@/components/illustrations/income';
+import { PlannedSpendingIllustration } from '@/components/illustrations/planned-spending';
+import { ReviewIllustration } from '@/components/illustrations/review';
+import { SavingsGoalsIllustration } from '@/components/illustrations/savings-goals';
+import { WelcomeIllustration } from '@/components/illustrations/welcome';
 import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -30,6 +30,7 @@ import { PlannedSpending } from '@/components/planned-spending';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WeekStartPicker } from '@/components/week-start-picker';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { billEmoji } from '@/lib/categories';
@@ -211,7 +212,7 @@ export default function OnboardingScreen() {
           {step === 1 && (
             <View>
               <StepHeader
-                illustration={IllustrationHousehold}
+                illustration={HouseholdIllustration}
                 illustrationSize={{ width: 130, height: 118 }}
                 title="Who's in your household?"
                 desc="Add the people you share money with — a partner, roommates, or kids. You'll be able to set who earns what and give each person a fun-money stash."
@@ -242,7 +243,7 @@ export default function OnboardingScreen() {
           {step === 2 && (
             <View>
               <StepHeader
-                illustration={IllustrationIncome}
+                illustration={IncomeIllustration}
                 illustrationSize={{ width: 127, height: 130 }}
                 title="What comes in?"
                 desc="This is the foundation — your weekly allowance, savings goals, and fun money are all calculated from this number. Add every regular paycheck. Tap any entry to edit it."
@@ -288,7 +289,7 @@ export default function OnboardingScreen() {
           {step === 3 && (
             <View>
               <StepHeader
-                illustration={IllustrationFixedExpenses}
+                illustration={FixedExpensesIllustration}
                 illustrationSize={{ width: 130, height: 99 }}
                 title="What's already spoken for?"
                 desc="Add the bills that come out no matter what — rent or mortgage, loans, utilities, subscriptions. We set this aside before figuring your weekly spending money."
@@ -325,7 +326,7 @@ export default function OnboardingScreen() {
           {step === 4 && (
             <View>
               <StepHeader
-                illustration={IllustrationSavingsGoals}
+                illustration={SavingsGoalsIllustration}
                 illustrationSize={{ width: 116, height: 140 }}
                 title="What are you saving toward?"
                 desc="Optional, but this is how consistent saving happens automatically — set a target and a monthly amount, and we fold it into your budget before the weekly number is calculated."
@@ -351,7 +352,7 @@ export default function OnboardingScreen() {
           {step === 5 && (
             <View>
               <StepHeader
-                illustration={IllustrationPlannedSpending}
+                illustration={PlannedSpendingIllustration}
                 illustrationSize={{ width: 130, height: 118 }}
                 title="What do you spend every week?"
                 desc="Optional — set aside your constant weekly costs like groceries and gas. They'll be reserved from your weekly money so your Week screen shows what's truly free to spend after them."
@@ -363,7 +364,7 @@ export default function OnboardingScreen() {
           {step === 6 && (
             <View>
               <StepHeader
-                illustration={IllustrationReview}
+                illustration={ReviewIllustration}
                 illustrationSize={{ width: 127, height: 130 }}
                 title="You're set up"
                 desc="Here's how your money breaks down each month, calculated from everything you just entered."
@@ -447,7 +448,7 @@ export default function OnboardingScreen() {
 function Welcome() {
   return (
     <View style={styles.welcome}>
-      <IllustrationWelcome width={150} height={134} style={styles.welcomeIllustration} />
+      <WelcomeIllustration width={150} height={134} style={styles.welcomeIllustration} />
       <ThemedText type="title" style={styles.welcomeTitle}>
         Let&apos;s set up your budget
       </ThemedText>
@@ -521,12 +522,17 @@ function EmptyCard({ emoji, text, cta, onPress }: { emoji: ReactNode; text: stri
 
 function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.dashedAdd}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={styles.dashedAdd}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

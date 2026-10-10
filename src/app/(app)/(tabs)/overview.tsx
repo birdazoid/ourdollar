@@ -37,6 +37,7 @@ import {
   weeksRemainingInPeriod,
 } from '@/lib/period';
 import { buildMonthComparison, monthBefore, monthLabel, monthStartISO } from '@/lib/month-review';
+import { screenData } from '@/lib/screen-data';
 import {
   useBills,
   useExtraIncome,
@@ -261,14 +262,21 @@ export default function OverviewScreen() {
     return out;
   }, [transactions.data, range]);
 
-  const loading = !householdId || income.isLoading || transactions.isLoading || snapshots.isLoading;
-  const loadFailed = income.isError || transactions.isError || snapshots.isError || bills.isError;
-  const retryLoad = () => {
-    income.refetch();
-    transactions.refetch();
-    snapshots.refetch();
-    bills.refetch();
-  };
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [
+    members,
+    income,
+    extraIncome,
+    bills,
+    goals,
+    funPeople,
+    funSettings,
+    transactions,
+    snapshots,
+  ]);
 
   return (
     <Screen>
@@ -310,7 +318,7 @@ export default function OverviewScreen() {
             <Card style={styles.glanceCard}>
               {pie.length > 0 && (
                 <View style={styles.donutWrap}>
-                  <Donut segments={pie}>
+                  <Donut key={monthOffset} segments={pie}>
                     <ThemedText type="small" themeColor="textSecondary">
                       INCOME
                     </ThemedText>
@@ -492,7 +500,8 @@ export default function OverviewScreen() {
             />
           </View>
           <Card style={styles.trendCard}>
-            <BarChart data={trend} />
+            {/* Keyed by range so the bars rise again for the new set of months. */}
+            <BarChart key={range} data={trend} />
           </Card>
 
           {/* Where the money went */}

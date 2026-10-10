@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Card } from '@/components/card';
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
@@ -19,6 +21,8 @@ type Props = {
   strikethrough?: boolean; // line through the title (done/paid state)
 };
 
+const DIM_OPACITY = 0.6;
+
 /** The shared rounded-tile list row used by bills, goals, income, expenses. */
 export function ListRow({
   emoji,
@@ -33,48 +37,62 @@ export function ListRow({
   dim,
   strikethrough,
 }: Props) {
+  // Settling into the muted "done" look (a bill just paid, an envelope
+  // skipped) fades rather than snapping, so the change is seen as a change.
+  const fade = useSharedValue(dim ? DIM_OPACITY : 1);
+  useEffect(() => {
+    fade.value = withTiming(dim ? DIM_OPACITY : 1, { duration: 320 });
+  }, [dim, fade]);
+  const faded = useAnimatedStyle(() => ({ opacity: fade.value }));
+
   return (
-    <Pressable
+    <PressableScale
+      scaleTo={0.98}
       onPress={onPress}
       disabled={!onPress}
       // Only announce as a button when it actually does something; a plain row
       // reporting itself as tappable is worse than saying nothing.
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={onPress ? [title, subtitle].filter(Boolean).join(', ') : undefined}
-      style={styles.wrap}>
-      <Card style={[styles.card, outline && styles.outline, dim && styles.dim]}>
-        <View style={styles.topRow}>
-          <View style={styles.tile}>
-            {typeof emoji === 'string' ? <ThemedText type="subtitle">{emoji}</ThemedText> : emoji}
-          </View>
-          <View style={styles.body}>
-            <ThemedText
-              type="bodyBold"
-              numberOfLines={1}
-              style={strikethrough && styles.strikethrough}>
-              {title}
-            </ThemedText>
-            {subtitle && (
-              <View style={styles.subRow}>
-                {/* Two lines. This is descriptive text, not a name, and at
+      style={styles.wrap}
+    >
+      <Animated.View style={faded}>
+        <Card style={[styles.card, outline && styles.outline]}>
+          <View style={styles.topRow}>
+            <View style={styles.tile}>
+              {typeof emoji === 'string' ? <ThemedText type="subtitle">{emoji}</ThemedText> : emoji}
+            </View>
+            <View style={styles.body}>
+              <ThemedText
+                type="bodyBold"
+                numberOfLines={1}
+                style={strikethrough && styles.strikethrough}
+              >
+                {title}
+              </ThemedText>
+              {subtitle && (
+                <View style={styles.subRow}>
+                  {/* Two lines. This is descriptive text, not a name, and at
                     one line it was already cutting sentences off mid-word
                     before the type scale grew. */}
-                <ThemedText
-                  type="small"
-                  style={subColor ? { color: subColor } : undefined}
-                  themeColor={subColor ? undefined : 'textSecondary'}
-                  numberOfLines={2}>
-                  {subtitle}
-                </ThemedText>
-                {badge}
-              </View>
-            )}
+                  <ThemedText
+                    type="small"
+                    style={subColor ? { color: subColor } : undefined}
+                    themeColor={subColor ? undefined : 'textSecondary'}
+                    numberOfLines={2}
+                  >
+                    {subtitle}
+                  </ThemedText>
+                  {badge}
+                </View>
+              )}
+            </View>
+            {right}
           </View>
-          {right}
-        </View>
-        {footer}
-      </Card>
-    </Pressable>
+          {footer}
+        </Card>
+      </Animated.View>
+    </PressableScale>
   );
 }
 
@@ -93,6 +111,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 2 },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   outline: { borderWidth: 1.5, borderColor: Palette.terracotta },
-  dim: { opacity: 0.6 },
   strikethrough: { textDecorationLine: 'line-through' },
 });

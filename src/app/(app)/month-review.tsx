@@ -14,6 +14,7 @@ import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { DeltaText } from '@/components/delta-text';
 import { ListRow } from '@/components/list-row';
+import { LoadError } from '@/components/load-error';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette, Radius, Spacing } from '@/constants/theme';
@@ -23,6 +24,7 @@ import { useHousehold } from '@/lib/household';
 import { useEnsureMonthClosed } from '@/lib/month-close';
 import { billMonthlyCost, computeBudget, fmt, isVariableExpense } from '@/lib/money';
 import { weeksInPeriod } from '@/lib/period';
+import { screenData } from '@/lib/screen-data';
 import {
   lastCompletedMonthStart,
   monthLabel,
@@ -149,7 +151,25 @@ export default function MonthReviewScreen() {
   const fixedBills = liveBillList.filter((b) => !b.varies);
   const me = (members.data ?? []).find((m) => m.account_id === session?.user.id) ?? null;
 
-  const loading = !householdId || bills.isLoading || snapshots.isLoading;
+  // Every query the review's figures come from: nothing is drawn until all of
+  // them have answered, and a failure shows an error rather than a month
+  // summary quietly built without part of its data.
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [
+    bills,
+    income,
+    extraIncome,
+    goals,
+    funPeople,
+    funSettings,
+    members,
+    snapshots,
+    carryovers,
+    allTransactions,
+  ]);
 
   function exitWizard() {
     if (router.canGoBack()) router.back();
@@ -199,7 +219,11 @@ export default function MonthReviewScreen() {
           )}
         </View>
 
-        {loading ? null : (
+        {loadFailed ? (
+          <View style={styles.body}>
+            <LoadError onRetry={retryLoad} what="this month's review" />
+          </View>
+        ) : loading ? null : (
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             {step === 0 && (
               <View>

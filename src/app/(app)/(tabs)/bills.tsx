@@ -1,6 +1,13 @@
 import { Check, ChevronRight, CornerDownRight, LifeBuoy, Plus } from 'lucide-react-native';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LayoutAnimationConfig,
+  LinearTransition,
+  ZoomIn,
+} from 'react-native-reanimated';
 
 import IconSave from '@/assets/icons/icon-save.svg';
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
@@ -20,6 +27,8 @@ import { Screen } from '@/components/screen';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
+import { ProgressFill } from '@/components/progress-fill';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { BILL_CATS, billEmoji } from '@/lib/categories';
 import { ordinal } from '@/lib/format';
@@ -44,6 +53,8 @@ import {
 import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
 import type { Bill, Goal } from '@/lib/types';
+import { haptic } from '@/lib/haptics';
+import { screenData } from '@/lib/screen-data';
 
 /** " · est. $421" when a paid bill came in different from what it was budgeted
  *  at — the card leads with what was actually paid, but the estimate is still
@@ -127,14 +138,13 @@ export default function BillsScreen() {
     return BILL_CATS.filter((c) => byCat[c]).map((c) => ({ cat: c, bills: byCat[c] }));
   }, [billList]);
 
-  const loading = !householdId || bills.isLoading || goals.isLoading;
-  // Without this a failed fetch showed an empty bill list, which reads as
-  // "you have no bills" rather than "this didn't load".
-  const loadFailed = bills.isError || goals.isError;
-  const retryLoad = () => {
-    bills.refetch();
-    goals.refetch();
-  };
+  // Without the failure check a failed fetch showed an empty bill list, which
+  // reads as "you have no bills" rather than "this didn't load".
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [bills, goals, members, carryovers, catchUp, fund]);
 
   // ---- bill handlers ----
   function saveBill(input: BillInput, id?: string) {
@@ -154,7 +164,10 @@ export default function BillsScreen() {
     });
   }
   function confirmPay(bill: Bill, amount: number) {
-    billMut.markPaid.mutate({ id: bill.id, paidAmount: amount, paidByMemberId: currentMemberId });
+    billMut.markPaid.mutate(
+      { id: bill.id, paidAmount: amount, paidByMemberId: currentMemberId },
+      { onSuccess: haptic.success }
+    );
     setBillDetail(null);
   }
 
@@ -162,7 +175,10 @@ export default function BillsScreen() {
   function markCarryoverPaid(id: string, amount: number | null) {
     // markPaid is explicit — a varies-amount bill (amount null) still counts as
     // genuinely paid rather than being mistaken for a dismissal.
-    resolveCarryover.mutate({ id, markPaid: true, paidAmount: amount, settledByMemberId: currentMemberId });
+    resolveCarryover.mutate(
+      { id, markPaid: true, paidAmount: amount, settledByMemberId: currentMemberId },
+      { onSuccess: haptic.success }
+    );
   }
   function dismissCarryover(id: string) {
     resolveCarryover.mutate({ id, markPaid: false, settledByMemberId: currentMemberId });
@@ -186,12 +202,15 @@ export default function BillsScreen() {
     });
   }
   function contribute(g: Goal) {
-    goalMut.contribute.mutate({
-      id: g.id,
-      saved_amount: g.saved_amount,
-      target_amount: g.target_amount,
-      monthly_amount: g.monthly_amount,
-    });
+    goalMut.contribute.mutate(
+      {
+        id: g.id,
+        saved_amount: g.saved_amount,
+        target_amount: g.target_amount,
+        monthly_amount: g.monthly_amount,
+      },
+      { onSuccess: haptic.success }
+    );
     setGoalDetail(null);
   }
 
@@ -204,10 +223,15 @@ export default function BillsScreen() {
       ) : loadFailed ? (
         <LoadError onRetry={retryLoad} what="your bills" />
       ) : (
-        <>
+        // Rows that change while the screen is open animate (a bill paid
+        // sliding to the bottom of its group, a goal added); the first load
+        // doesn't, so the screen never cascades in.
+        <LayoutAnimationConfig skipEntering>
           <HeroCard
             eyebrow="Bills paid this month"
             big={`${paid.length} of ${billList.length}`}
+            bigValue={paid.length}
+            formatBig={(n) => `${Math.round(n)} of ${billList.length}`}
             sub="paid"
             // "of $6,631" mixes real paid amounts with estimates for the bills
             // that haven't come in yet. Calling the total "expected" says so
@@ -349,8 +373,12 @@ export default function BillsScreen() {
             const done = g.saved_amount >= g.target_amount;
             const settled = done || g.paid_this_month;
             return (
-              <ListRow
+              <Animated.View
                 key={g.id}
+                entering={FadeIn.duration(220)}
+                exiting={FadeOut.duration(160)}
+                layout={LinearTransition.duration(260)}>
+              <ListRow
                 emoji={<GoalGlyph emoji={g.emoji} />}
                 title={g.name}
                 subtitle={`${fmt(g.saved_amount)} of ${fmt(g.target_amount)}${done ? ' · funded! 🎉' : g.paid_this_month ? " · this month's paid" : ''}`}
@@ -360,15 +388,22 @@ export default function BillsScreen() {
                 right={
                   <View style={styles.right}>
                     {!done && <ThemedText type="label">{fmt(g.monthly_amount)}</ThemedText>}
-                    {settled ? <Check size={18} color={Palette.ink} /> : <ChevronRight size={16} color="#B7B8C4" />}
+                    {settled ? (
+                      <Animated.View entering={POP}>
+                        <Check size={18} color={Palette.ink} />
+                      </Animated.View>
+                    ) : (
+                      <ChevronRight size={16} color="#B7B8C4" />
+                    )}
                   </View>
                 }
                 footer={
                   <View style={styles.goalTrack}>
-                    <View style={[styles.goalFill, { width: `${pct * 100}%` }]} />
+                    <ProgressFill value={pct} style={styles.goalFill} />
                   </View>
                 }
               />
+              </Animated.View>
             );
           })}
           <DashedAdd label="Add a savings goal" onPress={() => setGoalSheet({ goal: null })} />
@@ -406,9 +441,9 @@ export default function BillsScreen() {
                               : '—'}
                         </ThemedText>
                         {b.paid ? (
-                          <View style={styles.paidBadge}>
+                          <Animated.View entering={POP} style={styles.paidBadge}>
                             <Check size={13} color={Palette.card} strokeWidth={3} />
-                          </View>
+                          </Animated.View>
                         ) : (
                           <ChevronRight size={16} color="#B7B8C4" />
                         )}
@@ -416,17 +451,27 @@ export default function BillsScreen() {
                     }
                   />
                 );
-                return b.id === firstOverdueId ? (
-                  <View key={b.id} ref={firstOverdueRef} collapsable={false}>
-                    {row}
-                  </View>
-                ) : (
-                  <View key={b.id}>{row}</View>
+                // Paid bills sort to the bottom of their group; the layout
+                // transition makes that a visible move rather than a jump.
+                return (
+                  <Animated.View
+                    key={b.id}
+                    entering={FadeIn.duration(220)}
+                    exiting={FadeOut.duration(160)}
+                    layout={LinearTransition.duration(300)}>
+                    {b.id === firstOverdueId ? (
+                      <View ref={firstOverdueRef} collapsable={false}>
+                        {row}
+                      </View>
+                    ) : (
+                      row
+                    )}
+                  </Animated.View>
                 );
               })}
             </View>
           ))}
-        </>
+        </LayoutAnimationConfig>
       )}
 
       {/* Sheets */}
@@ -498,14 +543,23 @@ export default function BillsScreen() {
   );
 }
 
+// The paid check arrives with a small spring, so marking something paid
+// lands with a little weight. Reanimated skips it under Reduce Motion.
+const POP = ZoomIn.springify().damping(13).stiffness(220);
+
 function DashedAdd({ label, onPress, style }: { label: string; onPress: () => void; style?: object }) {
   return (
-    <Pressable onPress={onPress} style={[styles.dashedAdd, style]}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={[styles.dashedAdd, style]}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

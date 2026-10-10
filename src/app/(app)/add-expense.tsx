@@ -14,8 +14,10 @@ import { Segmented } from '@/components/segmented';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
+import { haptic } from '@/lib/haptics';
 import { TX_CATEGORIES, txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { catchUpBalance, fmt } from '@/lib/money';
@@ -269,6 +271,7 @@ export default function AddExpenseScreen() {
       } else {
         await txMut.create.mutateAsync(input);
       }
+      haptic.success();
       goBack();
     } catch {
       // The toast is raised by the global mutation handler; keep the form.
@@ -367,18 +370,22 @@ export default function AddExpenseScreen() {
             {TX_CATEGORIES.map((c) => {
               const on = category === c.id;
               return (
-                <Pressable
+                <PressableScale
                   key={c.id}
+                  scaleTo={0.94}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={c.name}
-                  onPress={() => setCategory(c.id)}
+                  onPress={() => {
+                    if (!on) haptic.select();
+                    setCategory(c.id);
+                  }}
                   style={[styles.catTile, on && styles.catTileOn]}>
                   <CategoryGlyph txId={c.id} emoji={c.emoji} />
                   <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
                     {c.name}
                   </ThemedText>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -392,7 +399,7 @@ export default function AddExpenseScreen() {
               {destinations.map((d) => {
                 const on = incomeDest === d.value;
                 return (
-                  <Pressable
+                  <PressableScale scaleTo={0.98}
                     key={d.value}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
@@ -403,7 +410,7 @@ export default function AddExpenseScreen() {
                     <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
                       {d.sub}
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
               {incomeDest === 'goal' && (
@@ -412,7 +419,7 @@ export default function AddExpenseScreen() {
                   {(goals.data ?? []).map((g) => {
                     const on = destGoalId === g.id;
                     return (
-                      <Pressable
+                      <PressableScale scaleTo={0.98}
                         key={g.id}
                         accessibilityRole="button"
                         accessibilityState={{ selected: on }}
@@ -423,7 +430,7 @@ export default function AddExpenseScreen() {
                         <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
                           {fmt(g.saved_amount)} of {fmt(g.target_amount)} saved
                         </ThemedText>
-                      </Pressable>
+                      </PressableScale>
                     );
                   })}
                 </>
@@ -466,12 +473,16 @@ export default function AddExpenseScreen() {
             {weekDays.map((d) => {
               const on = day === d.date;
               return (
-                <Pressable
+                <PressableScale
                   key={d.date}
+                  scaleTo={0.92}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={dayHeading(d.date)}
-                  onPress={() => setDay(d.date)}
+                  onPress={() => {
+                    if (!on) haptic.select();
+                    setDay(d.date);
+                  }}
                   style={[styles.dayBtn, on && styles.dayBtnOn]}>
                   <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={on ? styles.dayOnText : undefined}>
                     {d.short}
@@ -479,7 +490,7 @@ export default function AddExpenseScreen() {
                   <ThemedText type="label" style={on ? styles.dayOnText : undefined}>
                     {d.dayNum}
                   </ThemedText>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>

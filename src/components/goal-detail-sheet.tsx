@@ -6,6 +6,7 @@ import { Card } from '@/components/card';
 import { GoalGlyph } from '@/components/goal-glyph';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
+import { ProgressFill } from '@/components/progress-fill';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { fmt, goalProgress } from '@/lib/money';
 import type { Goal } from '@/lib/types';
@@ -43,7 +44,7 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
 
           <Card style={styles.infoCard}>
             <View style={styles.track}>
-              <View style={[styles.fill, { width: `${pct * 100}%` }]} />
+              <ProgressFill value={pct} style={styles.fill} />
             </View>
             <ThemedText type="small" themeColor="textSecondary" style={styles.infoText}>
               {Math.round(pct * 100)}% of the way there

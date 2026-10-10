@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Palette } from '@/constants/theme';
+import { useTween } from '@/hooks/use-tween';
 
 type Props = {
   value: number; // 0..1
@@ -24,7 +25,8 @@ export function Ring({
 }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, value));
+  // Draws in from empty on first view, then glides to each new value.
+  const v = useTween(Math.max(0, Math.min(1, value)), { from: 0, duration: 650 });
   const center = size / 2;
 
   return (

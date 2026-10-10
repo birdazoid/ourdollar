@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { BiometricLockScreen } from '@/components/biometric-lock-screen';
+import { CelebrationHost } from '@/components/celebration-host';
 import { ToastHost } from '@/components/toast-host';
 import { FontsToLoad } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/lib/auth';
@@ -108,6 +109,7 @@ function RootNavigator() {
       {locked && <BiometricLockScreen onRetry={retry} />}
       {/* Last, so a failed write is reported over whatever is on screen —
           including a sheet that has just closed itself. */}
+      <CelebrationHost />
       <ToastHost />
     </>
   );
