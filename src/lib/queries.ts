@@ -487,9 +487,12 @@ export function useGoalMutations(householdId: string | null) {
     // now, and only if this month isn't already paid. Writing "what this
     // phone saw + monthly" erased anything a partner had added meanwhile, and
     // two taps on two phones paid the month twice.
-    mutationFn: async ({ id }: { id: string }) => {
-      const { error } = await supabase.rpc('contribute_to_goal', { p_goal_id: id });
+    // Resolves to the new saved amount, or null when nothing changed because
+    // this month was already paid (by this phone or another).
+    mutationFn: async ({ id }: { id: string }): Promise<number | null> => {
+      const { data, error } = await supabase.rpc('contribute_to_goal', { p_goal_id: id });
       if (error) throw error;
+      return data == null ? null : Number(data);
     },
     onSuccess: invalidate,
   });
@@ -583,7 +586,7 @@ export function useTransactionMutations(householdId: string | null) {
       memberId?: string | null;
     }) => {
       const { id, input, goal, memberId } = args;
-      const { error } = await supabase.rpc('log_income', {
+      const { data, error } = await supabase.rpc('log_income', {
         p_id: id,
         p_household_id: householdId,
         p_member_id: memberId ?? input.member_id ?? null,
@@ -595,6 +598,10 @@ export function useTransactionMutations(householdId: string | null) {
         p_goal_id: goal?.id ?? null,
       });
       if (error) throw error;
+      // duplicate: an earlier attempt with this id already landed, so nothing
+      // was written this time (see the add-expense screen for what it tells
+      // the household).
+      return { duplicate: !!(data as { duplicate?: boolean } | null)?.duplicate };
     },
     onSuccess: () => {
       invalidate();

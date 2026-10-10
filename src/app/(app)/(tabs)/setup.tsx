@@ -157,7 +157,7 @@ export default function SetupScreen() {
 
   return (
     <Screen>
-      <ScreenHeader eyebrow="The numbers behind it all" title="Income & Setup" />
+      <ScreenHeader eyebrow="The numbers behind it all" title="Setup" />
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
@@ -173,15 +173,19 @@ export default function SetupScreen() {
               is exactly what Overview lays out. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Your week right now, see the full breakdown on Overview"
+            accessibilityLabel="Weekly spending money, see how it's worked out on Overview"
             onPress={() => router.push('/overview')}
             style={styles.liveWeek}>
             <View style={styles.flex}>
+              {/* Named for what it is. As "Your week right now" it sat beside
+                  the Week screen's free-to-spend, a different and smaller
+                  figure, and the two read as the app disagreeing with itself. */}
               <ThemedText type="bodyBold" style={styles.liveWeekText}>
-                Your week right now
+                Weekly spending money
               </ThemedText>
               <ThemedText type="small" style={styles.liveWeekSub}>
-                Updates as you edit below. Tap for how it&apos;s worked out.
+                What each week starts with, before planned spending and what you buy. Changes as
+                you edit below.
               </ThemedText>
             </View>
             <ThemedText type="title" style={styles.liveWeekText}>
@@ -193,7 +197,8 @@ export default function SetupScreen() {
           {/* INCOME */}
           <SectionHeader
             title="Monthly income"
-            action="the foundation"
+            onAdd={() => openSheet(null)}
+            addLabel="Add income"
             caption="Money here is part of the plan, so it raises every week of the month. For one-off money like selling something, log it on the Week screen instead and choose where it goes."
           />
           {(income.data ?? []).map((s) => {
@@ -251,7 +256,6 @@ export default function SetupScreen() {
             );
           })}
 
-          <DashedAdd label="Add income" onPress={() => openSheet(null)} />
 
           {/* WEEK START */}
           <SectionHeader title="Your week" />

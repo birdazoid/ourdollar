@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react-native';
+import { Pencil } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -16,10 +16,9 @@ type Props = {
   onClose: () => void;
   onContribute: (goal: Goal) => void;
   onEdit: (goal: Goal) => void;
-  onDelete: (id: string) => void;
 };
 
-export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete }: Props) {
+export function GoalDetailSheet({ goal, onClose, onContribute, onEdit }: Props) {
   const done = goal ? goal.saved_amount >= goal.target_amount : false;
   const pct = goal ? goalProgress(goal.saved_amount, goal.target_amount) : 0;
   // Null when nothing is being put aside monthly, since "never" is not a
@@ -59,6 +58,8 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
             </ThemedText>
           </Card>
 
+          {/* Delete lives at the bottom of the edit form, not here: a trash can
+              the same size as Edit, right beside it, invited accidental taps. */}
           <View style={styles.actions}>
             {!done && !goal.paid_this_month && (
               <View style={styles.flex}>
@@ -72,12 +73,6 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit, onDelete 
               onPress={() => onEdit(goal)}>
               <Pencil size={16} color={Palette.ink} />
               <ThemedText type="bodyBold">Edit</ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Delete goal"
-              style={styles.deleteBtn}
-              onPress={() => onDelete(goal.id)}>
-              <Trash2 size={18} color={Palette.terracottaDeep} />
             </Pressable>
           </View>
         </>
@@ -102,13 +97,5 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.card,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  deleteBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.large,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(224,122,95,0.14)',
   },
 });

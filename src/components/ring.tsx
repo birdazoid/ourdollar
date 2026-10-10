@@ -11,7 +11,11 @@ type Props = {
   stroke?: number;
   color?: string;
   track?: string;
-  children?: ReactNode;
+  /**
+   * What sits in the middle. Pass a function to get the ring's animated value,
+   * so a percentage can count with the arc without a second animation.
+   */
+  children?: ReactNode | ((shown: number) => ReactNode);
 };
 
 /** Circular progress ring with centered content (design-brief §7 hero pattern). */
@@ -47,7 +51,7 @@ export function Ring({
         />
       </Svg>
       <View style={StyleSheet.absoluteFill}>
-        <View style={styles.center}>{children}</View>
+        <View style={styles.center}>{typeof children === 'function' ? children(v) : children}</View>
       </View>
     </View>
   );

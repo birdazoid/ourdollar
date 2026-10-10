@@ -125,3 +125,16 @@ export function weeksRemainingInPeriod(weekStartsOn: number, today: string = tod
 export function isBoundaryWindow(weekStartsOn: number, today: string = todayISO()): boolean {
   return monthOf(today) !== fundingMonthForWeek(weekStartFor(today, weekStartsOn));
 }
+
+/**
+ * A bill's due day as it falls in a given month: "the 31st" is the 30th in
+ * a 30-day month and the 28th or 29th in February. Comparing the raw 31 meant
+ * a bill due at the end of a short month was never overdue there, and on its
+ * real last day it was still listed as due in the next seven days.
+ */
+export function dueDayInMonth(dueDay: number | null, iso: string): number | null {
+  if (dueDay == null) return null;
+  const [y, m] = iso.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  return Math.min(dueDay, daysInMonth);
+}

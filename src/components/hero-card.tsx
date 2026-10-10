@@ -46,9 +46,6 @@ export function HeroCard({
 }: Props) {
   const counted = useTween(bigValue ?? 0, { jumpKey });
   const bigText = bigValue != null && formatBig ? formatBig(counted) : big;
-  // The ring's own percentage counts alongside its arc.
-  const ringShown = useTween(ringValue, { from: 0, duration: 650 });
-  const ringText = ringCenter ?? `${Math.round(ringShown * 100)}%`;
 
   return (
     <View style={styles.card}>
@@ -72,12 +69,20 @@ export function HeroCard({
         )}
       </View>
       <Ring value={ringValue} color={ringColor}>
-        {ringText !== '' && <ThemedText type="subtitle">{ringText}</ThemedText>}
-        {ringLabel && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {ringLabel}
-          </ThemedText>
-        )}
+        {(shown) => {
+          // The percentage counts with the arc, from the ring's own animation.
+          const ringText = ringCenter ?? `${Math.round(shown * 100)}%`;
+          return (
+            <>
+              {ringText !== '' && <ThemedText type="subtitle">{ringText}</ThemedText>}
+              {ringLabel && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {ringLabel}
+                </ThemedText>
+              )}
+            </>
+          );
+        }}
       </Ring>
     </View>
   );

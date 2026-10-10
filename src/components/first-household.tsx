@@ -1,40 +1,79 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
-import { CreateHouseholdSheet } from '@/components/create-household-sheet';
+import { WelcomeIllustration } from '@/components/illustrations/welcome';
+import { TextField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Palette, Radius, Spacing } from '@/constants/theme';
+import { Palette, Spacing } from '@/constants/theme';
+import { useHousehold } from '@/lib/household';
+import { useCreateHousehold } from '@/lib/queries';
 
 /**
- * Empty state for an account with a profile but no households yet. Identity
- * (name/avatar) is already set at the account level, so this only names the
- * household and optionally invites people.
+ * Empty state for an account with a profile but no households yet: name the
+ * household, right here, and go.
+ *
+ * It used to be a "Let's set up your household" screen whose only button
+ * opened a sheet to type the name, after a "Set up your profile" screen and
+ * before a "Let's set up your budget" screen. Three introductions in a row
+ * read as the same step repeating. Inviting people now happens in the setup
+ * guide's first step, where it sits with the rest of the household.
  */
 export function FirstHousehold() {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const { setActiveHousehold } = useHousehold();
+  const create = useCreateHousehold();
+  const [name, setName] = useState('');
+  const valid = name.trim() !== '';
+
+  function submit() {
+    // Return on the keyboard and the button can both fire; one household only.
+    if (!valid || create.isPending) return;
+    create.mutate(
+      { householdName: name.trim(), inviteEmails: [] },
+      { onSuccess: (id) => setActiveHousehold(id) }
+    );
+  }
 
   return (
     <ThemedView style={styles.fill}>
       <SafeAreaView style={styles.fill}>
-        <View style={styles.body}>
-          <View style={styles.badge}>
-            <ThemedText type="display">🏡</ThemedText>
+        <KeyboardAvoidingView
+          style={styles.fill}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.body}>
+            <WelcomeIllustration width={150} height={134} style={styles.art} />
+            <ThemedText type="title" style={styles.center}>
+              Name your household
+            </ThemedText>
+            <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
+              Your household holds your income, bills and weekly spending. Next, a few quick
+              questions work out how much you have to spend each week.
+            </ThemedText>
+            <TextField
+              placeholder="e.g. The Smiths, Home"
+              value={name}
+              onChangeText={setName}
+              onSubmitEditing={submit}
+              returnKeyType="go"
+              style={styles.field}
+            />
+            {create.isError && (
+              <ThemedText type="small" style={styles.error}>
+                Couldn&apos;t create the household. Please try again.
+              </ThemedText>
+            )}
+            <Button
+              title={valid ? 'Continue' : 'Name your household'}
+              disabled={!valid}
+              loading={create.isPending}
+              onPress={submit}
+              style={styles.cta}
+            />
           </View>
-          <ThemedText type="title" style={styles.heading}>
-            Let&apos;s set up your household
-          </ThemedText>
-          <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>
-            A household is where your income, bills, goals and weekly spending
-            live. You can invite others — or keep it just for you.
-          </ThemedText>
-          <Button title="Create your household" onPress={() => setSheetOpen(true)} style={styles.cta} />
-        </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
-
-      <CreateHouseholdSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </ThemedView>
   );
 }
@@ -43,21 +82,13 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   body: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.five,
     gap: Spacing.three,
   },
-  badge: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.sage,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.two,
-  },
-  heading: { textAlign: 'center' },
-  sub: { textAlign: 'center' },
-  cta: { alignSelf: 'stretch', marginTop: Spacing.three },
+  art: { alignSelf: 'center', marginBottom: Spacing.two },
+  center: { textAlign: 'center' },
+  field: { marginTop: Spacing.two },
+  error: { color: Palette.terracottaDeep, textAlign: 'center' },
+  cta: { alignSelf: 'stretch' },
 });

@@ -70,7 +70,8 @@
     "verify:periods": "tsx scripts/verify-periods.ts",
     "verify:catch-up": "tsx scripts/verify-catch-up.ts",
     "verify:emergency-fund": "tsx scripts/verify-emergency-fund.ts",
-    "verify:money-writes": "tsx scripts/verify-money-writes.ts"
+    "verify:money-writes": "tsx scripts/verify-money-writes.ts",
+    "verify:calendar": "tsx scripts/verify-calendar.ts"
   },
   "private": true
 }

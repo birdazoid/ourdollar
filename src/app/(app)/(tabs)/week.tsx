@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, CornerDownRight, Plus, TrendingDown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, CornerDownRight, TrendingDown } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -11,13 +11,14 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
-import IconFreeToSpend from '@/assets/icons/icon-free-to-spend.svg';
 import IconGiftBox from '@/assets/icons/icon-gift-box.svg';
+import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { BoundaryNotice } from '@/components/boundary-notice';
 import { HeroCard } from '@/components/hero-card';
+import { ListGroup } from '@/components/list-group';
 import { ListRow } from '@/components/list-row';
 import { Ring } from '@/components/ring';
 import { RolloverPrompt } from '@/components/rollover-prompt';
@@ -27,7 +28,6 @@ import { ScreenHeader } from '@/components/screen-header';
 import { SectionHeader } from '@/components/section-header';
 import { ThemedText } from '@/components/themed-text';
 import { ProgressFill } from '@/components/progress-fill';
-import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
@@ -354,6 +354,10 @@ export default function WeekScreen() {
   }
 
   const usedCategories = (envelopes.data ?? []).map((e) => e.category);
+  // This week's status of the envelope open in the sheet, for its skip button.
+  const envSheetStatus = envSheet?.envelope
+    ? (envSummary.envelopes.find((e) => e.id === envSheet.envelope!.id) ?? null)
+    : null;
   const rawEnvelope = (id: string) => (envelopes.data ?? []).find((e) => e.id === id) ?? null;
   function saveEnvelope(draft: EnvelopeDraft, id?: string) {
     if (id) envMut.update.mutate({ id, weekly_amount: draft.weekly_amount });
@@ -469,7 +473,7 @@ export default function WeekScreen() {
           {showEnvelopes ? (
             <HeroCard
               key="free-to-spend"
-              eyebrow="This week's free-to-spend"
+              eyebrow="Free to spend this week"
               big={envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
               bigValue={envFree}
               formatBig={signedMoney}
@@ -480,7 +484,7 @@ export default function WeekScreen() {
               // category never touches this number until it overflows.
               sub={
                 envSummary.plannedTotal > 0
-                  ? `${fmt(envSummary.plannedTotal)} set aside · ${fmt(envSummary.reserved)} of it still to spend`
+                  ? `After ${fmt(envSummary.plannedTotal)} of planned spending · ${fmt(envSummary.reserved)} of it still to come`
                   : `${fmt(envSummary.spent)} spent this week`
               }
               subColor={envFree < 0 ? Palette.terracottaDeep : undefined}
@@ -492,15 +496,21 @@ export default function WeekScreen() {
           ) : (
             <HeroCard
               key="spending-money"
-              eyebrow={
-                isCurrent ? "This week's spending money" : `Past week · ${weekRangeLabel(week.days)}`
-              }
+              // One name for this number everywhere: "free to spend" is what's
+              // left this week. "Weekly spending money" is what the week
+              // started with. Six names for two numbers left testers unsure
+              // which one to trust.
+              eyebrow={isCurrent ? 'Free to spend this week' : `Left that week · ${weekRangeLabel(week.days)}`}
               big={over ? '-' + fmt(-remaining) : fmt(remaining)}
               bigValue={remaining}
               formatBig={signedMoney}
               jumpKey={figureReady ? `${householdId}:${offset}` : 'loading'}
               bigColor={over ? Palette.terracottaDeep : Palette.ink}
-              sub={over ? `${fmt(-remaining)} over budget` : `${fmt(spent)} spent of ${fmt(allowance)}`}
+              sub={
+                over
+                  ? `${fmt(-remaining)} over this week's spending money`
+                  : `${fmt(spent)} spent of ${fmt(allowance)} weekly spending money`
+              }
               subColor={over ? Palette.terracottaDeep : undefined}
               ringValue={frac}
               ringColor={over ? Palette.terracottaDeep : Palette.sage}
@@ -536,6 +546,19 @@ export default function WeekScreen() {
             </Pressable>
           )}
 
+          {/* A household that skipped income in setup landed on a page of $0
+              with nothing saying why. Point at the one thing that fixes it. */}
+          {isCurrent && (income.data ?? []).length === 0 && (
+            <Card style={styles.startCard}>
+              <ThemedText type="bodyBold">Add your income to get your weekly number</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Everything here is worked out from what comes in. Add each regular paycheck and
+                your free to spend appears.
+              </ThemedText>
+              <Button title="Add income" onPress={() => router.push('/setup')} style={styles.startBtn} />
+            </Card>
+          )}
+
           {/* Only during the days a new calendar month has started but this
               week is still funded by the last one. */}
           {isCurrent && <BoundaryNotice weekStartsOn={weekStart} />}
@@ -566,30 +589,16 @@ export default function WeekScreen() {
             </View>
           )}
 
-          {/* Day-of-week tracker with week navigation */}
+          {/* Which week this is, with arrows to page back. The row of seven day
+              circles it replaces looked tappable and wasn't, and said little
+              beyond which day it is. */}
           <View style={styles.trackerRow}>
             <NavArrow dir="left" onPress={() => setOffset(offset - 1)} disabled={false} />
-            <View style={styles.tracker}>
-              {week.days.map((d) => (
-                <View key={d.date} style={styles.dayCol}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {d.short}
-                  </ThemedText>
-                  <View
-                    style={[
-                      styles.dayDot,
-                      d.isToday && styles.dayToday,
-                      d.isPast && !d.isToday && styles.dayPast,
-                    ]}>
-                    <ThemedText
-                      type="small"
-                      style={d.isToday ? styles.dayTodayText : undefined}
-                      themeColor={d.isToday ? undefined : d.isPast ? 'textSecondary' : 'textSecondary'}>
-                      {d.dayNum}
-                    </ThemedText>
-                  </View>
-                </View>
-              ))}
+            <View style={styles.weekLabel}>
+              <ThemedText type="bodyBold">{isCurrent ? 'This week' : 'Past week'}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {weekRangeLabel(week.days)}
+              </ThemedText>
             </View>
             <NavArrow dir="right" onPress={() => setOffset(offset + 1)} disabled={isCurrent} />
           </View>
@@ -619,18 +628,153 @@ export default function WeekScreen() {
             </View>
           )}
 
+          {/* This week's spending, grouped by day. It used to sit at the very
+              bottom, under planned spending and fun money, though it's what
+              people open this screen to check. */}
+          <SectionHeader
+            title={isCurrent ? 'Spending this week' : 'Spending that week'}
+            action={weekTxns.length ? `${weekTxns.length} logged` : undefined}
+            onAdd={isCurrent ? () => router.push('/add-expense') : undefined}
+            addLabel="Add an expense"
+          />
+          {/* The week's opening position, shown wherever money went.
+
+              Deliberately NOT a transaction. The amount is already applied to
+              the allowance above, so writing it into the ledger as a real row
+              would deduct it a second time and make the week look twice as bad
+              as it is. Hence the dashed outline and no tap target: it reads as
+              context, not as something logged. */}
+          {/* On this week, the row says what was decided about last week,
+              whatever it was, and lets it be changed. A choice that isn't
+              shown can't be questioned: "let it go" used to leave no trace. */}
+          {lastSettlement ? (
+            <SettlementRow
+              settlement={lastSettlement}
+              goals={goals.data ?? []}
+              changing={reopenRollover.isPending}
+              onChange={changeRollover}
+            />
+          ) : adjustment !== 0 && (
+            <View style={styles.carryRow}>
+              <View style={styles.carryTile}>
+                <CornerDownRight
+                  size={20}
+                  color={adjustment < 0 ? Palette.terracottaDeep : Palette.sageDeep}
+                />
+              </View>
+              <View style={styles.flex}>
+                <ThemedText type="bodyBold">
+                  {adjustment < 0 ? 'Started short from last week' : 'Started ahead from last week'}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.carrySub}>
+                  {adjustment < 0
+                    ? `You went over last week and chose to carry it in, so this week began with ${fmt(-adjustment)} less to spend.`
+                    : `You had money left last week and chose to carry it in, so this week began with ${fmt(adjustment)} more to spend.`}
+                </ThemedText>
+              </View>
+              <ThemedText
+                type="bodyBold"
+                style={adjustment < 0 ? styles.overageText : styles.freeText}>
+                {adjustment < 0 ? '-' : '+'}
+                {fmt(Math.abs(adjustment))}
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Rows that arrive later (an expense just logged, or a partner's on
+              refetch) slide in, and deleted ones fold away. Nothing animates on
+              first load or when paging weeks: the key remounts this boundary,
+              which skips both, so a whole week never cascades in. */}
+          <LayoutAnimationConfig key={`${householdId}:${offset}`} skipEntering skipExiting>
+          {dayGroups.length ? (
+            dayGroups.map((g) => (
+              <Animated.View
+                key={g.date}
+                entering={FadeIn.duration(220)}
+                exiting={FadeOut.duration(160)}
+                layout={LinearTransition.duration(240)}>
+                <ThemedText type="label" themeColor="textSecondary" style={styles.dayHeading}>
+                  {g.heading}
+                </ThemedText>
+                <ListGroup>
+                {g.items.map((t) => {
+                  const cat = txCategoryById(t.category);
+                  const isIncome = t.type === 'income';
+                  return (
+                    <Animated.View
+                      key={t.id}
+                      entering={FadeInDown.duration(260)}
+                      exiting={FadeOut.duration(160)}
+                      layout={LinearTransition.duration(240)}>
+                    <ListRow
+                      emoji={
+                        isIncome ? (
+                          <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
+                        ) : (
+                          <CategoryGlyph txId={cat.id} emoji={cat.emoji} />
+                        )
+                      }
+                      title={t.label ?? cat.name}
+                      subtitle={`${isIncome ? incomeWentTo(t.income_destination) : cat.name} · ${memberName(t.member_id)}`}
+                      badge={
+                        t.is_fun_money ? (
+                          <View style={styles.funBadge}>
+                            <ThemedText type="small" style={styles.funBadgeText}>
+                              🎉 Fun
+                            </ThemedText>
+                          </View>
+                        ) : undefined
+                      }
+                      onPress={isCurrent ? () => router.push(`/add-expense?id=${t.id}`) : undefined}
+                      right={
+                        <ThemedText
+                          type="bodyBold"
+                          style={{ color: isIncome ? Palette.sageDeep : Palette.terracottaDeep }}>
+                          {isIncome ? '+' : '-'}
+                          {fmt(t.amount)}
+                        </ThemedText>
+                      }
+                    />
+                    </Animated.View>
+                  );
+                })}
+                </ListGroup>
+              </Animated.View>
+            ))
+          ) : (
+            <Card style={styles.empty}>
+              <IconBills width={26} height={26} color={Palette.ink} />
+              <ThemedText type="body" themeColor="textSecondary" style={styles.emptyText}>
+                Nothing logged for this week yet.
+              </ThemedText>
+              {isCurrent && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add your first expense"
+                  onPress={() => router.push('/add-expense')}>
+                  <ThemedText type="label" style={{ color: Palette.sageDeep }}>
+                    Add first expense
+                  </ThemedText>
+                </Pressable>
+              )}
+            </Card>
+          )}
+          </LayoutAnimationConfig>
+
           {/* Planned spending (envelopes) — current week. Always shown so a
               household can set envelopes up here; free-to-spend is the last row. */}
           {isCurrent && (
             <>
               <SectionHeader
-                title="Planned this week"
-                action={envSummary.reserved > 0 ? `${fmt(envSummary.reserved)} still to come` : undefined}
+                title="Planned spending"
+                action={envSummary.reserved > 0 ? `${fmt(envSummary.reserved)} to come` : undefined}
                 caption={
                   envSummary.hasEnvelopes
-                    ? "Set aside first. Spending here doesn't touch your free money unless you go over."
-                    : undefined
+                    ? "Set aside first. Spending here doesn't touch free to spend unless you go over."
+                    : "Set aside money for costs you have every week, like groceries and gas. It comes out first, so free to spend shows what's really left."
                 }
+                onAdd={() => setEnvSheet({ envelope: null })}
+                addLabel="Add planned spending"
               />
               {envSummary.hasEnvelopes && (
                 <Card style={styles.allowCard}>
@@ -694,15 +838,18 @@ export default function WeekScreen() {
                   </View>
                 </Card>
               )}
-              {envSummary.envelopes.map((env) => (
-                <EnvelopeRow
-                  key={env.id}
-                  env={env}
-                  householdOver={envFree < 0}
-                  onPress={() => setEnvSheet({ envelope: rawEnvelope(env.id) })}
-                  onSkipToggle={() => toggleSkip(env)}
-                />
-              ))}
+              {envSummary.hasEnvelopes && (
+                <ListGroup>
+                  {envSummary.envelopes.map((env) => (
+                    <EnvelopeRow
+                      key={env.id}
+                      env={env}
+                      householdOver={envFree < 0}
+                      onPress={() => setEnvSheet({ envelope: rawEnvelope(env.id) })}
+                    />
+                  ))}
+                </ListGroup>
+              )}
 
               {/* Where an envelope's overspend went. computeEnvelopes has
                   already taken it out of free-to-spend; without this row that
@@ -726,34 +873,6 @@ export default function WeekScreen() {
                 </View>
               )}
 
-              {/* Free-to-spend — everything not wrapped in an envelope. */}
-              <View style={styles.freeRow}>
-                <View style={styles.freeTile}>
-                  <IconFreeToSpend width={26} height={26} color={Palette.sageDeep} />
-                </View>
-                <View style={styles.flex}>
-                  <ThemedText type="bodyBold" style={styles.freeText}>
-                    Free to spend
-                  </ThemedText>
-                  <ThemedText type="small" style={styles.freeSub}>
-                    {envSummary.hasEnvelopes ? 'Everything not planned' : 'Set up planned costs to reserve some'}
-                  </ThemedText>
-                </View>
-                <ThemedText type="bodyBold" style={styles.freeText}>
-                  {envFree < 0 ? '-' + fmt(-envFree) : fmt(envFree)}
-                </ThemedText>
-              </View>
-
-              <PressableScale scaleTo={0.98}
-                accessibilityRole="button"
-                accessibilityLabel="Add a planned category"
-                onPress={() => setEnvSheet({ envelope: null })}
-                style={styles.addExpense}>
-                <View style={styles.addBadge}>
-                  <Plus size={16} color={Palette.card} strokeWidth={3} />
-                </View>
-                <ThemedText type="label">Add a planned category</ThemedText>
-              </PressableScale>
             </>
           )}
 
@@ -797,144 +916,6 @@ export default function WeekScreen() {
             </>
           )}
 
-          {/* Ledger grouped by day */}
-          <SectionHeader
-            title="Weekly spending"
-            action={weekTxns.length ? `${weekTxns.length} logged` : undefined}
-          />
-          {isCurrent && (
-            <PressableScale scaleTo={0.98}
-              accessibilityRole="button"
-              accessibilityLabel="Add an expense"
-              onPress={() => router.push('/add-expense')}
-              style={styles.addExpense}>
-              <View style={styles.addBadge}>
-                <Plus size={16} color={Palette.card} strokeWidth={3} />
-              </View>
-              <ThemedText type="label">Add an expense</ThemedText>
-            </PressableScale>
-          )}
-          {/* The week's opening position, shown wherever money went.
-
-              Deliberately NOT a transaction. The amount is already applied to
-              the allowance above, so writing it into the ledger as a real row
-              would deduct it a second time and make the week look twice as bad
-              as it is. Hence the dashed outline and no tap target: it reads as
-              context, not as something logged. */}
-          {/* On this week, the row says what was decided about last week,
-              whatever it was, and lets it be changed. A choice that isn't
-              shown can't be questioned: "let it go" used to leave no trace. */}
-          {lastSettlement ? (
-            <SettlementRow
-              settlement={lastSettlement}
-              goals={goals.data ?? []}
-              changing={reopenRollover.isPending}
-              onChange={changeRollover}
-            />
-          ) : adjustment !== 0 && (
-            <View style={styles.carryRow}>
-              <View style={styles.carryTile}>
-                <CornerDownRight
-                  size={20}
-                  color={adjustment < 0 ? Palette.terracottaDeep : Palette.sageDeep}
-                />
-              </View>
-              <View style={styles.flex}>
-                <ThemedText type="bodyBold">
-                  {adjustment < 0 ? 'Started short from last week' : 'Started ahead from last week'}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.carrySub}>
-                  {adjustment < 0
-                    ? `You went over last week and chose to carry it in, so this week began with ${fmt(-adjustment)} less to spend.`
-                    : `You had money left last week and chose to carry it in, so this week began with ${fmt(adjustment)} more to spend.`}
-                </ThemedText>
-              </View>
-              <ThemedText
-                type="bodyBold"
-                style={adjustment < 0 ? styles.overageText : styles.freeText}>
-                {adjustment < 0 ? '-' : '+'}
-                {fmt(Math.abs(adjustment))}
-              </ThemedText>
-            </View>
-          )}
-
-          {/* Rows that arrive later (an expense just logged, or a partner's on
-              refetch) slide in, and deleted ones fold away. Nothing animates on
-              first load or when paging weeks: the key remounts this boundary,
-              which skips both, so a whole week never cascades in. */}
-          <LayoutAnimationConfig key={`${householdId}:${offset}`} skipEntering skipExiting>
-          {dayGroups.length ? (
-            dayGroups.map((g) => (
-              <Animated.View
-                key={g.date}
-                entering={FadeIn.duration(220)}
-                exiting={FadeOut.duration(160)}
-                layout={LinearTransition.duration(240)}>
-                <ThemedText type="label" themeColor="textSecondary" style={styles.dayHeading}>
-                  {g.heading}
-                </ThemedText>
-                {g.items.map((t) => {
-                  const cat = txCategoryById(t.category);
-                  const isIncome = t.type === 'income';
-                  return (
-                    <Animated.View
-                      key={t.id}
-                      entering={FadeInDown.duration(260)}
-                      exiting={FadeOut.duration(160)}
-                      layout={LinearTransition.duration(240)}>
-                    <ListRow
-                      emoji={
-                        isIncome ? (
-                          <IconGiftBox width={22} height={22} color={Palette.sageDeep} />
-                        ) : (
-                          <CategoryGlyph txId={cat.id} emoji={cat.emoji} />
-                        )
-                      }
-                      title={t.label ?? cat.name}
-                      subtitle={`${isIncome ? incomeWentTo(t.income_destination) : cat.name} · ${memberName(t.member_id)}`}
-                      badge={
-                        t.is_fun_money ? (
-                          <View style={styles.funBadge}>
-                            <ThemedText type="small" style={styles.funBadgeText}>
-                              🎉 Fun
-                            </ThemedText>
-                          </View>
-                        ) : undefined
-                      }
-                      onPress={isCurrent ? () => router.push(`/add-expense?id=${t.id}`) : undefined}
-                      right={
-                        <ThemedText
-                          type="bodyBold"
-                          style={{ color: isIncome ? Palette.sageDeep : Palette.terracottaDeep }}>
-                          {isIncome ? '+' : '-'}
-                          {fmt(t.amount)}
-                        </ThemedText>
-                      }
-                    />
-                    </Animated.View>
-                  );
-                })}
-              </Animated.View>
-            ))
-          ) : (
-            <Card style={styles.empty}>
-              <IconBills width={26} height={26} color={Palette.ink} />
-              <ThemedText type="body" themeColor="textSecondary" style={styles.emptyText}>
-                Nothing logged for this week yet.
-              </ThemedText>
-              {isCurrent && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Add your first expense"
-                  onPress={() => router.push('/add-expense')}>
-                  <ThemedText type="label" style={{ color: Palette.sageDeep }}>
-                    Add first expense
-                  </ThemedText>
-                </Pressable>
-              )}
-            </Card>
-          )}
-          </LayoutAnimationConfig>
         </>
       )}
 
@@ -946,6 +927,15 @@ export default function WeekScreen() {
         onSave={saveEnvelope}
         onDelete={removeEnvelope}
         saving={envMut.add.isPending || envMut.update.isPending}
+        skipped={envSheetStatus?.skipped}
+        onToggleSkip={
+          envSheetStatus
+            ? () => {
+                toggleSkip(envSheetStatus);
+                setEnvSheet(null);
+              }
+            : undefined
+        }
       />
       <RolloverPrompt
         visible={showRolloverPrompt}
@@ -1081,7 +1071,6 @@ function EnvelopeRow({
   env,
   householdOver,
   onPress,
-  onSkipToggle,
 }: {
   env: EnvelopeStatus;
   // The household's OVERALL free-to-spend has gone negative. An envelope that
@@ -1090,7 +1079,6 @@ function EnvelopeRow({
   // whole is spent past what it has, so don't paint it green/reassuring here.
   householdOver: boolean;
   onPress: () => void;
-  onSkipToggle: () => void;
 }) {
   const cat = txCategoryById(env.category);
   const frac = env.budget > 0 ? Math.max(0, Math.min(1, env.spent / env.budget)) : 0;
@@ -1137,18 +1125,6 @@ function EnvelopeRow({
           <View style={styles.envTrack}>
             <ProgressFill value={frac} style={[styles.envFill, { backgroundColor: barColor }]} />
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              env.skipped ? `Stop skipping ${cat.name} this week` : `Skip ${cat.name} this week`
-            }
-            onPress={onSkipToggle}
-            hitSlop={8}
-            style={styles.skipBtn}>
-            <ThemedText type="small" themeColor="textSecondary">
-              {env.skipped ? 'Skipped · Undo' : 'Skip this week'}
-            </ThemedText>
-          </Pressable>
         </View>
       }
     />
@@ -1170,18 +1146,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tracker: { flex: 1, flexDirection: 'row', paddingVertical: Spacing.two, paddingHorizontal: Spacing.one },
-  dayCol: { flex: 1, alignItems: 'center', gap: Spacing.one },
-  dayDot: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayToday: { backgroundColor: Palette.sage },
-  dayTodayText: { color: Palette.card },
-  dayPast: { backgroundColor: 'rgba(61,64,91,0.08)' },
+  weekLabel: { flex: 1, alignItems: 'center', gap: 2 },
+  startCard: { gap: Spacing.two, marginBottom: Spacing.three },
+  startBtn: { marginTop: Spacing.one },
   // Sand rather than sage or terracotta: this is "pay attention, you're
   // somewhere else", not good news or bad news. It must not read as another
   // over-budget warning sitting above an over-budget figure.
@@ -1281,16 +1248,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   envFill: { height: '100%', borderRadius: Radius.pill },
-  skipBtn: { alignSelf: 'flex-start' },
-  freeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    backgroundColor: 'rgba(129,178,154,0.16)',
-    borderRadius: Radius.large,
-    padding: Spacing.three,
-    marginBottom: Spacing.two + 2,
-  },
   freeTile: {
     width: 44,
     height: 44,
@@ -1298,7 +1255,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   freeText: { color: Palette.sageDeep },
-  freeSub: { color: 'rgba(94,143,119,0.85)' },
   overageRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1334,26 +1290,6 @@ const styles = StyleSheet.create({
   },
   funText: { flex: 1, minWidth: 0 },
   dayHeading: { marginTop: Spacing.two, marginBottom: Spacing.two, marginLeft: Spacing.one },
-  addExpense: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(61,64,91,0.25)',
-    borderRadius: Radius.large,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    marginBottom: Spacing.three,
-  },
-  addBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.sageDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   funBadge: {
     backgroundColor: 'rgba(242,204,143,0.4)',
     borderRadius: Radius.pill,

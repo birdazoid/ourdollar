@@ -130,7 +130,7 @@ export function CreateHouseholdSheet({ visible, onClose, onCreated }: Props) {
       )}
 
       <Button
-        title="Create household"
+        title={valid ? 'Create household' : 'Name your household'}
         disabled={!valid}
         loading={create.isPending}
         onPress={submit}
