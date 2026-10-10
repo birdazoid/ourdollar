@@ -196,7 +196,7 @@ async function seed() {
   const transactions = [
     { member_id: owner.id, amount: 62.5, label: 'Groceries', category: 'groceries', is_fun_money: false },
     { member_id: partner.id, amount: 6.25, label: 'Coffee', category: 'dining', is_fun_money: true },
-    { member_id: owner.id, amount: 38.0, label: 'Gas', category: 'transportation', is_fun_money: false },
+    { member_id: owner.id, amount: 38.0, label: 'Gas', category: 'fuel', is_fun_money: false },
   ];
   for (const t of transactions) {
     const { error: txErr } = await admin.from('transactions').insert({ household_id: hid, type: 'expense', ...t });
