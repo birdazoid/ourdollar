@@ -13,6 +13,7 @@ import { fmt } from '@/lib/money';
 import type { Bill } from '@/lib/types';
 import { dueDayInMonth } from '@/lib/period';
 import { todayISO } from '@/lib/week';
+import { CategoryGlyph } from '@/components/category-glyph';
 
 type Props = {
   bill: Bill | null;
@@ -35,7 +36,13 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, savi
   const validAmount = amount !== '' && !Number.isNaN(amountNum);
 
   return (
-    <Sheet visible={!!bill} title={bill ? `${billEmoji(bill.category)} ${bill.name}` : undefined} onClose={onClose}>
+    <Sheet
+      visible={!!bill}
+      title={bill?.name}
+      titleIcon={
+        bill ? <CategoryGlyph billCategory={bill.category} emoji={billEmoji(bill.category)} size={24} /> : undefined
+      }
+      onClose={onClose}>
       {bill && (
         <>
           <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>

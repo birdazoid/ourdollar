@@ -10,7 +10,6 @@ export function RetryScreen({ onRetry }: { onRetry: () => void }) {
   return (
     <ThemedView style={styles.fill}>
       <View style={styles.body}>
-        <ThemedText type="display">🌧️</ThemedText>
         <ThemedText type="title" style={styles.center}>
           Couldn&apos;t load
         </ThemedText>

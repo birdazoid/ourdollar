@@ -423,7 +423,7 @@ export default function BillsScreen() {
               <ListRow
                 emoji={<GoalGlyph emoji={g.emoji} />}
                 title={g.name}
-                subtitle={`${fmt(g.saved_amount)} of ${fmt(g.target_amount)}${done ? ' · funded! 🎉' : g.paid_this_month ? " · this month's paid" : ''}`}
+                subtitle={`${fmt(g.saved_amount)} of ${fmt(g.target_amount)}${done ? ' · funded' : g.paid_this_month ? " · this month's paid" : ''}`}
                 subColor={done ? Palette.sageDeep : undefined}
                 onPress={() => setGoalDetail(g)}
                 dim={settled}

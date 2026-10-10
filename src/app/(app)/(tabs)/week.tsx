@@ -73,6 +73,7 @@ import {
 import type { Goal, Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 import { screenData } from '@/lib/screen-data';
+import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
 
 /**
  * Where a logged income row was assigned.
@@ -719,8 +720,9 @@ export default function WeekScreen() {
                       badge={
                         t.is_fun_money ? (
                           <View style={styles.funBadge}>
+                            <IconCelebrate width={13} height={13} color={Palette.sandDeep} />
                             <ThemedText type="small" style={styles.funBadgeText}>
-                              🎉 Fun
+                              Fun
                             </ThemedText>
                           </View>
                         ) : undefined
@@ -1291,6 +1293,9 @@ const styles = StyleSheet.create({
   funText: { flex: 1, minWidth: 0 },
   dayHeading: { marginTop: Spacing.two, marginBottom: Spacing.two, marginLeft: Spacing.one },
   funBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: 'rgba(242,204,143,0.4)',
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.two,
