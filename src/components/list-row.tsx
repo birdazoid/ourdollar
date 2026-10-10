@@ -18,7 +18,13 @@ type Props = {
   right?: ReactNode;
   footer?: ReactNode;
   onPress?: () => void;
-  outline?: boolean; // needs attention (overdue)
+  /**
+   * Needs attention (overdue). The icon sits on a soft terracotta tile, and on
+   * its own the row's card also gets a terracotta outline. Inside a group it
+   * used to be a red bar on the row's left edge, which the group's rounded
+   * corners clipped on the first and last rows.
+   */
+  outline?: boolean;
   dim?: boolean; // muted/paid state
   strikethrough?: boolean; // line through the title (done/paid state)
   /**
@@ -65,7 +71,7 @@ export function ListRow({
   const content = (
     <>
       <View style={styles.topRow}>
-        <View style={styles.tile}>
+        <View style={[styles.tile, outline && styles.tileAttention]}>
           {typeof emoji === 'string' ? <ThemedText type="subtitle">{emoji}</ThemedText> : emoji}
         </View>
         <View style={styles.body}>
@@ -107,12 +113,7 @@ export function ListRow({
       style={grouped ? styles.groupedWrap : styles.wrap}>
       <Animated.View style={faded}>
         {grouped ? (
-          <View style={styles.groupedRow}>
-            {/* An overdue row inside a group can't have its own outline, so
-                it gets a terracotta edge marker instead. */}
-            {outline && <View style={styles.attention} />}
-            {content}
-          </View>
+          <View style={styles.groupedRow}>{content}</View>
         ) : (
           <Card style={outline && styles.outline}>{content}</Card>
         )}
@@ -128,15 +129,6 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(61,64,91,0.14)',
   },
   groupedRow: { paddingVertical: Spacing.three - 2, paddingHorizontal: Spacing.three },
-  attention: {
-    position: 'absolute',
-    left: 0,
-    top: Spacing.two,
-    bottom: Spacing.two,
-    width: 3,
-    borderRadius: 2,
-    backgroundColor: Palette.terracotta,
-  },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   tile: {
     width: 40,
@@ -149,5 +141,6 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 2 },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   outline: { borderWidth: 1.5, borderColor: Palette.terracotta },
+  tileAttention: { backgroundColor: 'rgba(224,122,95,0.16)' },
   strikethrough: { textDecorationLine: 'line-through' },
 });

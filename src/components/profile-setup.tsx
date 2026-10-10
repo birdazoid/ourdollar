@@ -63,7 +63,8 @@ export function ProfileSetup() {
                   accessibilityState={{ selected: a === avatar }}
                   onPress={() => setAvatar(a)}
                   style={[styles.avatarOption, a === avatar && styles.avatarSelected]}>
-                  <AvatarGlyph value={a} size={44} />
+                  {/* 40 inside a 44 frame with a 2pt border, so the selected ring stays visible. */}
+                  <AvatarGlyph value={a} size={40} />
                 </Pressable>
               ))}
             </View>

@@ -290,7 +290,13 @@ export default function BillsScreen() {
               {(carryovers.data ?? []).map((c) => (
                 <ListRow
                   key={c.id}
-                  emoji={<CategoryGlyph billCategory={c.category} emoji={billEmoji(c.category)} />}
+                  emoji={
+                    <CategoryGlyph
+                      billCategory={c.category}
+                      emoji={billEmoji(c.category)}
+                      color={Palette.terracottaDeep}
+                    />
+                  }
                   title={c.name}
                   subtitle={`Unpaid since ${monthLabel(c.from_month)}`}
                   subColor={Palette.terracotta}
@@ -357,7 +363,13 @@ export default function BillsScreen() {
                       exiting={FadeOut.duration(160)}
                       layout={LinearTransition.duration(260)}>
                       <ListRow
-                        emoji={<CategoryGlyph billCategory={b.category} emoji={billEmoji(b.category)} />}
+                        emoji={
+                          <CategoryGlyph
+                            billCategory={b.category}
+                            emoji={billEmoji(b.category)}
+                            color={isOverdue ? Palette.terracottaDeep : undefined}
+                          />
+                        }
                         title={b.name}
                         subtitle={
                           b.paid

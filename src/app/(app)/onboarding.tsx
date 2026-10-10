@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import type { ComponentType, ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SvgProps } from 'react-native-svg';
 
 import IconBills from '@/assets/icons/icon-bills.svg';
@@ -76,6 +76,7 @@ import { todayISO } from '@/lib/week';
 const STEPS = ['People', 'Income', 'Bills', 'Savings goals', 'Your weekly money', 'Planned spending'];
 
 export default function OnboardingScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useSession();
   const { householdId, household } = useHousehold();
@@ -190,7 +191,10 @@ export default function OnboardingScreen() {
 
   return (
     <ThemedView style={styles.fill}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      {/* Padded from the root window's insets rather than a SafeAreaView:
+          inside an iOS full-screen modal SafeAreaView can measure no inset,
+          and the progress header ended up under the status bar. */}
+      <View style={[styles.fill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* Progress header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
@@ -493,7 +497,7 @@ export default function OnboardingScreen() {
             <Button title={step === STEPS.length - 1 ? 'Finish setup' : 'Continue'} onPress={next} />
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       <AddMemberSheet
         visible={addingMember}
