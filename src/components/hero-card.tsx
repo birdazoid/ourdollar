@@ -3,10 +3,20 @@ import { StyleSheet, View } from 'react-native';
 import { Ring } from '@/components/ring';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Spacing } from '@/constants/theme';
+import { useTween } from '@/hooks/use-tween';
 
 type Props = {
   eyebrow: string;
   big: string;
+  /**
+   * The number behind `big`, when it has one. Given this and `formatBig`, the
+   * figure counts to each new value instead of swapping, so logging an expense
+   * visibly takes it off. `big` stays the screen-reader text.
+   */
+  bigValue?: number;
+  formatBig?: (n: number) => string;
+  /** Change to show a new figure without counting (a different week, say). */
+  jumpKey?: string | number;
   bigColor?: string;
   sub: string;
   subColor?: string;
@@ -22,6 +32,9 @@ type Props = {
 export function HeroCard({
   eyebrow,
   big,
+  bigValue,
+  formatBig,
+  jumpKey,
   bigColor,
   sub,
   subColor,
@@ -31,14 +44,20 @@ export function HeroCard({
   ringLabel,
   ringCenter,
 }: Props) {
+  const counted = useTween(bigValue ?? 0, { jumpKey });
+  const bigText = bigValue != null && formatBig ? formatBig(counted) : big;
+
   return (
     <View style={styles.card}>
       <View style={styles.left}>
         <ThemedText type="label" themeColor="textSecondary">
           {eyebrow}
         </ThemedText>
-        <ThemedText type="display" style={[styles.big, bigColor ? { color: bigColor } : undefined]}>
-          {big}
+        <ThemedText
+          type="display"
+          accessibilityLabel={big}
+          style={[styles.big, bigColor ? { color: bigColor } : undefined]}>
+          {bigText}
         </ThemedText>
         <ThemedText type="label" style={{ color: subColor ?? Palette.sageDeep }}>
           {sub}
@@ -50,14 +69,20 @@ export function HeroCard({
         )}
       </View>
       <Ring value={ringValue} color={ringColor}>
-        {(ringCenter ?? `${Math.round(ringValue * 100)}%`) !== '' && (
-          <ThemedText type="subtitle">{ringCenter ?? `${Math.round(ringValue * 100)}%`}</ThemedText>
-        )}
-        {ringLabel && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {ringLabel}
-          </ThemedText>
-        )}
+        {(shown) => {
+          // The percentage counts with the arc, from the ring's own animation.
+          const ringText = ringCenter ?? `${Math.round(shown * 100)}%`;
+          return (
+            <>
+              {ringText !== '' && <ThemedText type="subtitle">{ringText}</ThemedText>}
+              {ringLabel && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {ringLabel}
+                </ThemedText>
+              )}
+            </>
+          );
+        }}
       </Ring>
     </View>
   );

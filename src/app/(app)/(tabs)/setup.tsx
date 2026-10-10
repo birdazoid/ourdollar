@@ -26,6 +26,7 @@ import {
 } from '@/lib/money';
 import { monthOf, periodFor, weekStartFor, weeksRemainingInPeriod } from '@/lib/period';
 import { todayISO, weekdayName } from '@/lib/week';
+import { screenData } from '@/lib/screen-data';
 import {
   useBills,
   useExtraIncome,
@@ -40,6 +41,7 @@ import {
   useMembers,
 } from '@/lib/queries';
 import { WeekStartPicker } from '@/components/week-start-picker';
+import { PressableScale } from '@/components/pressable-scale';
 
 export default function SetupScreen() {
   const router = useRouter();
@@ -105,15 +107,13 @@ export default function SetupScreen() {
     }),
   });
 
-  const loading = !householdId || income.isLoading || members.isLoading;
   // Setup is the screen people edit from. Showing an empty income list after a
   // failed fetch invites re-adding income that already exists.
-  const loadFailed = income.isError || members.isError || bills.isError;
-  const retryLoad = () => {
-    income.refetch();
-    members.refetch();
-    bills.refetch();
-  };
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [members, income, extraIncome, bills, goals, funPeople, funSettings]);
 
   // The sheet reports which kind it saved, so a one-off routes to extra_income
   // and a recurring source to income_sources. Switching cadence to or from
@@ -157,7 +157,7 @@ export default function SetupScreen() {
 
   return (
     <Screen>
-      <ScreenHeader eyebrow="The numbers behind it all" title="Income & Setup" />
+      <ScreenHeader eyebrow="The numbers behind it all" title="Setup" />
 
       {loading ? (
         <ActivityIndicator color={Palette.sageDeep} style={styles.loading} />
@@ -173,15 +173,19 @@ export default function SetupScreen() {
               is exactly what Overview lays out. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Your week right now, see the full breakdown on Overview"
+            accessibilityLabel="Weekly spending money, see how it's worked out on Overview"
             onPress={() => router.push('/overview')}
             style={styles.liveWeek}>
             <View style={styles.flex}>
+              {/* Named for what it is. As "Your week right now" it sat beside
+                  the Week screen's free-to-spend, a different and smaller
+                  figure, and the two read as the app disagreeing with itself. */}
               <ThemedText type="bodyBold" style={styles.liveWeekText}>
-                Your week right now
+                Weekly spending money
               </ThemedText>
               <ThemedText type="small" style={styles.liveWeekSub}>
-                Updates as you edit below. Tap for how it&apos;s worked out.
+                What each week starts with, before planned spending and what you buy. Changes as
+                you edit below.
               </ThemedText>
             </View>
             <ThemedText type="title" style={styles.liveWeekText}>
@@ -193,7 +197,8 @@ export default function SetupScreen() {
           {/* INCOME */}
           <SectionHeader
             title="Monthly income"
-            action="the foundation"
+            onAdd={() => openSheet(null)}
+            addLabel="Add income"
             caption="Money here is part of the plan, so it raises every week of the month. For one-off money like selling something, log it on the Week screen instead and choose where it goes."
           />
           {(income.data ?? []).map((s) => {
@@ -251,7 +256,6 @@ export default function SetupScreen() {
             );
           })}
 
-          <DashedAdd label="Add income" onPress={() => openSheet(null)} />
 
           {/* WEEK START */}
           <SectionHeader title="Your week" />
@@ -371,12 +375,17 @@ export default function SetupScreen() {
 
 function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={styles.dashedAdd}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={styles.dashedAdd}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

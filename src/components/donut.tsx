@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
+import { useTween } from '@/hooks/use-tween';
+
 export type DonutSegment = { value: number; color: string };
 
 type Props = {
@@ -28,6 +30,9 @@ export function Donut({ segments, size = 168, stroke = 26, gap = 3, children }: 
   const circ = 2 * Math.PI * r;
   const center = size / 2;
   const total = segments.reduce((a, s) => a + s.value, 0) || 1;
+  // 0 to 1 once, on first view: the arcs sweep round in order, like the money
+  // being dealt out. Each arc lands at exactly its real size.
+  const sweep = useTween(1, { from: 0, duration: 800 });
 
   // Start angles precomputed rather than accumulated inside the map: a `let`
   // reassigned from a render callback makes the React Compiler bail out of
@@ -46,6 +51,7 @@ export function Donut({ segments, size = 168, stroke = 26, gap = 3, children }: 
     // and never let that floor exceed the segment's own share.
     const floor = seg.value > 0 ? Math.min((MIN_ARC_DEGREES / 360) * circ, frac * circ) : 0;
     const dash = Math.max(floor, (frac - gapFrac) * circ);
+    const swept = Math.min(dash, Math.max(0, (sweep - starts[i]) * circ));
     return (
       <Circle
         key={i}
@@ -55,7 +61,7 @@ export function Donut({ segments, size = 168, stroke = 26, gap = 3, children }: 
         stroke={seg.color}
         strokeWidth={stroke}
         fill="none"
-        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeDasharray={`${swept} ${circ - swept}`}
         strokeLinecap="butt"
         transform={`rotate(${startAngle - 90} ${center} ${center})`}
       />

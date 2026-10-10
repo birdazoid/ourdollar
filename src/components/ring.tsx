@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Palette } from '@/constants/theme';
+import { useTween } from '@/hooks/use-tween';
 
 type Props = {
   value: number; // 0..1
@@ -10,7 +11,11 @@ type Props = {
   stroke?: number;
   color?: string;
   track?: string;
-  children?: ReactNode;
+  /**
+   * What sits in the middle. Pass a function to get the ring's animated value,
+   * so a percentage can count with the arc without a second animation.
+   */
+  children?: ReactNode | ((shown: number) => ReactNode);
 };
 
 /** Circular progress ring with centered content (design-brief §7 hero pattern). */
@@ -24,7 +29,8 @@ export function Ring({
 }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
-  const v = Math.max(0, Math.min(1, value));
+  // Draws in from empty on first view, then glides to each new value.
+  const v = useTween(Math.max(0, Math.min(1, value)), { from: 0, duration: 650 });
   const center = size / 2;
 
   return (
@@ -45,7 +51,7 @@ export function Ring({
         />
       </Svg>
       <View style={StyleSheet.absoluteFill}>
-        <View style={styles.center}>{children}</View>
+        <View style={styles.center}>{typeof children === 'function' ? children(v) : children}</View>
       </View>
     </View>
   );

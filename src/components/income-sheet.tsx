@@ -38,10 +38,12 @@ type Props = {
   onClose: () => void;
   onSave: (draft: IncomeDraft, id?: string) => void;
   onDelete: (id: string, kind: 'recurring' | 'one-off') => void;
+  /** Offer "One-off" as a frequency. Off in the setup guide. */
+  allowOneOff?: boolean;
   saving?: boolean;
 };
 
-export function IncomeSheet({ visible, target, members, onClose, onSave, onDelete, saving }: Props) {
+export function IncomeSheet({ visible, target, members, onClose, onSave, onDelete, saving, allowOneOff = true }: Props) {
   const theme = useTheme();
   const isEdit = !!target;
   const [amount, setAmount] = useState('');
@@ -133,7 +135,9 @@ export function IncomeSheet({ visible, target, members, onClose, onSave, onDelet
           { value: 'semimonthly', label: FREQ.semimonthly.label },
           { value: 'biweekly', label: FREQ.biweekly.label },
           { value: 'weekly', label: FREQ.weekly.label },
-          { value: 'one-off', label: 'One-off' },
+          // One-off money belongs to logging, not to setting up the plan, so
+          // the setup guide leaves it out.
+          ...(allowOneOff ? [{ value: 'one-off' as const, label: 'One-off' }] : []),
         ]}
       />
 
@@ -183,7 +187,16 @@ export function IncomeSheet({ visible, target, members, onClose, onSave, onDelet
         )}
         <View style={styles.saveWrap}>
           <Button
-            title={isEdit ? 'Save changes' : 'Add income'}
+            // A disabled button says what it's waiting for.
+            title={
+              !(amountNum > 0)
+                ? 'Enter an amount'
+                : isOneOff && label.trim() === ''
+                  ? "Add where it's from"
+                  : isEdit
+                    ? 'Save changes'
+                    : 'Add income'
+            }
             loading={saving}
             disabled={!valid}
             onPress={save}

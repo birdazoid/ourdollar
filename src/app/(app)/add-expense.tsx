@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2, X } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
@@ -14,8 +14,11 @@ import { Segmented } from '@/components/segmented';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
+import { haptic } from '@/lib/haptics';
+import { showToast } from '@/lib/toast';
 import { TX_CATEGORIES, txCategoryById } from '@/lib/categories';
 import { useHousehold } from '@/lib/household';
 import { catchUpBalance, fmt } from '@/lib/money';
@@ -31,6 +34,7 @@ import {
 } from '@/lib/queries';
 import type { IncomeDestination } from '@/lib/types';
 import { dayHeading, getWeek, todayISO } from '@/lib/week';
+import { newId } from '@/lib/ids';
 
 type TxType = 'expense' | 'income';
 
@@ -38,6 +42,11 @@ export default function AddExpenseScreen() {
   const router = useRouter();
   // Fall back to Week when there's no history to pop (e.g. a web reload).
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/week'));
+  // This entry's id, fixed for as long as the form is open. A save whose reply
+  // was lost can then be retried without logging the money twice.
+  const [draftId] = useState(newId);
+  // What the first income save sent, to notice if a retry differs from it.
+  const firstIncomeAttempt = useRef<string | null>(null);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { householdId, household } = useHousehold();
   const { session } = useSession();
@@ -97,6 +106,16 @@ export default function AddExpenseScreen() {
   }, [label, transactions.data]);
 
   const amountNum = Number(amount);
+  // What the form is still waiting for, in the order it asks for things.
+  const missing = !(amountNum > 0)
+    ? 'Enter an amount'
+    : label.trim() === ''
+      ? type === 'income'
+        ? "Add where it's from"
+        : 'Add where you spent it'
+      : !category
+        ? 'Pick a category'
+        : 'Pick a goal';
   const valid =
     amount !== '' &&
     amountNum > 0 &&
@@ -265,10 +284,22 @@ export default function AddExpenseScreen() {
         // logIncome writes the transaction AND applies the destination as one
         // operation, so a failure can't leave the money recorded but unassigned.
         const goal = (goals.data ?? []).find((g) => g.id === destGoalId);
-        await txMut.logIncome.mutateAsync({ input, goal, catchUpOwed, memberId });
+        const attempt = JSON.stringify({ input, goal: goal?.id ?? null });
+        firstIncomeAttempt.current ??= attempt;
+        const { duplicate } = await txMut.logIncome.mutateAsync({ id: draftId, input, goal, memberId });
+        // The first try landed after all (only its reply was lost). If the
+        // form was changed since, those changes weren't saved: say so instead
+        // of closing as though they were.
+        if (duplicate && attempt !== firstIncomeAttempt.current) {
+          showToast(
+            "This income was already saved on your first try, as it was then. To change it, tap it in this week's spending.",
+            'info'
+          );
+        }
       } else {
-        await txMut.create.mutateAsync(input);
+        await txMut.create.mutateAsync({ ...input, id: draftId });
       }
+      haptic.success();
       goBack();
     } catch {
       // The toast is raised by the global mutation handler; keep the form.
@@ -301,11 +332,16 @@ export default function AddExpenseScreen() {
           </Pressable>
         </View>
 
+        {/* The form scrolls; Save stays pinned above the keyboard. At the end
+            of a long scrolling form it was off screen whenever the keyboard
+            was up. */}
+        <KeyboardAvoidingView
+          style={styles.fill}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}>
           <Segmented
             value={type}
@@ -367,18 +403,22 @@ export default function AddExpenseScreen() {
             {TX_CATEGORIES.map((c) => {
               const on = category === c.id;
               return (
-                <Pressable
+                <PressableScale
                   key={c.id}
+                  scaleTo={0.94}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={c.name}
-                  onPress={() => setCategory(c.id)}
+                  onPress={() => {
+                    if (!on) haptic.select();
+                    setCategory(c.id);
+                  }}
                   style={[styles.catTile, on && styles.catTileOn]}>
                   <CategoryGlyph txId={c.id} emoji={c.emoji} />
                   <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'} style={styles.catLabel}>
                     {c.name}
                   </ThemedText>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -392,7 +432,7 @@ export default function AddExpenseScreen() {
               {destinations.map((d) => {
                 const on = incomeDest === d.value;
                 return (
-                  <Pressable
+                  <PressableScale scaleTo={0.98}
                     key={d.value}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
@@ -403,7 +443,7 @@ export default function AddExpenseScreen() {
                     <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
                       {d.sub}
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
               {incomeDest === 'goal' && (
@@ -412,7 +452,7 @@ export default function AddExpenseScreen() {
                   {(goals.data ?? []).map((g) => {
                     const on = destGoalId === g.id;
                     return (
-                      <Pressable
+                      <PressableScale scaleTo={0.98}
                         key={g.id}
                         accessibilityRole="button"
                         accessibilityState={{ selected: on }}
@@ -423,7 +463,7 @@ export default function AddExpenseScreen() {
                         <ThemedText type="small" themeColor="textSecondary" style={styles.destSub}>
                           {fmt(g.saved_amount)} of {fmt(g.target_amount)} saved
                         </ThemedText>
-                      </Pressable>
+                      </PressableScale>
                     );
                   })}
                 </>
@@ -466,12 +506,16 @@ export default function AddExpenseScreen() {
             {weekDays.map((d) => {
               const on = day === d.date;
               return (
-                <Pressable
+                <PressableScale
                   key={d.date}
+                  scaleTo={0.92}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={dayHeading(d.date)}
-                  onPress={() => setDay(d.date)}
+                  onPress={() => {
+                    if (!on) haptic.select();
+                    setDay(d.date);
+                  }}
                   style={[styles.dayBtn, on && styles.dayBtnOn]}>
                   <ThemedText type="small" themeColor={on ? undefined : 'textSecondary'} style={on ? styles.dayOnText : undefined}>
                     {d.short}
@@ -479,7 +523,7 @@ export default function AddExpenseScreen() {
                   <ThemedText type="label" style={on ? styles.dayOnText : undefined}>
                     {d.dayNum}
                   </ThemedText>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -488,42 +532,58 @@ export default function AddExpenseScreen() {
             <Pressable
               accessibilityRole="switch"
               accessibilityState={{ checked: isFun }}
-              accessibilityLabel="Count this as fun money"
+              accessibilityLabel="Pay from fun money"
               onPress={() => setIsFun(!isFun)}
               style={[styles.funRow, isFun && styles.funOn]}>
               <IconCelebrate width={23} height={23} color={Palette.ink} />
               <View style={styles.flex}>
-                <ThemedText type="bodyBold">Fun money</ThemedText>
+                {/* Says what each position does. "Counts against the weekly
+                    budget" described the OFF state but read like a description
+                    of fun money itself, which sits outside the weekly budget. */}
+                <ThemedText type="bodyBold">Pay from fun money</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  {isFun ? 'From a personal stash' : 'Counts against the weekly budget'}
+                  {isFun
+                    ? "Comes out of this person's fun money, not this week's free to spend"
+                    : "Off: comes out of this week's free to spend"}
                 </ThemedText>
               </View>
               <Switch value={isFun} onValueChange={setIsFun} onColor={Palette.sand} />
             </Pressable>
           )}
 
-          <View style={styles.actions}>
-            {isEdit && (
-              <Pressable accessibilityLabel="Delete entry" onPress={askDelete} style={styles.deleteBtn}>
-                <Trash2 size={20} color={Palette.terracottaDeep} />
-              </Pressable>
-            )}
-            <View style={styles.flex}>
-              <Button
-                title={
-                  isEdit
-                    ? 'Save changes'
-                    : `${type === 'income' ? 'Add income' : 'Add expense'}${valid ? ' · ' + fmt(amountNum) : ''}`
-                }
-                disabled={!valid}
-                // The screen now waits for the write, so the button has to say
-                // it's working or the tap reads as having done nothing.
-                loading={txMut.create.isPending || txMut.update.isPending || txMut.logIncome.isPending}
-                onPress={save}
-              />
-            </View>
-          </View>
+          {/* Delete is a quiet text action at the end of the form, away from
+              Save. It used to be a trash can right beside the Save button. */}
+          {isEdit && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Delete this entry"
+              onPress={askDelete}
+              style={styles.deleteRow}>
+              <Trash2 size={18} color={Palette.terracottaDeep} />
+              <ThemedText type="bodyBold" style={{ color: Palette.terracottaDeep }}>
+                Delete this entry
+              </ThemedText>
+            </Pressable>
+          )}
         </ScrollView>
+        <View style={styles.footer}>
+          <Button
+            // Says what's missing rather than sitting there a shade paler.
+            title={
+              !valid
+                ? missing
+                : isEdit
+                  ? 'Save changes'
+                  : `${type === 'income' ? 'Add income' : 'Add expense'} · ${fmt(amountNum)}`
+            }
+            disabled={!valid}
+            // The screen waits for the write, so the button has to say it's
+            // working or the tap reads as having done nothing.
+            loading={txMut.create.isPending || txMut.update.isPending || txMut.logIncome.isPending}
+            onPress={save}
+          />
+        </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </ThemedView>
@@ -626,13 +686,19 @@ const styles = StyleSheet.create({
     marginTop: Spacing.four,
   },
   funOn: { backgroundColor: 'rgba(242,204,143,0.25)' },
-  actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four },
-  deleteBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.large,
+  footer: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(61,64,91,0.14)',
+  },
+  deleteRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(224,122,95,0.14)',
+    gap: Spacing.two,
+    marginTop: Spacing.five,
+    paddingVertical: Spacing.two,
   },
 });

@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
@@ -36,13 +37,13 @@ export function MiniCard({ label, children, warn, onPress, hint }: MiniCardProps
   );
   if (onPress) {
     return (
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         accessibilityLabel={[label, hint].filter(Boolean).join(', ')}
         style={styles.flex}
         onPress={onPress}>
         {inner}
-      </Pressable>
+      </PressableScale>
     );
   }
   return <View style={styles.flex}>{inner}</View>;

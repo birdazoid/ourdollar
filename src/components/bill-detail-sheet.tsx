@@ -1,4 +1,4 @@
-import { Check, Pencil, Trash2 } from 'lucide-react-native';
+import { Check, Pencil } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,9 +8,11 @@ import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { billEmoji } from '@/lib/categories';
-import { ordinal } from '@/lib/format';
+import { ordinal, shortDate } from '@/lib/format';
 import { fmt } from '@/lib/money';
 import type { Bill } from '@/lib/types';
+import { dueDayInMonth } from '@/lib/period';
+import { todayISO } from '@/lib/week';
 
 type Props = {
   bill: Bill | null;
@@ -18,12 +20,11 @@ type Props = {
   onClose: () => void;
   onPay: (bill: Bill, amount: number) => void;
   onEdit: (bill: Bill) => void;
-  onDelete: (id: string) => void;
   saving?: boolean;
 };
 
 /** Bill detail: shows status, lets you confirm/adjust the amount and mark paid, then edit or delete — all in one sheet. */
-export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDelete, saving }: Props) {
+export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, saving }: Props) {
   const [amount, setAmount] = useState('');
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
       {bill && (
         <>
           <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>
-            {bill.category} · {bill.paid ? `paid ${paidByName ? `by ${paidByName} ` : ''}${bill.paid_on ?? ''}` : `due the ${ordinal(bill.due_day ?? 0)}`}
+            {bill.category} · {bill.paid ? `paid ${paidByName ? `by ${paidByName} ` : ''}${bill.paid_on ? shortDate(bill.paid_on) : ''}` : `due the ${ordinal(dueDayInMonth(bill.due_day, todayISO()) ?? 0)}`}
           </ThemedText>
 
           {bill.paid ? (
@@ -58,6 +59,8 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
             </>
           )}
 
+          {/* Delete lives at the bottom of the edit form, not here: a trash can
+              the same size as Edit, right beside it, invited accidental taps. */}
           <View style={styles.actions}>
             {!bill.paid && (
               <Pressable
@@ -80,12 +83,6 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, onDe
               onPress={() => onEdit(bill)}>
               <Pencil size={16} color={Palette.ink} />
               <ThemedText type="bodyBold">Edit</ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Delete bill"
-              style={styles.deleteBtn}
-              onPress={() => onDelete(bill.id)}>
-              <Trash2 size={18} color={Palette.terracottaDeep} />
             </Pressable>
           </View>
         </>
@@ -119,13 +116,5 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.card,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  deleteBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.large,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(224,122,95,0.14)',
   },
 });

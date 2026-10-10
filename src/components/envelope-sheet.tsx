@@ -19,6 +19,9 @@ type Props = {
   onSave: (draft: EnvelopeDraft, id?: string) => void;
   onDelete: (id: string) => void;
   saving?: boolean;
+  /** This week's skip state, when editing. Skipping used to be a grey link on every row. */
+  skipped?: boolean;
+  onToggleSkip?: () => void;
 };
 
 export function EnvelopeSheet({
@@ -29,6 +32,8 @@ export function EnvelopeSheet({
   onSave,
   onDelete,
   saving,
+  skipped,
+  onToggleSkip,
 }: Props) {
   const isEdit = !!envelope;
   const [category, setCategory] = useState<string | null>(null);
@@ -48,7 +53,7 @@ export function EnvelopeSheet({
   return (
     <Sheet
       visible={visible}
-      title={isEdit ? 'Edit planned category' : 'Add a planned category'}
+      title={isEdit ? 'Edit planned spending' : 'Add planned spending'}
       onClose={onClose}>
       {!isEdit && (
         <ThemedText type="small" themeColor="textSecondary" style={styles.intro}>
@@ -98,12 +103,31 @@ export function EnvelopeSheet({
       <MoneyInput value={amount} onChangeText={setAmount} size={30} />
 
       <Button
-        title={isEdit ? 'Save' : 'Add planned category'}
+        // A disabled button says what it's waiting for, rather than sitting
+        // there slightly paler than an enabled one.
+        title={
+          !category ? 'Pick a category' : !(amountNum > 0) ? 'Enter a weekly amount' : isEdit ? 'Save' : 'Add planned spending'
+        }
         disabled={!valid}
         loading={saving}
         onPress={() => category && onSave({ category, weekly_amount: amountNum }, envelope?.id)}
         style={styles.save}
       />
+
+      {isEdit && onToggleSkip && (
+        <View style={styles.skip}>
+          <Button
+            variant="secondary"
+            title={skipped ? 'Stop skipping this week' : 'Skip this week'}
+            onPress={onToggleSkip}
+          />
+          <ThemedText type="small" themeColor="textSecondary" style={styles.skipNote}>
+            {skipped
+              ? 'Skipped: its money is back in free to spend until next week.'
+              : 'Not buying this week? Skipping puts its money back in free to spend until next week.'}
+          </ThemedText>
+        </View>
+      )}
 
       {isEdit && (
         <Pressable
@@ -121,6 +145,8 @@ export function EnvelopeSheet({
 
 const styles = StyleSheet.create({
   intro: { marginBottom: Spacing.three },
+  skip: { marginTop: Spacing.three, gap: Spacing.one },
+  skipNote: { textAlign: 'center' },
   fixedCat: {
     flexDirection: 'row',
     alignItems: 'center',

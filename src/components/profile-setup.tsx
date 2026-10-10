@@ -21,10 +21,10 @@ export function ProfileSetup() {
   const { session } = useSession();
   const updateProfile = useUpdateProfile(session?.user.id ?? null);
 
-  const emailLocal = session?.user.email?.split('@')[0] ?? '';
-  const defaultName = emailLocal ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : '';
-
-  const [name, setName] = useState(defaultName);
+  // Starts empty. It used to be pre-filled from the email address, which put
+  // things like "Ourdollar-review-newuser" in the box, and typing added to it
+  // instead of replacing it.
+  const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string>(AVATAR_OPTIONS[0]);
 
   const valid = name.trim() !== '';

@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { BiometricLockScreen } from '@/components/biometric-lock-screen';
+import { CelebrationHost } from '@/components/celebration-host';
 import { ToastHost } from '@/components/toast-host';
 import { FontsToLoad } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/lib/auth';
@@ -20,12 +21,13 @@ const queryClient = new QueryClient({
     /**
      * Writes are NOT retried, on purpose.
      *
-     * None of the mutations carry an idempotency key, so a request that
-     * reached Postgres and then lost its response is indistinguishable from
-     * one that never arrived. Retrying would log the same expense twice, and
-     * a duplicate that silently inflates the week is worse than an error the
-     * household can see and act on. The failure is reported instead, and the
+     * A request that reached Postgres and then lost its response is
+     * indistinguishable from one that never arrived, so retrying blindly could
+     * log the same money twice. The failure is reported instead, and the
      * screens that write keep their form open so trying again is one tap.
+     * Expenses and income carry an id generated before the first attempt, so
+     * that tap is safe: the database recognises the id rather than writing the
+     * money a second time. Other writes don't carry one yet.
      */
     mutations: { retry: 0 },
   },
@@ -108,6 +110,7 @@ function RootNavigator() {
       {locked && <BiometricLockScreen onRetry={retry} />}
       {/* Last, so a failed write is reported over whatever is on screen —
           including a sheet that has just closed itself. */}
+      <CelebrationHost />
       <ToastHost />
     </>
   );

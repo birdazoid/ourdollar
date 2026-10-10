@@ -33,6 +33,7 @@ import { Sheet } from '@/components/sheet';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PressableScale } from '@/components/pressable-scale';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import {
@@ -102,7 +103,6 @@ export default function ProfileScreen() {
   const [creatingHousehold, setCreatingHousehold] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [reminders, setReminders] = useState({ due: true, overdue: true, weekClose: false });
   const [expanded, setExpanded] = useState<string[]>([]);
 
   // Security: change password, change email, biometric app-lock toggle.
@@ -539,20 +539,10 @@ export default function ProfileScreen() {
               value={me?.notify_on_spend ?? true}
               onToggle={() => me && memberMut.update.mutate({ id: me.id, notify_on_spend: !(me.notify_on_spend ?? true) })}
             />
-            <ToggleRow
-              icon={<IconNotifications width={21} height={21} color={Palette.ink} />}
-              title="Bill due reminders"
-              subtitle="A nudge the day before"
-              value={reminders.due}
-              onToggle={() => setReminders((r) => ({ ...r, due: !r.due }))}
-            />
-            <ToggleRow
-              icon={<IconNotifications width={21} height={21} color={Palette.ink} />}
-              title="Overdue alerts"
-              subtitle="If a bill slips past its date"
-              value={reminders.overdue}
-              onToggle={() => setReminders((r) => ({ ...r, overdue: !r.overdue }))}
-            />
+            {/* Bill due and overdue reminders were listed here as switches, but
+                nothing ever sent them: the switches were local placeholders
+                that reset on restart. A household trusting them would miss a
+                bill, so they stay hidden until the reminders exist. */}
             <ToggleRow
               icon={<Mail size={18} color={Palette.ink} />}
               title="Product updates"
@@ -914,12 +904,17 @@ function SettingRow({
 
 function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.dashedAdd}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      scaleTo={0.98}
+      style={styles.dashedAdd}>
       <View style={styles.plusBadge}>
         <Plus size={16} color={Palette.card} strokeWidth={3} />
       </View>
       <ThemedText type="label">{label}</ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 

@@ -104,7 +104,18 @@ export function GoalSheet({ visible, goal, onClose, onSave, onDelete, saving }: 
         )}
         <View style={styles.flex}>
           <Button
-            title={isEdit ? 'Save changes' : 'Add goal'}
+            // A disabled button says what it's waiting for.
+            title={
+              name.trim() === ''
+                ? 'Name your goal'
+                : !(Number(target) > 0)
+                  ? 'Enter a target amount'
+                  : monthly === ''
+                    ? 'Enter a monthly amount'
+                    : isEdit
+                      ? 'Save changes'
+                      : 'Add goal'
+            }
             loading={saving}
             disabled={!valid}
             onPress={() =>

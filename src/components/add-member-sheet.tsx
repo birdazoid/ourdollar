@@ -103,7 +103,16 @@ export function AddMemberSheet({ visible, onClose, onAdd, saving }: Props) {
       )}
 
       <Button
-        title="Add & send invite"
+        // A disabled button says what it's waiting for.
+        title={
+          name.trim() === ''
+            ? 'Enter their name'
+            : isOwnEmail
+              ? "That's your own email"
+              : !emailValid(email)
+                ? 'Enter their email'
+                : 'Add & send invite'
+        }
         disabled={!valid}
         loading={saving}
         onPress={() =>

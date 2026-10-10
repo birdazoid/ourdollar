@@ -37,6 +37,7 @@ import {
   weeksRemainingInPeriod,
 } from '@/lib/period';
 import { buildMonthComparison, monthBefore, monthLabel, monthStartISO } from '@/lib/month-review';
+import { screenData } from '@/lib/screen-data';
 import {
   useBills,
   useExtraIncome,
@@ -214,7 +215,7 @@ export default function OverviewScreen() {
   const pie = glance
     ? [
         { name: 'Fixed expenses', value: plannedForBills, color: Palette.ink },
-        { name: 'Weekly allowance', value: glance.monthlyPool, color: Palette.sage },
+        { name: 'Weekly spending money', value: glance.monthlyPool, color: Palette.sage },
         { name: 'Savings goals', value: glance.goalsMonthly, color: Palette.terracotta },
         { name: 'Fun money', value: glance.funTotal, color: Palette.sandDeep },
         // Its own slice, so the ring still totals the income in its centre.
@@ -261,14 +262,21 @@ export default function OverviewScreen() {
     return out;
   }, [transactions.data, range]);
 
-  const loading = !householdId || income.isLoading || transactions.isLoading || snapshots.isLoading;
-  const loadFailed = income.isError || transactions.isError || snapshots.isError || bills.isError;
-  const retryLoad = () => {
-    income.refetch();
-    transactions.refetch();
-    snapshots.refetch();
-    bills.refetch();
-  };
+  const {
+    loading,
+    failed: loadFailed,
+    retry: retryLoad,
+  } = screenData(householdId, [
+    members,
+    income,
+    extraIncome,
+    bills,
+    goals,
+    funPeople,
+    funSettings,
+    transactions,
+    snapshots,
+  ]);
 
   return (
     <Screen>
@@ -310,7 +318,7 @@ export default function OverviewScreen() {
             <Card style={styles.glanceCard}>
               {pie.length > 0 && (
                 <View style={styles.donutWrap}>
-                  <Donut segments={pie}>
+                  <Donut key={monthOffset} segments={pie}>
                     <ThemedText type="small" themeColor="textSecondary">
                       INCOME
                     </ThemedText>
@@ -363,15 +371,18 @@ export default function OverviewScreen() {
               {/* Same reason. This was THE misleading one: a green $1,969 sat
                   directly above a green arc worth $1,909, so the arc read as
                   the variable pool when it's the weekly allowance. */}
-              <MoneyRow label="Variable pool" value={fmt(glance.variablePool)} strong />
+              <MoneyRow label="Left after bills" value={fmt(glance.variablePool)} strong />
+              {/* The rows below are where that money goes, not money lost, so
+                  they carry no minus sign or red. Shown as subtractions, extra
+                  income read as "-$250": money arriving looked like money
+                  leaving. */}
               <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
-                What&apos;s left after bills. The three below come out of it.
+                Here&apos;s where it goes.
               </ThemedText>
               <MoneyRow
-                label={`Weekly allowance · ${fmt(glance.weeklyAllowance)}/wk ×${glance.weeks}`}
-                value={`−${fmt(glance.monthlyPool)}`}
+                label={`Weekly spending money · ${fmt(glance.weeklyAllowance)} × ${glance.weeks} weeks`}
+                value={fmt(glance.monthlyPool)}
                 sub
-                color={Palette.terracottaDeep}
                 dot={Palette.sage}
               />
               <View style={styles.noteRow}>
@@ -380,15 +391,14 @@ export default function OverviewScreen() {
                 </ThemedText>
                 <InfoTap label="How your weekly amount works" onPress={() => setWeeklyInfo(true)} />
               </View>
-              <MoneyRow label="Savings goals" value={`−${fmt(glance.goalsMonthly)}`} sub color={Palette.terracottaDeep} dot={Palette.terracotta} />
-              <MoneyRow label="Fun money" value={`−${fmt(glance.funTotal)}`} sub color={Palette.terracottaDeep} dot={Palette.sandDeep} />
+              <MoneyRow label="Savings goals" value={fmt(glance.goalsMonthly)} sub dot={Palette.terracotta} />
+              <MoneyRow label="Fun money" value={fmt(glance.funTotal)} sub dot={Palette.sandDeep} />
               {glance.extraTotal > 0 && (
                 <>
                   <MoneyRow
                     label="Extra income this month"
-                    value={`−${fmt(glance.extraTotal)}`}
+                    value={fmt(glance.extraTotal)}
                     sub
-                    color={Palette.terracottaDeep}
                     dot={Palette.sageDeep}
                   />
                   <ThemedText type="small" themeColor="textSecondary" style={styles.rowNote}>
@@ -492,7 +502,8 @@ export default function OverviewScreen() {
             />
           </View>
           <Card style={styles.trendCard}>
-            <BarChart data={trend} />
+            {/* Keyed by range so the bars rise again for the new set of months. */}
+            <BarChart key={range} data={trend} />
           </Card>
 
           {/* Where the money went */}

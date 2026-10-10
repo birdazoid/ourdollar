@@ -58,7 +58,7 @@ const SEED = {
   // One bill per BILL_CATS category, mixed paid/unpaid, so the Bills tab shows every icon.
   bills: [
     { name: 'Rent', category: 'Housing', amount: 1800, due_day: 1, paidByKey: 'jamie' },
-    { name: 'Car loan', category: 'Loans', amount: 340, due_day: 5 },
+    { name: 'Car loan', category: 'Loans', amount: 340, due_day: 5, paidByKey: 'sam' },
     { name: 'Electric & gas', category: 'Bills & Utilities', amount: 145, due_day: 12, varies: true },
     { name: "Robin's swim class", category: 'Kids', amount: 60, due_day: 15 },
     { name: 'Streaming bundle', category: 'Subscriptions', amount: 32, due_day: 3, paidByKey: 'jamie' },
@@ -90,6 +90,8 @@ const SEED = {
     { label: 'Lunch out', amount: 15.5, memberKey: 'sam', category: 'dining', is_fun_money: false, day: 2 },
     { label: 'Household supplies', amount: 18.9, memberKey: 'robin', category: 'household', is_fun_money: false, day: 3 },
     { label: 'New shoes', amount: 45, memberKey: 'sam', category: 'personal', is_fun_money: true, day: 3 },
+    { label: 'Bookstore', amount: 18.5, memberKey: 'jamie', category: 'personal', is_fun_money: true, day: 1 },
+    { label: 'Arcade', amount: 12, memberKey: 'robin', category: 'entertainment', is_fun_money: true, day: 2 },
   ],
 };
 

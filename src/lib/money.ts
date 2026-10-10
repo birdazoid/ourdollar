@@ -236,8 +236,17 @@ export function describeDelta(delta: number, opts: { invert?: boolean } = {}): D
 }
 
 /**
- * Keeps only what can belong to a dollar figure: digits and a single decimal
- * point. Commas are stripped, so the grouped string a field displays sanitizes
+ * The database stores amounts to the cent with at most ten whole digits, so a
+ * longer amount failed with a vague "Couldn't save". Nine is far past any
+ * household figure and safely inside that.
+ */
+const MAX_WHOLE_DIGITS = 9;
+
+/**
+ * Keeps only what can belong to a dollar figure: digits, a single decimal
+ * point, at most two decimal places (the database keeps cents, so "1.234"
+ * showed as $1.234 until it came back as $1.23) and at most nine whole digits.
+ * Commas are stripped, so the grouped string a field displays sanitizes
  * straight back to something Number() can read.
  *
  * A second "." is dropped rather than kept: Number('1.2.3') is NaN and
@@ -247,8 +256,12 @@ export function describeDelta(delta: number, opts: { invert?: boolean } = {}): D
 export function sanitizeAmountInput(text: string): string {
   const cleaned = text.replace(/[^0-9.]/g, '');
   const firstDot = cleaned.indexOf('.');
-  if (firstDot === -1) return cleaned;
-  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+  if (firstDot === -1) return cleaned.slice(0, MAX_WHOLE_DIGITS);
+  return (
+    cleaned.slice(0, Math.min(firstDot, MAX_WHOLE_DIGITS)) +
+    '.' +
+    cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
+  );
 }
 
 /**

@@ -10,8 +10,8 @@ import Logo from '@/assets/brand/ourdollar-logo.svg';
 import IconBills from '@/assets/icons/icon-bills.svg';
 import IconSave from '@/assets/icons/icon-save.svg';
 import IconWeek from '@/assets/icons/icon-week.svg';
-import IllustrationLanding from '@/assets/illustrations/landing-login.svg';
 import { Button } from '@/components/button';
+import { LandingLoginIllustration } from '@/components/illustrations/landing-login';
 import { PasswordField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -107,7 +107,7 @@ export default function SignInScreen() {
           <View style={styles.content}>
             <View style={styles.header}>
               {isSignIn && (
-                <IllustrationLanding width={150} height={143} style={styles.headerIllustration} />
+                <LandingLoginIllustration width={150} height={143} style={styles.headerIllustration} />
               )}
               <View style={styles.wordmarkRow}>
                 <Logo width={34} height={34} />

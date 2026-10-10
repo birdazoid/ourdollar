@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { FirstHousehold } from '@/components/first-household';
 import { InviteInbox, InviteWelcome } from '@/components/invites';
+import { GoalCelebrations } from '@/components/goal-celebrations';
 import { MonthAutoClose } from '@/components/month-auto-close';
 import { ProfileSetup } from '@/components/profile-setup';
 import { RetryScreen } from '@/components/retry-screen';
@@ -98,6 +99,7 @@ function HouseholdGate() {
       </Stack>
       <InviteInbox />
       <MonthAutoClose />
+      <GoalCelebrations />
       <WeeklyPeriodsNotice />
     </>
   );

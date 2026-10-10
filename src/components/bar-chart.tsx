@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Palette, Spacing } from '@/constants/theme';
+import { useTween } from '@/hooks/use-tween';
 
 export type Bar = { label: string; value: number };
 
@@ -17,18 +18,29 @@ const axisFmt = (n: number) =>
 /** Simple vertical bar chart (react-native-svg). Last bar highlighted in sage. */
 export function BarChart({ data, height = 150, highlightLast = true }: Props) {
   const max = Math.max(1, ...data.map((d) => d.value));
+  const hasData = data.some((d) => d.value > 0);
   const plotH = height - 24; // leave room for labels
   const barGap = 8;
+  // Bars rise from the baseline on first view, left to right, and re-rise when
+  // the range changes, since that's a different set of months.
+  const rise = useTween(1, { from: 0, duration: 700 });
+  const grow = (i: number) => {
+    const lag = data.length > 1 ? (i / (data.length - 1)) * 0.35 : 0;
+    const u = Math.min(1, Math.max(0, (rise - lag) / 0.65));
+    return 1 - (1 - u) ** 3;
+  };
 
   return (
     <View>
       <View style={styles.row}>
         <View style={styles.yAxis}>
+          {/* With nothing logged, `max` is a placeholder 1 and the scale read
+              "$1 / $1 / $0". An empty chart only needs its baseline. */}
           <ThemedText type="small" themeColor="textSecondary">
-            {axisFmt(max)}
+            {hasData ? axisFmt(max) : ''}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {axisFmt(max / 2)}
+            {hasData ? axisFmt(max / 2) : ''}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             $0
@@ -37,7 +49,7 @@ export function BarChart({ data, height = 150, highlightLast = true }: Props) {
         <View style={styles.plot}>
           <View style={[styles.bars, { height: plotH }]}>
             {data.map((d, i) => {
-              const h = max > 0 ? (d.value / max) * plotH : 0;
+              const h = max > 0 ? (d.value / max) * plotH * grow(i) : 0;
               const isLast = i === data.length - 1;
               const color = highlightLast && isLast ? Palette.sage : '#E2DCC9';
               return (
