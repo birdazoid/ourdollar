@@ -9,7 +9,7 @@
   --ink: #3d405b;
   --ink-soft: #6b6e8c;
   --sage: #81b29a;
-  --sage-deep: #5e8f77;
+  --sage-deep: #416b55;
   --sand: #f2cc8f;
   --sand-deep: #c9974a;
   --terracotta: #e07a5f;
@@ -107,7 +107,7 @@ a:hover {
   font-size: 12.5px;
   letter-spacing: 0.19em;
   text-transform: uppercase;
-  color: var(--sage-deep);
+  color: var(--ink);
   margin: 0 0 16px;
 }
 
@@ -120,8 +120,8 @@ a:hover {
 
 /* ---------- Motion primitives (driven by SiteEffects) ---------- */
 [data-reveal] {
-  opacity: 0;
-  transform: translateY(20px);
+  opacity: 1;
+  transform: none;
   transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
   transition-delay: var(--reveal-delay, 0s);
   will-change: opacity, transform;
@@ -132,9 +132,9 @@ a:hover {
 }
 
 [data-image-reveal] {
-  opacity: 0;
-  transform: scale(1.05);
-  clip-path: inset(0 0 100% 0 round var(--ir-round, 20px));
+  opacity: 1;
+  transform: none;
+  clip-path: none;
   transition: opacity 0.9s ease, transform 1.2s var(--ease),
     clip-path 1.2s var(--ease);
   will-change: opacity, transform, clip-path;
@@ -194,12 +194,12 @@ a:hover {
   text-decoration: none;
 }
 .btn-primary {
-  background: var(--terracotta);
+  background: #a84430;
   color: #fff;
   box-shadow: 0 8px 22px rgba(224, 122, 95, 0.28);
 }
 .btn-primary:hover {
-  background: var(--terracotta-deep);
+  background: #923a29;
   box-shadow: 0 12px 30px rgba(224, 122, 95, 0.34);
 }
 .btn-ghost {
@@ -348,7 +348,7 @@ a:hover {
     justify-content: center;
   }
   .hero-visual {
-    order: -1;
+    order: 0;
   }
 }
 
@@ -620,93 +620,6 @@ a:hover {
   color: var(--ink-soft);
 }
 
-/* ---------- Pricing ---------- */
-.price-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.15fr;
-  gap: 24px;
-  align-items: start;
-  max-width: 900px;
-  margin: 0 auto;
-}
-@media (max-width: 760px) {
-  .price-grid {
-    grid-template-columns: 1fr;
-  }
-}
-.plan {
-  background: var(--card);
-  border-radius: var(--radius-lg);
-  padding: 36px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--hair-soft);
-  position: relative;
-}
-.plan.featured {
-  background: linear-gradient(160deg, #ffffff 0%, #f7fbf8 100%);
-  border: 1.5px solid var(--sage);
-  box-shadow: var(--shadow);
-}
-.plan-tag {
-  position: absolute;
-  top: -13px;
-  left: 36px;
-  background: var(--sage);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  padding: 6px 13px;
-  border-radius: var(--radius-sm);
-}
-.plan h3 {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-.plan .price {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 42px;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  margin: 12px 0 2px;
-}
-.plan .price small {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  letter-spacing: 0;
-}
-.plan .price-sub {
-  color: var(--ink-soft);
-  font-size: 15px;
-  margin-bottom: 20px;
-}
-.plan ul {
-  list-style: none;
-  padding: 0;
-  margin: 22px 0 0;
-}
-.plan li {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 10px 0;
-  border-top: 1px solid var(--hair-soft);
-  font-size: 16px;
-}
-.plan li:first-child {
-  border-top: none;
-}
-.check {
-  color: var(--sage-deep);
-  flex: none;
-  margin-top: 2px;
-  font-weight: 800;
-}
-
 /* ---------- Legal pages ---------- */
 .legal {
   max-width: 720px;
@@ -798,4 +711,65 @@ a:hover {
   .statement-photo {
     max-width: 280px;
   }
+}
+
+/* Clear actions, budget example, and mobile reading order. */
+section[id], [id="get"] { scroll-margin-top: 92px; }
+a:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+.nav-links .nav-cta {
+  padding: 9px 14px;
+  background: var(--ink);
+  color: white;
+  border-radius: var(--radius-sm);
+}
+.nav-links .nav-cta:hover { background: #292c43; color: white; }
+.launch-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.launch-note { margin: 12px 0 0; font-size: 14px; color: var(--ink-soft); }
+.budget-example {
+  margin-top: 30px; padding: 28px; border: 1px solid var(--hair);
+  border-radius: var(--radius-lg); background: var(--card); max-width: 520px;
+}
+.budget-breakdown { margin: 0; }
+.budget-breakdown > div {
+  display: flex; justify-content: space-between; gap: 18px; padding: 12px 0;
+}
+.budget-breakdown dt { color: var(--ink-soft); }
+.budget-breakdown dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.budget-breakdown .budget-remainder { border-top: 1px solid var(--hair); margin-top: 8px; }
+.budget-result { margin-top: 16px; padding: 20px; border-radius: 12px; background: var(--linen); }
+.budget-result > span { display: block; font-weight: 700; }
+.budget-result strong { display: block; font: 700 48px/1.2 var(--font-serif); margin-top: 8px; }
+.budget-result small { font: 500 16px var(--font-sans); }
+.budget-caption { margin: 14px 0 0; font-size: 13px; color: var(--ink-soft); }
+.faq-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 60px; }
+.faq-list details { border-bottom: 1px solid var(--hair); padding: 18px 0; }
+.faq-list summary { cursor: pointer; font-size: 18px; font-weight: 700; }
+.faq-list details p { margin: 12px 0 0; color: var(--ink-soft); }
+.faq-list > a { margin-top: 22px; }
+@media (max-width: 860px) {
+  .hero { padding-top: 42px; }
+  .hero-phone-shot { width: 220px; }
+  .launch-actions { justify-content: center; }
+  .hero-visual { margin-top: 16px; }
+  .faq-layout { grid-template-columns: 1fr; gap: 20px; }
+}
+@media (max-width: 640px) {
+  .container { padding: 0 20px; }
+  .section { padding: 56px 0; }
+  .section-tight { padding: 40px 0; }
+  .hero { padding: 32px 0 36px; }
+  .hero .lead { font-size: 18px; }
+  .hero h1 { font-size: clamp(36px, 9.5vw, 48px); line-height: 1.08; }
+  .nav-inner { height: auto; min-height: 68px; gap: 12px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+  .nav-links { gap: 16px; flex-wrap: wrap; }
+  .nav-links a { font-size: 14px; }
+  .brand { font-size: 19px; }
+  .budget-example { padding: 20px; }
+  .budget-result strong { font-size: 42px; }
+  .callout { padding: 28px; }
+  .steps .step { padding: 18px 0; }
 }
