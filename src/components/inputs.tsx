@@ -52,23 +52,25 @@ export function MoneyInput({ value, onChangeText, size = 30, style, ...props }: 
  * Bordered password input with a show/hide toggle. Used by the auth screens.
  * startVisible shows the password from the first letter: sign-up uses it so a
  * typo is visible as it's made, instead of asking for the password twice.
+ * plain drops the border and matches TextField, for use inside sheets.
  */
 export function PasswordField({
   startVisible = false,
+  plain = false,
   ...props
-}: Omit<TextInputProps, 'secureTextEntry' | 'style'> & { startVisible?: boolean }) {
+}: Omit<TextInputProps, 'secureTextEntry' | 'style'> & { startVisible?: boolean; plain?: boolean }) {
   const theme = useTheme();
   const [visible, setVisible] = useState(startVisible);
   const ToggleIcon = visible ? EyeOff : Eye;
   return (
-    <View style={[styles.passwordRow, { borderColor: theme.accentDeep }]}>
+    <View style={[styles.passwordRow, plain ? styles.passwordRowPlain : { borderColor: theme.accentDeep }]}>
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         spellCheck={false}
         secureTextEntry={!visible}
-        placeholderTextColor={theme.textSecondary}
-        style={[styles.passwordInput, { color: theme.text }]}
+        placeholderTextColor={plain ? '#B7B8C4' : theme.textSecondary}
+        style={[styles.passwordInput, plain && styles.passwordInputPlain, { color: theme.text }]}
         {...props}
       />
       <Pressable
@@ -117,6 +119,8 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans.regular,
     fontSize: 17,
   },
+  passwordRowPlain: { borderWidth: 0 },
+  passwordInputPlain: { fontFamily: Fonts.sans.medium },
   passwordToggle: { padding: Spacing.two },
   moneyCard: {
     flexDirection: 'row',
