@@ -796,3 +796,11 @@ a:focus-visible, summary:focus-visible {
   .hero-device { padding: 5px; border-radius: 28px; }
   .hero-device-screen { border-radius: 22px; }
 }
+
+/* App illustrations keep their original vector geometry and animation timing. */
+.step-illo svg { height: 100%; width: auto; overflow: visible; }
+.illustration-controls { display: flex; justify-content: flex-end; margin: -24px 0 24px; }
+.illustration-controls .btn { font-size: 13px; padding: 9px 14px; }
+@media (max-width: 640px) {
+  .illustration-controls { justify-content: flex-start; margin-top: -24px; }
+}
