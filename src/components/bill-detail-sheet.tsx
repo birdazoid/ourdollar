@@ -52,14 +52,14 @@ export function BillDetailSheet({ bill, paidByName, onClose, onPay, onEdit, savi
           {bill.paid ? (
             <Card style={styles.infoCard}>
               <ThemedText type="body" themeColor="textSecondary">
-                {bill.varies ? `Varies month to month — paid ${fmt(bill.amount)} this time.` : `Fixed — steady ${fmt(bill.amount)}/mo.`}
+                {bill.varies ? `Varies month to month. Paid ${fmt(bill.amount)} this time.` : `Fixed at ${fmt(bill.amount)}/mo.`}
               </ThemedText>
             </Card>
           ) : (
             <>
               {bill.varies && (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.variesNote}>
-                  Amount varies month to month — adjust it below if needed.
+                  Amount varies month to month. Adjust it below if needed.
                 </ThemedText>
               )}
               <MoneyInput value={amount} onChangeText={setAmount} size={34} />

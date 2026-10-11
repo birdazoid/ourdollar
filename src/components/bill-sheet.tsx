@@ -183,7 +183,7 @@ export function BillSheet({ visible, bill, onClose, onSave, onDelete, saving }: 
         <View style={styles.flex}>
           <ThemedText type="bodyBold">Amount varies monthly</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Utilities &amp; credit cards — confirm when paying
+            Utilities &amp; credit cards. Confirm the amount when paying.
           </ThemedText>
         </View>
         <Switch value={varies} onValueChange={setVaries} onColor={Palette.sand} />

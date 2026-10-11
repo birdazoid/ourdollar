@@ -432,7 +432,7 @@ export default function OverviewScreen() {
           ) : (
             <Card style={styles.noSnapshotCard}>
               <ThemedText type="body" themeColor="textSecondary" style={styles.noSnapshotText}>
-                No budget snapshot recorded for {viewedMonthName} — this was before monthly tracking
+                No budget snapshot recorded for {viewedMonthName}. This was before monthly tracking
                 started.
               </ThemedText>
             </Card>
