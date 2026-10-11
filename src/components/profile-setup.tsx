@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarGlyph } from '@/components/avatar-glyph';
@@ -7,6 +7,7 @@ import { Button } from '@/components/button';
 import { FieldLabel, TextField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DismissKeyboard } from '@/components/dismiss-keyboard';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { AVATAR_OPTIONS } from '@/lib/categories';
@@ -37,53 +38,58 @@ export function ProfileSetup() {
   return (
     <ThemedView style={styles.fill}>
       <SafeAreaView style={styles.fill}>
-        <View style={styles.body}>
-          <View style={styles.badge}>
-            <AvatarGlyph value={avatar} size={96} />
-          </View>
-          <ThemedText type="title" style={styles.heading}>
-            Set up your profile
-          </ThemedText>
-          <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>
-            This is how you&apos;ll show up in any household you create or join. You can change it
-            anytime.
-          </ThemedText>
-
-          <View style={styles.form}>
-            <FieldLabel>Your name</FieldLabel>
-            <TextField placeholder="Your name" value={name} onChangeText={setName} />
-
-            <FieldLabel>Your avatar</FieldLabel>
-            <View style={styles.avatarGrid}>
-              {AVATAR_OPTIONS.map((a) => (
-                <Pressable
-                  key={a}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Avatar ${a}`}
-                  accessibilityState={{ selected: a === avatar }}
-                  onPress={() => setAvatar(a)}
-                  style={[styles.avatarOption, a === avatar && styles.avatarSelected]}>
-                  {/* 40 inside a 44 frame with a 2pt border, so the selected ring stays visible. */}
-                  <AvatarGlyph value={a} size={40} />
-                </Pressable>
-              ))}
+        <DismissKeyboard>
+          <View style={styles.body}>
+            <View style={styles.badge}>
+              <AvatarGlyph value={avatar} size={96} />
             </View>
-          </View>
-
-          {updateProfile.isError && (
-            <ThemedText type="small" themeColor="warningDeep" style={styles.err}>
-              Couldn&apos;t save your profile. Please try again.
+            <ThemedText type="title" style={styles.heading}>
+              Set up your profile
             </ThemedText>
-          )}
+            <ThemedText type="body" themeColor="textSecondary" style={styles.sub}>
+              This is how you&apos;ll show up in any household you create or join. You can change it
+              anytime.
+            </ThemedText>
 
-          <Button
-            title="Continue"
-            disabled={!valid}
-            loading={updateProfile.isPending}
-            onPress={save}
-            style={styles.cta}
-          />
-        </View>
+            <View style={styles.form}>
+              <FieldLabel>Your name</FieldLabel>
+              <TextField placeholder="Your name" value={name} onChangeText={setName} />
+
+              <FieldLabel>Your avatar</FieldLabel>
+              <View style={styles.avatarGrid}>
+                {AVATAR_OPTIONS.map((a) => (
+                  <Pressable
+                    key={a}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Avatar ${a}`}
+                    accessibilityState={{ selected: a === avatar }}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setAvatar(a);
+                    }}
+                    style={[styles.avatarOption, a === avatar && styles.avatarSelected]}>
+                    {/* 40 inside a 44 frame with a 2pt border, so the selected ring stays visible. */}
+                    <AvatarGlyph value={a} size={40} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {updateProfile.isError && (
+              <ThemedText type="small" themeColor="warningDeep" style={styles.err}>
+                Couldn&apos;t save your profile. Please try again.
+              </ThemedText>
+            )}
+
+            <Button
+              title="Continue"
+              disabled={!valid}
+              loading={updateProfile.isPending}
+              onPress={save}
+              style={styles.cta}
+            />
+          </View>
+        </DismissKeyboard>
       </SafeAreaView>
     </ThemedView>
   );

@@ -15,6 +15,7 @@ import { LandingLoginIllustration } from '@/components/illustrations/landing-log
 import { PasswordField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DismissKeyboard } from '@/components/dismiss-keyboard';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/auth';
@@ -135,117 +136,119 @@ export default function SignInScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.flex}>
-          <View style={styles.content}>
-            <View style={styles.header}>
-              {isSignIn && (
-                <LandingLoginIllustration width={150} height={143} style={styles.headerIllustration} />
-              )}
-              <View style={styles.wordmarkRow}>
-                <Logo width={34} height={34} />
-                <ThemedText type="display">OurDollar</ThemedText>
+        <DismissKeyboard>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.flex}>
+            <View style={styles.content}>
+              <View style={styles.header}>
+                {isSignIn && (
+                  <LandingLoginIllustration width={150} height={143} style={styles.headerIllustration} />
+                )}
+                <View style={styles.wordmarkRow}>
+                  <Logo width={34} height={34} />
+                  <ThemedText type="display">OurDollar</ThemedText>
+                </View>
+                <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
+                  {isSignIn
+                    ? 'Sign in to your household.'
+                    : 'Shared budgeting for the people you live with.'}
+                </ThemedText>
               </View>
-              <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
-                {isSignIn
-                  ? 'Sign in to your household.'
-                  : 'Shared budgeting for the people you live with.'}
-              </ThemedText>
-            </View>
-
-            {!isSignIn && (
-              <View style={styles.perks}>
-                <Perk icon={IconBills} text="Track bills — and who paid what" />
-                <Perk icon={IconSave} text="Save toward goals together" />
-                <Perk icon={IconWeek} text="A weekly spending number, auto-calculated" />
-              </View>
-            )}
-
-            <View style={styles.form}>
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
-                placeholder="Email"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                inputMode="email"
-                value={email}
-                onChangeText={setEmail}
-                editable={!loading}
-              />
-              <PasswordField
-                placeholder={isSignIn ? 'Password' : 'Create a password'}
-                value={password}
-                onChangeText={setPassword}
-                editable={!loading}
-                onSubmitEditing={handleSubmit}
-                returnKeyType="go"
-              />
-
-              {isSignIn && (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push('/forgot-password')}
-                  style={styles.forgotRow}>
-                  <ThemedText type="label" style={{ color: Palette.sageDeep }}>
-                    Forgot password?
-                  </ThemedText>
-                </Pressable>
-              )}
 
               {!isSignIn && (
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: marketingOptIn }}
-                  accessibilityLabel="Send me product updates"
-                  onPress={() => setMarketingOptIn((v) => !v)}
-                  style={styles.optInRow}>
-                  <View style={[styles.checkbox, marketingOptIn && styles.checkboxOn]}>
-                    {marketingOptIn && <Check size={14} color={Palette.card} strokeWidth={3} />}
-                  </View>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                    Send me occasional product updates &amp; tips. You can turn this off anytime.
-                  </ThemedText>
-                </Pressable>
-              )}
-
-              {error && (
-                <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
-                  {error}
-                </ThemedText>
-              )}
-
-              {unconfirmed && (
-                <View style={styles.unconfirmed}>
-                  <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
-                    Your email isn&apos;t confirmed yet. Tap the link we emailed you, or get a new
-                    one.
-                  </ThemedText>
-                  <Button
-                    variant="secondary"
-                    title="Send a new link"
-                    loading={resending}
-                    onPress={() => sendNewLink(email.trim())}
-                  />
+                <View style={styles.perks}>
+                  <Perk icon={IconBills} text="Track bills — and who paid what" />
+                  <Perk icon={IconSave} text="Save toward goals together" />
+                  <Perk icon={IconWeek} text="A weekly spending number, auto-calculated" />
                 </View>
               )}
 
-              <Button
-                title={isSignIn ? 'Sign in' : 'Create account'}
-                onPress={handleSubmit}
-                loading={loading}
-              />
-              <Button
-                title={isSignIn ? 'New here? Create an account' : 'Already have an account? Sign in'}
-                variant="secondary"
-                onPress={() => switchTo(isSignIn ? 'signUp' : 'signIn')}
-                disabled={loading}
-              />
+              <View style={styles.form}>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
+                  placeholder="Email"
+                  placeholderTextColor={theme.textSecondary}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  inputMode="email"
+                  value={email}
+                  onChangeText={setEmail}
+                  editable={!loading}
+                />
+                <PasswordField
+                  placeholder={isSignIn ? 'Password' : 'Create a password'}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
+                  onSubmitEditing={handleSubmit}
+                  returnKeyType="go"
+                />
+
+                {isSignIn && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push('/forgot-password')}
+                    style={styles.forgotRow}>
+                    <ThemedText type="label" style={{ color: Palette.sageDeep }}>
+                      Forgot password?
+                    </ThemedText>
+                  </Pressable>
+                )}
+
+                {!isSignIn && (
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: marketingOptIn }}
+                    accessibilityLabel="Send me product updates"
+                    onPress={() => setMarketingOptIn((v) => !v)}
+                    style={styles.optInRow}>
+                    <View style={[styles.checkbox, marketingOptIn && styles.checkboxOn]}>
+                      {marketingOptIn && <Check size={14} color={Palette.card} strokeWidth={3} />}
+                    </View>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+                      Send me occasional product updates &amp; tips. You can turn this off anytime.
+                    </ThemedText>
+                  </Pressable>
+                )}
+
+                {error && (
+                  <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
+                    {error}
+                  </ThemedText>
+                )}
+
+                {unconfirmed && (
+                  <View style={styles.unconfirmed}>
+                    <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
+                      Your email isn&apos;t confirmed yet. Tap the link we emailed you, or get a new
+                      one.
+                    </ThemedText>
+                    <Button
+                      variant="secondary"
+                      title="Send a new link"
+                      loading={resending}
+                      onPress={() => sendNewLink(email.trim())}
+                    />
+                  </View>
+                )}
+
+                <Button
+                  title={isSignIn ? 'Sign in' : 'Create account'}
+                  onPress={handleSubmit}
+                  loading={loading}
+                />
+                <Button
+                  title={isSignIn ? 'New here? Create an account' : 'Already have an account? Sign in'}
+                  variant="secondary"
+                  onPress={() => switchTo(isSignIn ? 'signUp' : 'signIn')}
+                  disabled={loading}
+                />
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </DismissKeyboard>
       </SafeAreaView>
     </ThemedView>
   );

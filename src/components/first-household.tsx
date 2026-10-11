@@ -7,6 +7,7 @@ import { WelcomeIllustration } from '@/components/illustrations/welcome';
 import { TextField } from '@/components/inputs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DismissKeyboard } from '@/components/dismiss-keyboard';
 import { Palette, Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
 import { useCreateHousehold } from '@/lib/queries';
@@ -39,40 +40,42 @@ export function FirstHousehold() {
   return (
     <ThemedView style={styles.fill}>
       <SafeAreaView style={styles.fill}>
-        <KeyboardAvoidingView
-          style={styles.fill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.body}>
-            <WelcomeIllustration width={150} height={134} style={styles.art} />
-            <ThemedText type="title" style={styles.center}>
-              Name your household
-            </ThemedText>
-            <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
-              Your household holds your income, bills and weekly spending. Next, a few quick
-              questions work out how much you have to spend each week.
-            </ThemedText>
-            <TextField
-              placeholder="e.g. The Smiths, Home"
-              value={name}
-              onChangeText={setName}
-              onSubmitEditing={submit}
-              returnKeyType="go"
-              style={styles.field}
-            />
-            {create.isError && (
-              <ThemedText type="small" style={styles.error}>
-                Couldn&apos;t create the household. Please try again.
+        <DismissKeyboard>
+          <KeyboardAvoidingView
+            style={styles.fill}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.body}>
+              <WelcomeIllustration width={150} height={134} style={styles.art} />
+              <ThemedText type="title" style={styles.center}>
+                Name your household
               </ThemedText>
-            )}
-            <Button
-              title={valid ? 'Continue' : 'Name your household'}
-              disabled={!valid}
-              loading={create.isPending}
-              onPress={submit}
-              style={styles.cta}
-            />
-          </View>
-        </KeyboardAvoidingView>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
+                Your household holds your income, bills and weekly spending. Next, a few quick
+                questions work out how much you have to spend each week.
+              </ThemedText>
+              <TextField
+                placeholder="e.g. The Smiths, Home"
+                value={name}
+                onChangeText={setName}
+                onSubmitEditing={submit}
+                returnKeyType="go"
+                style={styles.field}
+              />
+              {create.isError && (
+                <ThemedText type="small" style={styles.error}>
+                  Couldn&apos;t create the household. Please try again.
+                </ThemedText>
+              )}
+              <Button
+                title={valid ? 'Continue' : 'Name your household'}
+                disabled={!valid}
+                loading={create.isPending}
+                onPress={submit}
+                style={styles.cta}
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </DismissKeyboard>
       </SafeAreaView>
     </ThemedView>
   );

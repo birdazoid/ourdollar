@@ -220,7 +220,10 @@ export default function OnboardingScreen() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive">
           {step === 0 && (
             <View>
               <StepHeader
