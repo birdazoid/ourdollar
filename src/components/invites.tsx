@@ -8,9 +8,10 @@ import { CreateHouseholdSheet } from '@/components/create-household-sheet';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Palette, Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
 import { useInviteResponses, type PendingInvite } from '@/lib/queries';
+import { HouseholdIllustration } from '@/components/illustrations/household';
 
 const onInviteError = () =>
   Alert.alert("Couldn't reach the server", 'Check your connection and try again.');
@@ -108,9 +109,7 @@ export function InviteWelcome() {
     <ThemedView style={styles.fill}>
       <SafeAreaView style={styles.fill}>
         <View style={styles.welcomeBody}>
-          <View style={styles.badge}>
-            <ThemedText type="display">✉️</ThemedText>
-          </View>
+          <HouseholdIllustration width={130} height={118} style={styles.art} />
           <ThemedText type="title" style={styles.center}>
             {pendingInvites.length > 1 ? "You've been invited" : "You've got an invite"}
           </ThemedText>
@@ -145,6 +144,7 @@ export function InviteWelcome() {
 }
 
 const styles = StyleSheet.create({
+  art: { alignSelf: 'center', marginBottom: 8 },
   flex: { flex: 1 },
   intro: { marginBottom: Spacing.three },
   row: { marginBottom: Spacing.three },
@@ -157,16 +157,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.five,
     gap: Spacing.three,
-  },
-  badge: {
-    alignSelf: 'center',
-    width: 96,
-    height: 96,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.sand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.two,
   },
   center: { textAlign: 'center' },
   welcomeList: { marginTop: Spacing.two },

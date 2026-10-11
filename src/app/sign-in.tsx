@@ -19,6 +19,7 @@ import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/auth';
 import { stashPendingMarketingOptIn } from '@/lib/queries';
+import IconNotifications from '@/assets/icons/icon-notifications.svg';
 
 type Mode = 'signIn' | 'signUp';
 
@@ -93,9 +94,9 @@ export default function SignInScreen() {
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
             <View style={styles.header}>
-              <ThemedText type="display" style={styles.confirmEmoji}>
-                📬
-              </ThemedText>
+<View style={styles.inboxBadge}>
+                <IconNotifications width={40} height={40} color={Palette.sageDeep} />
+              </View>
               <ThemedText type="title">Check your inbox</ThemedText>
               <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
                 We sent a confirmation link to{'\n'}
@@ -262,6 +263,16 @@ function Perk({ icon: Icon, text }: { icon: ComponentType<SvgProps>; text: strin
 }
 
 const styles = StyleSheet.create({
+  inboxBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(129,178,154,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
   unconfirmed: { gap: Spacing.two },
   container: { flex: 1 },
   flex: { flex: 1 },
@@ -276,7 +287,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  confirmEmoji: { marginBottom: Spacing.two },
   headerIllustration: { marginTop: -Spacing.five, marginBottom: Spacing.four },
   wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   tagline: { textAlign: 'center' },

@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/auth';
+import IconNotifications from '@/assets/icons/icon-notifications.svg';
 
 export default function ForgotPasswordScreen() {
   const theme = useTheme();
@@ -48,9 +49,9 @@ export default function ForgotPasswordScreen() {
         {sentTo ? (
           <View style={styles.content}>
             <View style={styles.copy}>
-              <ThemedText type="display" style={styles.emoji}>
-                📬
-              </ThemedText>
+<View style={styles.inboxBadge}>
+                <IconNotifications width={40} height={40} color={Palette.sageDeep} />
+              </View>
               <ThemedText type="title">Check your inbox</ThemedText>
               <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
                 We sent a password reset link to{'\n'}
@@ -109,6 +110,16 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
+  inboxBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(129,178,154,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
   container: { flex: 1 },
   flex: { flex: 1 },
   safeArea: { flex: 1 },
@@ -128,7 +139,6 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
   copy: { alignItems: 'center', gap: Spacing.two },
-  emoji: { marginBottom: Spacing.two },
   tagline: { textAlign: 'center' },
   form: { gap: Spacing.three },
   input: {

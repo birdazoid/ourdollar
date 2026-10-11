@@ -38,7 +38,7 @@ export function GoalDetailSheet({ goal, onClose, onContribute, onEdit }: Props) 
         <>
           <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>
             {fmt(goal.saved_amount)} saved of {fmt(goal.target_amount)} · {fmt(goal.monthly_amount)}/mo
-            {done ? ' · funded! 🎉' : goal.paid_this_month ? " · this month's contribution made" : ''}
+            {done ? ' · funded' : goal.paid_this_month ? " · this month's contribution made" : ''}
           </ThemedText>
 
           <Card style={styles.infoCard}>
