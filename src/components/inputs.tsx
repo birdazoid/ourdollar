@@ -48,10 +48,17 @@ export function MoneyInput({ value, onChangeText, size = 30, style, ...props }: 
   );
 }
 
-/** Bordered password input with a show/hide toggle. Used by the auth screens. */
-export function PasswordField(props: Omit<TextInputProps, 'secureTextEntry' | 'style'>) {
+/**
+ * Bordered password input with a show/hide toggle. Used by the auth screens.
+ * startVisible shows the password from the first letter: sign-up uses it so a
+ * typo is visible as it's made, instead of asking for the password twice.
+ */
+export function PasswordField({
+  startVisible = false,
+  ...props
+}: Omit<TextInputProps, 'secureTextEntry' | 'style'> & { startVisible?: boolean }) {
   const theme = useTheme();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(startVisible);
   const ToggleIcon = visible ? EyeOff : Eye;
   return (
     <View style={[styles.passwordRow, { borderColor: theme.accentDeep }]}>

@@ -158,7 +158,7 @@ export default function SignInScreen() {
 
               {!isSignIn && (
                 <View style={styles.perks}>
-                  <Perk icon={IconBills} text="Track bills — and who paid what" />
+                  <Perk icon={IconBills} text="Track bills and who paid what" />
                   <Perk icon={IconSave} text="Save toward goals together" />
                   <Perk icon={IconWeek} text="A weekly spending number, auto-calculated" />
                 </View>
@@ -178,6 +178,10 @@ export default function SignInScreen() {
                   editable={!loading}
                 />
                 <PasswordField
+                  // Keyed by mode so switching between sign-in and sign-up resets
+                  // the show/hide toggle to that mode's starting state.
+                  key={mode}
+                  startVisible={!isSignIn}
                   placeholder={isSignIn ? 'Password' : 'Create a password'}
                   value={password}
                   onChangeText={setPassword}
