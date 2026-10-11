@@ -44,28 +44,20 @@ export default function Home() {
       <section className="hero">
         <div className="container hero-grid">
           <div>
-            <p className="eyebrow" data-reveal>
-              Household budgeting
+            <p className="eyebrow">
+              Free household budgeting
             </p>
-            <h1 data-reveal style={delay('0.06s')}>
-              Budgeting that works for your whole household.
+            <h1>
+              Know what your household can spend this week.
             </h1>
-            <p
-              className="lead"
-              data-reveal
-              style={delay('0.14s')}
-            >
-              Track your bills, weekly spending, and keep everyone in your household on
-              the same page. Solo or with a full house.
+            <p className="lead">
+              Set aside money for bills and savings, then see what’s left for the week.
+              One shared budget, whether you live solo or with a full house.
             </p>
-            <div
-              className="hero-cta"
-              id="get"
-              data-reveal
-              style={delay('0.22s')}
-            >
+            <div className="hero-cta" id="get">
               <StoreBadges />
             </div>
+            <p className="hero-note">Completely free · No bank connection · No ads</p>
           </div>
           <PhoneMock />
         </div>
@@ -101,13 +93,19 @@ export default function Home() {
               know where your money is going.
             </p>
 
-            <div className="feat-photo" data-image-reveal>
-              <Image
-                src="/screenshots/phone-on-table.jpg"
-                alt="OurDollar's Income & Setup screen on a phone, showing monthly income, fixed expenses, and the weekly spending allowance"
-                width={752}
-                height={1178}
-              />
+            <div className="budget-example" aria-label="Illustrative household budget">
+              <p className="eyebrow">A simple example</p>
+              <dl className="budget-breakdown">
+                <div><dt>Monthly income</dt><dd>$3,900</dd></div>
+                <div><dt>Set aside for bills</dt><dd>−$2,300</dd></div>
+                <div><dt>Set aside for savings</dt><dd>−$300</dd></div>
+                <div className="budget-remainder"><dt>Left for spending each month</dt><dd>$1,300</dd></div>
+              </dl>
+              <div className="budget-result">
+                <span>Your weekly spending amount</span>
+                <strong>$300<small> / week</small></strong>
+              </div>
+              <p className="budget-caption">Illustrative amounts. $1,300 a month × 12 ÷ 52 weeks = $300 a week.</p>
             </div>
           </div>
 
@@ -137,7 +135,7 @@ export default function Home() {
       </section>
 
       {/* How it works — staggered */}
-      <section className="section" style={{ paddingTop: 0 }}>
+      <section className="section" id="how-it-works" style={{ paddingTop: 0 }}>
         <div className="container">
           <div data-reveal>
             <p className="eyebrow">How it works</p>
@@ -215,19 +213,32 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing teaser */}
-      <section className="section" style={{ paddingTop: 0 }}>
-        <div className="container" style={{ textAlign: 'center' }} data-reveal>
-          <h2 style={{ fontSize: 'clamp(28px, 3.6vw, 40px)', marginBottom: 14 }}>
-            Genuinely free to start.
-          </h2>
-          <p className="lead" style={{ margin: '0 auto 24px' }}>
-            Run your real budget on the free tier. Premium adds scale and depth for
-            people who want more.
-          </p>
-          <Link href="/pricing" className="btn btn-ghost" data-magnetic="0.25">
-            See what’s included
-          </Link>
+      <section className="section" id="faq" style={{ paddingTop: 0 }}>
+        <div className="container faq-layout">
+          <div data-reveal>
+            <p className="eyebrow">Good to know</p>
+            <h2>A little clarity before you start.</h2>
+            <p className="lead">A shared picture of your money, with less guesswork.</p>
+          </div>
+          <div className="faq-list">
+            <details>
+              <summary>Is OurDollar free?</summary>
+              <p>Yes. OurDollar is free, with no paid plans or subscriptions.</p>
+            </details>
+            <details>
+              <summary>Do I need to connect my bank?</summary>
+              <p>No. You enter your income, bills, savings goals, and spending yourself. OurDollar uses those entries to calculate your weekly spending amount. It doesn’t connect to, hold, or move your money.</p>
+            </details>
+            <details>
+              <summary>Can I share a budget with someone?</summary>
+              <p>Yes. Invite someone to your household from Profile. Each person can use their own login to keep your shared budget up to date.</p>
+            </details>
+            <details>
+              <summary>Can I use it on my own?</summary>
+              <p>Absolutely. The same weekly budget works for one person, a couple, or a household.</p>
+            </details>
+            <Link href="/support" className="link-arrow">More questions? Visit support →</Link>
+          </div>
         </div>
       </section>
 
@@ -235,7 +246,7 @@ export default function Home() {
       <section className="section-tight">
         <div className="container" style={{ textAlign: 'center' }}>
           <h2 data-reveal style={{ marginBottom: 24 }}>
-            Ready when you are.
+            A clearer week. A shared budget. Always free.
           </h2>
           <div style={{ display: 'inline-flex' }} data-reveal>
             <StoreBadges />
