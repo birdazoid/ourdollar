@@ -1,6 +1,6 @@
 # OurDollar — marketing site
 
-Next.js (App Router) marketing site for OurDollar: landing page, pricing, and
+Next.js (App Router) marketing site for OurDollar: free app landing page, support, and
 the hosted Privacy Policy / Terms of Service that the app links to.
 
 Kept intentionally separate from the Expo app — it has its own `package.json`
@@ -19,7 +19,6 @@ npm run dev        # http://localhost:3000
 | Route      | Purpose                                             |
 | ---------- | --------------------------------------------------- |
 | `/`        | Landing — value prop, features, how-it-works, CTA   |
-| `/pricing` | Free vs Premium plans                               |
 | `/privacy` | Privacy Policy (rendered from vendored legal doc)   |
 | `/terms`   | Terms of Service (rendered from vendored legal doc) |
 
@@ -44,9 +43,7 @@ Edit `site.config.ts`:
 
 - `url` — the real domain
 - `stores.ios` / `stores.android` — real App Store / Play Store URLs (the badges
-  are inert placeholders until these are set)
-- `pricing.premiumLive` — set `true` when subscriptions ship (flips the pricing
-  page from "coming soon" to live prices)
+  the homepage shows working information links until these are set)
 - `legal.*` — fill every value, then set `legal.reviewed = true` after review
 
 ## Deploy (Vercel)
