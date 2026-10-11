@@ -1275,11 +1275,9 @@ const styles = StyleSheet.create({
   },
   varianceUnder: { backgroundColor: 'rgba(129,178,154,0.16)' },
   varianceOver: { backgroundColor: 'rgba(224,122,95,0.14)' },
-  funRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
+  // One card per row: side by side, "$79.75 of $90 used" wrapped onto two lines.
+  funRow: { gap: Spacing.three },
   funCard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 150,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
