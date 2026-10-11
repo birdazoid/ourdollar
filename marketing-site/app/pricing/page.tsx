@@ -43,7 +43,7 @@ export default function Pricing() {
           <h2 style={{ marginBottom: 14 }}>Free to start. Fair to upgrade.</h2>
           <p className="lead" style={{ margin: '0 auto' }}>
             No hard paywall, no trial countdown. Use the free tier for as long as you
-            like — upgrade only if you want more room.
+            like. Upgrade only if you want more room.
           </p>
         </div>
       </section>
@@ -90,7 +90,7 @@ export default function Pricing() {
                     Planned: ~{annualPerMonth}/mo
                   </div>
                   <div className="price-sub">
-                    Around {annual}/yr or {monthly}/mo. Premium isn’t live yet — the
+                    Around {annual}/yr or {monthly}/mo. Premium isn’t live yet. The
                     app is fully usable free while we finalize it.
                   </div>
                 </>
@@ -117,7 +117,7 @@ export default function Pricing() {
           >
             {premiumLive
               ? 'Subscriptions are billed through the App Store or Google Play and can be managed or cancelled anytime from your device settings. Prices shown in USD.'
-              : 'When Premium launches it’ll be billed through the App Store or Google Play, with price and renewal terms shown clearly before you buy — and always cancellable from your device settings.'}
+              : 'When Premium launches it’ll be billed through the App Store or Google Play, with price and renewal terms shown clearly before you buy, and always cancellable from your device settings.'}
           </p>
         </div>
       </section>

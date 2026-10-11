@@ -16,7 +16,7 @@ const sideFeatures = [
   {
     icon: IconBills,
     title: 'Bills that never sneak up',
-    body: 'Every recurring bill in one checklist — due dates, paid status, overdue flags. Nothing forgotten.',
+    body: 'Every recurring bill in one checklist: due dates, paid status, overdue flags. Nothing forgotten.',
   },
   {
     icon: IconSubscriptions,
@@ -26,7 +26,7 @@ const sideFeatures = [
   {
     icon: IconSave,
     title: 'Savings goals with progress',
-    body: 'Set what you’re saving toward, chip away monthly, watch the ring fill — right beside your bills.',
+    body: 'Set what you’re saving toward, chip away monthly, watch the ring fill, right beside your bills.',
   },
   {
     icon: IconGraph,

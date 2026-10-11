@@ -21,12 +21,12 @@ const karla = Karla({
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `${siteConfig.name} — ${siteConfig.tagline}`,
-    template: `%s — ${siteConfig.name}`,
+    default: `${siteConfig.name} | ${siteConfig.tagline}`,
+    template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
   openGraph: {
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    title: `${siteConfig.name} | ${siteConfig.tagline}`,
     description: siteConfig.description,
     url: siteConfig.url,
     siteName: siteConfig.name,

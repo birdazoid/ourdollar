@@ -65,7 +65,7 @@ export function StoreBadges({ compact = false }: { compact?: boolean }) {
       </div>
       {!compact && (!siteConfig.stores.ios || !siteConfig.stores.android) && (
         <p className="badge-soon" style={{ marginTop: 12 }}>
-          Launching soon — links go live the day the app ships.
+          Launching soon. Links go live the day the app ships.
         </p>
       )}
     </div>

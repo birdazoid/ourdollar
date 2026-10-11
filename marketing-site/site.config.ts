@@ -14,7 +14,7 @@ export const siteConfig = {
   url: 'https://ourdollar.app',
   tagline: 'Budgeting for your whole household.',
   description:
-    'Track the bills, spend a weekly allowance you can trust, and keep everyone in your household on the same page — solo or with a full house.',
+    'Track the bills, spend a weekly allowance you can trust, and keep everyone in your household on the same page, solo or with a full house.',
 
   // App store links — placeholders until the apps are live. Set to real URLs
   // and the badges become clickable.
