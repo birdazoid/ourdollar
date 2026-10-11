@@ -1,9 +1,7 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet } from 'react-native';
 
+import { LoadingScreen } from '@/components/loading-screen';
 import { RetryScreen } from '@/components/retry-screen';
-import { ThemedView } from '@/components/themed-view';
-import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
 import { useAccount, useBills, useIncome } from '@/lib/queries';
@@ -18,11 +16,7 @@ export default function AppIndex() {
   const bills = useBills(householdId);
 
   if (account.isLoading || income.isLoading || bills.isLoading) {
-    return (
-      <ThemedView style={styles.center}>
-        <ActivityIndicator color={Palette.sageDeep} />
-      </ThemedView>
-    );
+    return <LoadingScreen />;
   }
 
   if (account.isError || income.isError || bills.isError) {
@@ -48,7 +42,3 @@ export default function AppIndex() {
 
   return <Redirect href={needsOnboarding ? '/onboarding' : '/week'} />;
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-});
