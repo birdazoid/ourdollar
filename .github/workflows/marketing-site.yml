@@ -1,0 +1,24 @@
+name: Marketing site build
+on:
+  pull_request:
+    paths:
+      - 'marketing-site/**'
+      - '.github/workflows/marketing-site.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketing-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: marketing-site/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build

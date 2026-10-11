@@ -71,9 +71,7 @@ process it on our behalf, under contract, solely to provide the Service:
   household data).
 - **Expo** — delivery of push notifications.
 - **Resend** — delivery of transactional emails (such as household invitations).
-- **Apple / Google** — app distribution through their app stores, and, if paid
-  features are offered in the future, processing of purchases (we would not
-  receive your full payment card details).
+- **Apple / Google** — app distribution through their app stores.
 
 **Legal reasons.** We may disclose information if required by law, or to protect
 the rights, safety, or property of users, the public, or us.
@@ -83,11 +81,8 @@ cross-context behavioral advertising.
 
 ## 4. Payments
 
-The current version of the Service does not charge you and does not collect
-payment information. If subscriptions or paid features are offered in the
-future, purchases would be processed by Apple’s App Store or Google Play, and
-those platforms — not us — would handle your payment details, subject to their
-own privacy policies.
+OurDollar is free, with no paid plans or subscriptions. We do not collect
+payment information.
 
 ## 5. Data retention and deletion
 
