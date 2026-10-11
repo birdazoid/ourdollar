@@ -1,7 +1,7 @@
-import { Fingerprint } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import IconFingerprint from '@/assets/icons/icon-fingerprint.svg';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,7 +14,7 @@ export function BiometricLockScreen({ onRetry }: { onRetry: () => void }) {
         <SafeAreaView style={styles.fill}>
           <Pressable style={styles.content} onPress={onRetry} accessibilityRole="button">
             <View style={styles.iconWrap}>
-              <Fingerprint size={40} color={Palette.sageDeep} />
+              <IconFingerprint width={40} height={40} color={Palette.sageDeep} />
             </View>
             <ThemedText type="title">OurDollar is locked</ThemedText>
             <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>

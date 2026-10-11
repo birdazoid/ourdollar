@@ -1,4 +1,4 @@
-import { Check, CornerDownRight, LifeBuoy } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { useMemo, useRef, useState, type RefObject } from 'react';
 import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -10,6 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import IconSave from '@/assets/icons/icon-save.svg';
+import IconRestart from '@/assets/icons/icon-restart.svg';
+import IconLifeBuoy from '@/assets/icons/icon-life-buoy.svg';
 import { BillDetailSheet } from '@/components/bill-detail-sheet';
 import { BillSheet } from '@/components/bill-sheet';
 import { CatchUpSheet } from '@/components/catch-up-sheet';
@@ -459,12 +461,12 @@ export default function BillsScreen() {
             <>
               <SectionHeader
                 title="Emergency fund"
-                icon={<LifeBuoy size={20} color={Palette.ink} />}
+                icon={<IconLifeBuoy width={20} height={20} color={Palette.ink} />}
                 caption="Money set aside for when something goes wrong. It sits outside your weekly spending."
               />
               <ListGroup>
               <ListRow
-                emoji={<LifeBuoy size={22} color={Palette.sageDeep} />}
+                emoji={<IconLifeBuoy width={22} height={22} color={Palette.sageDeep} />}
                 title={fundBalance > 0 ? 'Set aside' : 'Nothing set aside yet'}
                 subtitle={
                   fundBalance > 0
@@ -490,16 +492,13 @@ export default function BillsScreen() {
             <>
               <SectionHeader
                 title="Catch-up"
-                icon={<CornerDownRight size={20} color={Palette.ink} />}
+                icon={<IconRestart width={20} height={20} color={Palette.ink} />}
                 caption="A record of how far past your plan you've gone. It never comes out of your weekly money."
               />
               <ListGroup>
               <ListRow
                 emoji={
-                  <CornerDownRight
-                    size={22}
-                    color={catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep}
-                  />
+                  <IconRestart width={22} height={22} color={catchUpOwed > 0 ? Palette.terracottaDeep : Palette.sageDeep} />
                 }
                 title={catchUpOwed > 0 ? 'Still to make up' : 'All caught up'}
                 subtitle={

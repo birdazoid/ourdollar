@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+<g id="down-arrow" fill="none" stroke="currentColor" stroke-width="4.59" stroke-linecap="round" stroke-linejoin="round">
+<path id="shaft" d="M48 17 C47 32 49 48 48 73"/>
+<path id="arrowhead" d="M26 53 Q37 63 48 76 Q59 65 70 54"/>
+</g>
+</svg>

@@ -1,18 +1,5 @@
 import { useRouter } from 'expo-router';
-import {
-  Camera,
-  ChevronDown,
-  ChevronLeft,
-  ChevronUp,
-  Fingerprint,
-  KeyRound,
-  Mail,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react-native';
+import { Camera, ChevronDown, ChevronLeft, ChevronUp, KeyRound, Mail, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +8,7 @@ import IconHousing from '@/assets/icons/icon-housing.svg';
 import IconNotifications from '@/assets/icons/icon-notifications.svg';
 import IconShare from '@/assets/icons/icon-share.svg';
 import IconSignOut from '@/assets/icons/icon-sign-out.svg';
+import IconFingerprint from '@/assets/icons/icon-fingerprint.svg';
 import { AddMemberSheet } from '@/components/add-member-sheet';
 import { AvatarGlyph } from '@/components/avatar-glyph';
 import { AvatarPickerSheet } from '@/components/avatar-picker-sheet';
@@ -575,7 +563,7 @@ export default function ProfileScreen() {
             />
             {biometricSupported && (
               <ToggleRow
-                icon={<Fingerprint size={21} color={Palette.ink} />}
+                icon={<IconFingerprint width={21} height={21} color={Palette.ink} />}
                 title="Unlock with Face ID"
                 subtitle="Require Face ID or Touch ID to open the app"
                 value={biometricEnabled}

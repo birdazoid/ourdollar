@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+<g id="life-buoy" fill="none" stroke="currentColor" stroke-width="3.51" stroke-linecap="round" stroke-linejoin="round">
+<path id="outer-ring" d="M48 14 C67 13 81 28 82 47 C83 66 67 82 48 82 C29 83 14 67 14 49 C13 29 28 14 48 14 Z"/>
+<path id="inner-ring" d="M48 32 C58 31 65 39 65 48 C66 58 58 65 48 65 C38 66 31 58 31 48 C31 39 38 32 48 32 Z"/>
+<path id="band-seams" d="M23 26 L36 37 M34 17 L41 33 M62 17 L55 33 M74 27 L61 38 M74 70 L61 59 M62 79 L55 64 M34 79 L41 64 M22 69 L35 59"/>
+<g id="stitch-details" stroke-width="2.29"><path d="M24 42 Q22 48 24 54 M72 42 Q74 48 72 54"/></g>
+</g>
+</svg>

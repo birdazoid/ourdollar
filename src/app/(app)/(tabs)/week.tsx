@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, CornerDownRight, TrendingDown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -74,6 +74,8 @@ import type { Goal, Transaction, WeeklyEnvelope } from '@/lib/types';
 import { dayHeading, getWeek, weekRangeLabel } from '@/lib/week';
 import { screenData } from '@/lib/screen-data';
 import IconCelebrate from '@/assets/icons/icon-celebrate.svg';
+import IconRestart from '@/assets/icons/icon-restart.svg';
+import IconDownArrow from '@/assets/icons/icon-down-arrow.svg';
 
 /**
  * Where a logged income row was assigned.
@@ -658,10 +660,7 @@ export default function WeekScreen() {
           ) : adjustment !== 0 && (
             <View style={styles.carryRow}>
               <View style={styles.carryTile}>
-                <CornerDownRight
-                  size={20}
-                  color={adjustment < 0 ? Palette.terracottaDeep : Palette.sageDeep}
-                />
+                <IconRestart width={20} height={20} color={adjustment < 0 ? Palette.terracottaDeep : Palette.sageDeep} />
               </View>
               <View style={styles.flex}>
                 <ThemedText type="bodyBold">
@@ -859,7 +858,7 @@ export default function WeekScreen() {
               {envSummary.overage > 0 && (
                 <View style={styles.overageRow}>
                   <View style={styles.freeTile}>
-                    <TrendingDown size={24} color={Palette.terracottaDeep} />
+                    <IconDownArrow width={24} height={24} color={Palette.terracottaDeep} />
                   </View>
                   <View style={styles.flex}>
                     <ThemedText type="bodyBold" style={styles.overageText}>
@@ -1024,7 +1023,7 @@ function SettlementRow({
   return (
     <View style={styles.carryRow}>
       <View style={styles.carryTile}>
-        <CornerDownRight size={20} color={over ? Palette.terracottaDeep : Palette.sageDeep} />
+        <IconRestart width={20} height={20} color={over ? Palette.terracottaDeep : Palette.sageDeep} />
       </View>
       <View style={styles.flex}>
         <ThemedText type="bodyBold">{title}</ThemedText>
