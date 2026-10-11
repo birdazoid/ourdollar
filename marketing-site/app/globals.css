@@ -773,3 +773,26 @@ a:focus-visible, summary:focus-visible {
   .callout { padding: 28px; }
   .steps .step { padding: 18px 0; }
 }
+
+/* The original screenshot stays uncropped inside the hero phone frame. */
+.hero-device {
+  padding: 7px;
+  background: #292c43;
+  border: 1px solid rgba(61, 64, 91, 0.35);
+  border-radius: 38px;
+  box-shadow: 0 20px 48px rgba(61, 64, 91, 0.18);
+}
+.hero-device-screen {
+  overflow: hidden;
+  border-radius: 30px;
+  background: var(--linen);
+}
+.hero-device-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 860px) {
+  .hero-device { padding: 5px; border-radius: 28px; }
+  .hero-device-screen { border-radius: 22px; }
+}
