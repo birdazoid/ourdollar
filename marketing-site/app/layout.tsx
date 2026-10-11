@@ -21,12 +21,12 @@ const karla = Karla({
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    default: `${siteConfig.name} — Free household budgeting`,
     template: `%s — ${siteConfig.name}`,
   },
-  description: siteConfig.description,
+  description: 'Free household budgeting. Track bills, savings, and weekly spending together, with no subscriptions or bank connection.',
   openGraph: {
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    title: `${siteConfig.name} — Free household budgeting`,
     description: siteConfig.description,
     url: siteConfig.url,
     siteName: siteConfig.name,
