@@ -68,8 +68,9 @@ export default function Home() {
         <div className="container statement-grid statement-grid--photo">
           <div className="statement-photo" data-image-reveal>
             <Image
-              src="/screenshots/hands-holding-phone.jpg"
-              alt="Someone checking their household's OurDollar profile on their phone at home"
+              src="/screenshots/hands-add-expense.svg"
+              unoptimized
+              alt="Hands holding a phone showing OurDollar’s Add expense screen with a grocery purchase"
               width={752}
               height={1160}
             />
