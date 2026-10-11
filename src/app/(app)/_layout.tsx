@@ -1,16 +1,14 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { FirstHousehold } from '@/components/first-household';
 import { InviteInbox, InviteWelcome } from '@/components/invites';
 import { GoalCelebrations } from '@/components/goal-celebrations';
 import { MonthAutoClose } from '@/components/month-auto-close';
 import { ProfileSetup } from '@/components/profile-setup';
+import { LoadingScreen } from '@/components/loading-screen';
 import { RetryScreen } from '@/components/retry-screen';
-import { ThemedView } from '@/components/themed-view';
 import { WeeklyPeriodsNotice } from '@/components/weekly-periods-notice';
-import { Palette } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import { HouseholdProvider, useHousehold } from '@/lib/household';
 import { syncPushToken } from '@/lib/notifications';
@@ -43,11 +41,7 @@ function RootGate() {
   const account = useAccount(session?.user.id ?? null);
 
   if (account.isLoading) {
-    return (
-      <ThemedView style={styles.center}>
-        <ActivityIndicator color={Palette.sageDeep} />
-      </ThemedView>
-    );
+    return <LoadingScreen />;
   }
 
   if (account.isError) {
@@ -68,11 +62,7 @@ function HouseholdGate() {
   const { isLoading, isError, retry, households, pendingInvites } = useHousehold();
 
   if (isLoading) {
-    return (
-      <ThemedView style={styles.center}>
-        <ActivityIndicator color={Palette.sageDeep} />
-      </ThemedView>
-    );
+    return <LoadingScreen />;
   }
 
   if (isError) {
@@ -104,7 +94,3 @@ function HouseholdGate() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-});

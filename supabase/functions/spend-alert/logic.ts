@@ -226,5 +226,5 @@ export function buildSpendAlertBody(args: {
   const categoryName = CATEGORY_NAME[args.category ?? 'other'] ?? 'spending';
   const balanceText =
     args.remaining < 0 ? `${fmt(-args.remaining)} over budget` : `${fmt(args.remaining)} left this week`;
-  return `${args.spenderName} spent ${fmt(Number(args.amount))} on ${categoryName} — ${balanceText}`;
+  return `${args.spenderName} spent ${fmt(Number(args.amount))} on ${categoryName}. ${balanceText}`;
 }

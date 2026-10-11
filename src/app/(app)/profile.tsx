@@ -275,7 +275,7 @@ export default function ProfileScreen() {
   async function shareApp() {
     try {
       await Share.share({
-        message: `I'm using OurDollar to budget with my household — give it a try: ${APP_SHARE_URL}`,
+        message: `I'm using OurDollar to budget with my household. Give it a try: ${APP_SHARE_URL}`,
       });
     } catch {
       // user dismissed the share sheet — nothing to do
@@ -285,7 +285,7 @@ export default function ProfileScreen() {
     setConfirm({
       title: 'Delete your account?',
       message:
-        'This permanently deletes your account and any households you own — every bill, goal, income, and all history. This cannot be undone.',
+        'This permanently deletes your account and any households you own: every bill, goal, income, and all history. This cannot be undone.',
       confirmLabel: 'Delete account',
       onConfirm: async () => {
         try {

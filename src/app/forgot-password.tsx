@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DismissKeyboard } from '@/components/dismiss-keyboard';
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/lib/auth';
@@ -37,73 +38,75 @@ export default function ForgotPasswordScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/sign-in'))}
-            style={styles.iconBtn}
-            accessibilityLabel="Back">
-            <ChevronLeft size={20} color={Palette.ink} />
-          </Pressable>
-        </View>
-
-        {sentTo ? (
-          <View style={styles.content}>
-            <View style={styles.copy}>
-<View style={styles.inboxBadge}>
-                <IconNotifications width={40} height={40} color={Palette.sageDeep} />
-              </View>
-              <ThemedText type="title">Check your inbox</ThemedText>
-              <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
-                We sent a password reset link to{'\n'}
-                <ThemedText type="bodyBold">{sentTo}</ThemedText>
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.tagline}>
-                Tap the link in that email to set a new password. Check spam if it hasn&apos;t arrived
-                in a minute.
-              </ThemedText>
-            </View>
-            <Button title="Back to sign in" onPress={() => router.replace('/sign-in')} />
+        <DismissKeyboard>
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/sign-in'))}
+              style={styles.iconBtn}
+              accessibilityLabel="Back">
+              <ChevronLeft size={20} color={Palette.ink} />
+            </Pressable>
           </View>
-        ) : (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.flex}>
+
+          {sentTo ? (
             <View style={styles.content}>
               <View style={styles.copy}>
-                <ThemedText type="title">Forgot your password?</ThemedText>
+  <View style={styles.inboxBadge}>
+                  <IconNotifications width={40} height={40} color={Palette.sageDeep} />
+                </View>
+                <ThemedText type="title">Check your inbox</ThemedText>
                 <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
-                  Enter your email and we&apos;ll send you a link to reset it.
+                  We sent a password reset link to{'\n'}
+                  <ThemedText type="bodyBold">{sentTo}</ThemedText>
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.tagline}>
+                  Tap the link in that email to set a new password. Check spam if it hasn&apos;t arrived
+                  in a minute.
                 </ThemedText>
               </View>
-
-              <View style={styles.form}>
-                <TextInput
-                  style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
-                  placeholder="Email"
-                  placeholderTextColor={theme.textSecondary}
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  keyboardType="email-address"
-                  inputMode="email"
-                  value={email}
-                  onChangeText={setEmail}
-                  editable={!loading}
-                  onSubmitEditing={handleSubmit}
-                  returnKeyType="go"
-                  autoFocus
-                />
-
-                {error && (
-                  <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
-                    {error}
-                  </ThemedText>
-                )}
-
-                <Button title="Send reset link" onPress={handleSubmit} loading={loading} />
-              </View>
+              <Button title="Back to sign in" onPress={() => router.replace('/sign-in')} />
             </View>
-          </KeyboardAvoidingView>
-        )}
+          ) : (
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.flex}>
+              <View style={styles.content}>
+                <View style={styles.copy}>
+                  <ThemedText type="title">Forgot your password?</ThemedText>
+                  <ThemedText type="body" themeColor="textSecondary" style={styles.tagline}>
+                    Enter your email and we&apos;ll send you a link to reset it.
+                  </ThemedText>
+                </View>
+
+                <View style={styles.form}>
+                  <TextInput
+                    style={[styles.input, { color: theme.text, borderColor: theme.accentDeep }]}
+                    placeholder="Email"
+                    placeholderTextColor={theme.textSecondary}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    inputMode="email"
+                    value={email}
+                    onChangeText={setEmail}
+                    editable={!loading}
+                    onSubmitEditing={handleSubmit}
+                    returnKeyType="go"
+                    autoFocus
+                  />
+
+                  {error && (
+                    <ThemedText type="small" themeColor="warningDeep" style={styles.message}>
+                      {error}
+                    </ThemedText>
+                  )}
+
+                  <Button title="Send reset link" onPress={handleSubmit} loading={loading} />
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          )}
+        </DismissKeyboard>
       </SafeAreaView>
     </ThemedView>
   );

@@ -345,7 +345,7 @@ export default function SetupScreen() {
               <View style={styles.rowBody}>
                 <ThemedText type="bodyBold">Preview month-end review</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  See the wizard anytime — nothing is saved
+                  See the wizard anytime. Nothing is saved.
                 </ThemedText>
               </View>
               <ChevronRight size={16} color="#B7B8C4" />

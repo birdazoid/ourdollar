@@ -49,7 +49,7 @@ export async function LegalDoc({
 
       {showDraftBanner && (
         <div className="draft-banner">
-          <strong>Draft — pending legal review.</strong> This document is a working
+          <strong>Draft: pending legal review.</strong> This document is a working
           draft and not yet legal advice. It will be finalized before public launch.
         </div>
       )}

@@ -34,7 +34,7 @@ function inviteHtml(opts: { inviter: string; household: string; email: string })
       <div style="font-size:24px;font-weight:800;color:#3D405B;margin-bottom:8px">OurDollar</div>
       <p style="font-size:16px;color:#3D405B;line-height:1.5">
         <strong>${opts.inviter}</strong> invited you to join the household
-        <strong>“${opts.household}”</strong> on OurDollar — a simple way to share bills,
+        <strong>“${opts.household}”</strong> on OurDollar, a simple way to share bills,
         savings goals, and weekly spending.
       </p>
       <p style="font-size:15px;color:#6B6E8C;line-height:1.5">
@@ -43,7 +43,7 @@ function inviteHtml(opts: { inviter: string; household: string; email: string })
       </p>
       ${cta ? `<div style="margin:20px 0">${cta}</div>` : ''}
       <p style="font-size:13px;color:#6B6E8C;line-height:1.5">
-        Didn't expect this? You can safely ignore this email — nothing was shared with you.
+        Didn't expect this? You can safely ignore this email. Nothing was shared with you.
       </p>
     </div>
   </div>`;

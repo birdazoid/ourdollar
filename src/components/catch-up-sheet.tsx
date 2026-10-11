@@ -42,7 +42,7 @@ export function CatchUpSheet({ visible, balance, entries, memberName, onClose }:
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.blurb}>
           {balance > 0
-            ? "You've already spent this. Nobody is owed it — it's a record of how far past your plan you went, so it isn't quietly forgotten. It never comes out of your weekly money."
+            ? "You've already spent this. Nobody is owed it. It's a record of how far past your plan you went, so it isn't quietly forgotten. It never comes out of your weekly money."
             : "Nothing outstanding. Weeks that go over can be sent here instead of eating into the next week."}
         </ThemedText>
       </Card>

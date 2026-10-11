@@ -44,7 +44,7 @@ export function MonthReviewBanner() {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${monthLabel(pending)} wrapped up — review and start the new month`}
+      accessibilityLabel={`${monthLabel(pending)} wrapped up. Review and start the new month.`}
       onPress={() => router.push('/month-review')}
       style={styles.banner}>
       <View style={styles.flex}>

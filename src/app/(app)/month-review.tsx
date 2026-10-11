@@ -218,7 +218,7 @@ export default function MonthReviewScreen() {
           </View>
           {isPreview && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.previewNote}>
-              Preview only — finishing this won&apos;t change any data.
+              Preview only. Finishing this won&apos;t change any data.
             </ThemedText>
           )}
         </View>
@@ -295,7 +295,7 @@ export default function MonthReviewScreen() {
                 <StepHeader
                   Icon={IconBills}
                   title="Anything change?"
-                  desc="A quick check on your fixed bills — tap one to update its amount, or continue if nothing's different."
+                  desc="A quick check on your fixed bills. Tap one to update its amount, or continue if nothing's different."
                 />
                 {fixedBills.length === 0 ? (
                   <ThemedText type="body" themeColor="textSecondary" style={styles.emptyNote}>
@@ -324,13 +324,13 @@ export default function MonthReviewScreen() {
                   desc={
                     hasClosed
                       ? 'Anything left unpaid was automatically flagged below as a reminder. Dismiss any you don’t need to track.'
-                      : "These will automatically become reminders once the month closes — nothing to do here."
+                      : "These will automatically become reminders once the month closes. Nothing to do here."
                   }
                 />
                 {hasClosed ? (
                   targetCarryovers.length === 0 ? (
                     <Card style={styles.allPaidCard}>
-                      <ThemedText type="subtitle">Nothing left unpaid — nice!</ThemedText>
+                      <ThemedText type="subtitle">Nothing left unpaid. Nice!</ThemedText>
                     </Card>
                   ) : (
                     targetCarryovers.map((c) => (
@@ -353,7 +353,7 @@ export default function MonthReviewScreen() {
                   )
                 ) : liveUnpaidBills.length === 0 ? (
                   <Card style={styles.allPaidCard}>
-                    <ThemedText type="subtitle">Nothing unpaid — nice!</ThemedText>
+                    <ThemedText type="subtitle">Nothing unpaid. Nice!</ThemedText>
                   </Card>
                 ) : (
                   liveUnpaidBills.map((b) => (
