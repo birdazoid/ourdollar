@@ -142,7 +142,16 @@ async function seed() {
   console.log('Writing household...');
   const { data: household, error: hErr } = await client
     .from('households')
-    .insert({ name: SEED.householdName, owner_account_id: uid, color: SEED.householdColor })
+    .insert({
+      name: SEED.householdName,
+      owner_account_id: uid,
+      color: SEED.householdColor,
+      // The week starts the day after today, so today is always the LAST day
+      // of the demo's week and every sample expense (up to 6 days back) lands
+      // inside it. Seeded on a Sunday with a Sunday start, only today's two
+      // expenses counted and the screenshots showed an almost empty week.
+      week_start_day: (today.getDay() + 1) % 7,
+    })
     .select()
     .single();
   if (hErr) throw hErr;
