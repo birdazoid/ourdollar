@@ -56,14 +56,10 @@ You agree not to:
 
 We may suspend or terminate accounts that violate these Terms.
 
-## 6. Subscriptions and payments
+## 6. Free service
 
-The current version of the Service is provided free of charge. If we offer paid
-subscriptions or features in the future, they will be sold through the Apple App
-Store or Google Play. Any such purchase is billed by, and subject to the terms
-of, that platform, including its rules on pricing, auto-renewal, and
-cancellation. You can manage or cancel a subscription in your app store account
-settings. We will disclose price and renewal terms before you purchase.
+OurDollar is provided free of charge. There are no paid plans or subscriptions,
+and we do not collect payment information.
 
 ## 7. Your content
 
