@@ -4,6 +4,10 @@ import { Nav } from './components/nav';
 import { Footer } from './components/footer';
 import { StoreBadges } from './components/store-badges';
 import { PhoneMock } from './components/phone-mock';
+import { IllustrationMotion } from './components/illustrations/motion';
+import { IncomeIllustration } from './components/illustrations/income';
+import { FixedExpensesIllustration } from './components/illustrations/fixed-expenses';
+import { PlannedSpendingIllustration } from './components/illustrations/planned-spending';
 import { IconBills, IconSubscriptions, IconSave, IconGraph } from './components/feature-icons';
 
 // Stagger helper: sets the --reveal-delay custom property consumed by
@@ -144,15 +148,11 @@ export default function Home() {
               Set it up once. Check in for seconds.
             </h2>
           </div>
+          <IllustrationMotion>
           <div className="steps">
             <div className="step" data-reveal>
               <div className="step-illo">
-                <Image
-                  src="/illustrations/onboarding-income.svg"
-                  alt=""
-                  width={315}
-                  height={322}
-                />
+                <IncomeIllustration />
               </div>
               <h3>Add your income</h3>
               <p>
@@ -162,12 +162,7 @@ export default function Home() {
             </div>
             <div className="step" data-reveal style={delay('0.1s')}>
               <div className="step-illo">
-                <Image
-                  src="/illustrations/onboarding-fixed-expenses.svg"
-                  alt=""
-                  width={313}
-                  height={238}
-                />
+                <FixedExpensesIllustration />
               </div>
               <h3>Set bills &amp; goals</h3>
               <p>
@@ -177,12 +172,7 @@ export default function Home() {
             </div>
             <div className="step" data-reveal style={delay('0.2s')}>
               <div className="step-illo">
-                <Image
-                  src="/illustrations/onboarding-planned-spending.svg"
-                  alt=""
-                  width={292}
-                  height={264}
-                />
+                <PlannedSpendingIllustration />
               </div>
               <h3>Spend your week</h3>
               <p>
@@ -190,6 +180,7 @@ export default function Home() {
               </p>
             </div>
           </div>
+          </IllustrationMotion>
         </div>
       </section>
 
