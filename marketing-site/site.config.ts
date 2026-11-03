@@ -19,7 +19,7 @@ export const siteConfig = {
   // App store links — placeholders until the apps are live. Set to real URLs
   // and the badges become clickable.
   stores: {
-    ios: '', // e.g. 'https://apps.apple.com/app/ourdollar/id6790992459'
+    ios: 'https://apps.apple.com/app/ourdollar/id6790992459',
     android: '', // e.g. 'https://play.google.com/store/apps/details?id=com.adriantownsend.ourdollar'
   },
 
