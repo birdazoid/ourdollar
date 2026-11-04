@@ -28,6 +28,7 @@ import {
   fmt,
   isVariableExpense,
   monthlyEquiv,
+  unallocatedAfterPlan,
 } from '@/lib/money';
 import {
   periodFor,
@@ -154,17 +155,9 @@ export default function OverviewScreen() {
     }),
   });
 
-  /**
-   * What the variable pool has left after the three planned allocations.
-   *
-   * It reduces to plannedFixed − totalFixed every time, because the pool is
-   * measured against what bills actually cost while the allowance is derived
-   * from the estimates. Non-zero means the breakdown wouldn't sum on screen,
-   * so it gets its own row rather than being left as an unexplained gap.
-   */
-  const unallocated = glance
-    ? Math.round((glance.variablePool - glance.monthlyPool - glance.goalsMonthly - glance.funTotal) * 100) / 100
-    : 0;
+  // Non-zero means the breakdown wouldn't sum on screen, so it gets its own row
+  // rather than being left as an unexplained gap.
+  const unallocated = glance ? unallocatedAfterPlan(glance) : 0;
 
   const comparison =
     glance && prevSnapshot
@@ -411,11 +404,17 @@ export default function OverviewScreen() {
                   ACTUALLY cost while the allowance is derived from the
                   estimates, so when the two differ this much is left sitting
                   outside the plan. Without the row the numbers above simply
-                  don't add up, which is worse than the gap itself. */}
+                  don't add up, which is worse than the gap itself. A closed
+                  month's record folds extra income into its total, so there
+                  the gap can't be pinned on bills alone. */}
               {unallocated !== 0 && (
                 <>
                   <MoneyRow
-                    label={`Bills came in ${unallocated > 0 ? 'under' : 'over'}`}
+                    label={
+                      isCurrentMonth
+                        ? `Bills came in ${unallocated > 0 ? 'under' : 'over'}`
+                        : 'Extra income and bill changes'
+                    }
                     value={`${unallocated > 0 ? '+' : '−'}${fmt(Math.abs(unallocated))}`}
                     sub
                     color={unallocated > 0 ? Palette.sageDeep : Palette.terracottaDeep}

@@ -552,3 +552,27 @@ export function computeBudget(inp: BudgetInputs): Budget {
     fixedPct,
   };
 }
+
+/**
+ * What "Left after bills" still has over once every row under it is counted:
+ * weekly spending, goals, fun money and extra income.
+ *
+ * Extra income has to come off here because it's in the left-after-bills figure
+ * but not in the monthly pool (see computeBudget). Leaving it in made a one-off
+ * payment read as bills having come in under their estimates.
+ *
+ * For the live plan this comes to plannedFixed − totalFixed, because that figure
+ * uses what bills actually cost while the allowance uses the estimates. A closed
+ * month has no separate extra income figure, so pass 0: its result is any extra
+ * income and any bill difference together, and the two can't be told apart.
+ */
+export function unallocatedAfterPlan(args: {
+  variablePool: number;
+  monthlyPool: number;
+  goalsMonthly: number;
+  funTotal: number;
+  extraTotal: number;
+}): number {
+  const { variablePool, monthlyPool, goalsMonthly, funTotal, extraTotal } = args;
+  return Math.round((variablePool - monthlyPool - goalsMonthly - funTotal - extraTotal) * 100) / 100;
+}
