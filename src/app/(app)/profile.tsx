@@ -16,7 +16,7 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { CreateHouseholdSheet } from '@/components/create-household-sheet';
-import { FieldLabel, TextField } from '@/components/inputs';
+import { FieldLabel, PasswordField, TextField } from '@/components/inputs';
 import { Sheet } from '@/components/sheet';
 import { Switch } from '@/components/switch';
 import { ThemedText } from '@/components/themed-text';
@@ -670,26 +670,26 @@ export default function ProfileScreen() {
       </Sheet>
       <Sheet visible={changingPassword} title="Change password" onClose={() => setChangingPassword(false)}>
         <FieldLabel>Current password</FieldLabel>
-        <TextField
+        <PasswordField
           placeholder="Current password"
           value={currentPasswordForPw}
           onChangeText={setCurrentPasswordForPw}
-          secureTextEntry
+          plain
           autoFocus
         />
         <FieldLabel>New password</FieldLabel>
-        <TextField
+        <PasswordField
           placeholder="New password"
           value={newPassword}
           onChangeText={setNewPassword}
-          secureTextEntry
+          plain
         />
         <FieldLabel>Confirm new password</FieldLabel>
-        <TextField
+        <PasswordField
           placeholder="Confirm new password"
           value={newPasswordConfirm}
           onChangeText={setNewPasswordConfirm}
-          secureTextEntry
+          plain
         />
         {passwordError && (
           <ThemedText type="small" themeColor="warningDeep" style={styles.sheetError}>
@@ -716,11 +716,11 @@ export default function ProfileScreen() {
         ) : (
           <>
             <FieldLabel>Current password</FieldLabel>
-            <TextField
+            <PasswordField
               placeholder="Current password"
               value={currentPasswordForEmail}
               onChangeText={setCurrentPasswordForEmail}
-              secureTextEntry
+              plain
               autoFocus
             />
             <FieldLabel>New email</FieldLabel>
