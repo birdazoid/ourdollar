@@ -17,6 +17,7 @@ import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
 import { EnvelopeSheet } from '@/components/envelope-sheet';
 import { BoundaryNotice } from '@/components/boundary-notice';
+import { OwedBillsNotice } from '@/components/owed-bills-notice';
 import { HeroCard } from '@/components/hero-card';
 import { ListGroup } from '@/components/list-group';
 import { ListRow } from '@/components/list-row';
@@ -565,6 +566,7 @@ export default function WeekScreen() {
           {/* Only during the days a new calendar month has started but this
               week is still funded by the last one. */}
           {isCurrent && <BoundaryNotice weekStartsOn={weekStart} />}
+          {isCurrent && <OwedBillsNotice />}
 
           {/* Carried-over money used to be explained by a note here too. It now
               lives as an entry in the ledger below, next to the spending it sits
