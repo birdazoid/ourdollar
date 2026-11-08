@@ -12,6 +12,7 @@ import { BillSheet } from '@/components/bill-sheet';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { CategoryGlyph } from '@/components/category-glyph';
+import { ConfirmDialog, type ConfirmState } from '@/components/confirm-dialog';
 import { DeltaText } from '@/components/delta-text';
 import { ListRow } from '@/components/list-row';
 import { LoadError } from '@/components/load-error';
@@ -47,7 +48,7 @@ import {
   useTransactions,
   type BillInput,
 } from '@/lib/queries';
-import type { Bill } from '@/lib/types';
+import type { Bill, BillCarryover } from '@/lib/types';
 
 const STEPS = ['Summary', 'Confirm bills', 'Unpaid bills', 'Start month'];
 
@@ -80,6 +81,7 @@ export default function MonthReviewScreen() {
 
   const [step, setStep] = useState(0);
   const [billSheet, setBillSheet] = useState<{ bill: Bill | null } | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const targetMonth = useMemo(() => monthStartISO(lastCompletedMonthStart()), []);
   const currentMonth = useMemo(() => monthStartISO(new Date()), []);
@@ -184,6 +186,15 @@ export default function MonthReviewScreen() {
 
   function dismissCarryover(id: string) {
     resolveCarryover.mutate({ id, markPaid: false, settledByMemberId: me?.id ?? null });
+  }
+  // A one-tap Dismiss here cleared a reminder for good, with no way back.
+  function askDismiss(c: BillCarryover) {
+    setConfirm({
+      title: `Stop tracking ${c.name}?`,
+      message: `It won't be counted as paid, and it won't show on your Bills screen. Only do this if you don't owe it anymore.`,
+      confirmLabel: 'Dismiss',
+      onConfirm: () => dismissCarryover(c.id),
+    });
   }
 
   // Closing already happened (passively, or via the safety-net hook above) by
@@ -323,7 +334,7 @@ export default function MonthReviewScreen() {
                   title="Anything still unpaid?"
                   desc={
                     hasClosed
-                      ? 'Anything left unpaid was automatically flagged below as a reminder. Dismiss any you don’t need to track.'
+                      ? 'Anything left unpaid is saved as a reminder on your Bills screen until you mark it paid. Only dismiss one if you don’t owe it anymore.'
                       : "These will automatically become reminders once the month closes. Nothing to do here."
                   }
                 />
@@ -343,7 +354,7 @@ export default function MonthReviewScreen() {
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`Dismiss ${c.name}`}
-                            onPress={() => dismissCarryover(c.id)}
+                            onPress={() => askDismiss(c)}
                             style={styles.dismissBtn}>
                             <ThemedText type="small">Dismiss</ThemedText>
                           </Pressable>
@@ -418,6 +429,7 @@ export default function MonthReviewScreen() {
         onDelete={() => setBillSheet(null)}
         saving={billMut.update.isPending}
       />
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </ThemedView>
   );
 }

@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react-native';
 import { useMemo, useRef, useState, type RefObject } from 'react';
-import { ActivityIndicator, findNodeHandle, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, findNodeHandle, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -36,7 +36,7 @@ import { billEmoji } from '@/lib/categories';
 import { ordinal, shortDate } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
 import { balanceFromEntries, billMonthlyCost, catchUpBalance, fmt, goalProgress } from '@/lib/money';
-import { monthLabel } from '@/lib/month-review';
+import { monthLabel, monthName } from '@/lib/month-review';
 import { monthOf, dueDayInMonth } from '@/lib/period';
 import {
   useBillCarryovers,
@@ -54,7 +54,7 @@ import {
 } from '@/lib/queries';
 import { useToday } from '@/hooks/use-today';
 import { useSession } from '@/lib/auth';
-import type { Bill, Goal } from '@/lib/types';
+import type { Bill, BillCarryover, Goal } from '@/lib/types';
 import { haptic } from '@/lib/haptics';
 import { showToast } from '@/lib/toast';
 import { screenData } from '@/lib/screen-data';
@@ -178,12 +178,35 @@ export default function BillsScreen() {
       onConfirm: () => billMut.remove.mutate(id),
     });
   }
-  function confirmPay(bill: Bill, amount: number) {
+  function payThisMonth(bill: Bill, amount: number) {
     billMut.markPaid.mutate(
       { id: bill.id, paidAmount: amount, paidByMemberId: currentMemberId },
       { onSuccess: haptic.success }
     );
+  }
+  function confirmPay(bill: Bill, amount: number) {
     setBillDetail(null);
+    // The same bill still owed from a closed month looks identical to this
+    // month's, so a payment could be meant for either. Guessing wrong is how
+    // October's OG&E silently vanished, so ask whenever both are open.
+    const owed = (carryovers.data ?? []).find((c) => c.bill_id === bill.id);
+    if (!owed) {
+      payThisMonth(bill, amount);
+      return;
+    }
+    const thisMonth = monthName(monthOf(today));
+    const owedMonth = monthName(owed.from_month);
+    setConfirm({
+      title: `Which ${bill.name} is this for?`,
+      message: `${bill.name} from ${owedMonth} is still unpaid, and so is ${thisMonth}'s.`,
+      tone: 'primary',
+      confirmLabel: `${thisMonth}'s bill`,
+      onConfirm: () => payThisMonth(bill, amount),
+      secondary: {
+        label: `${owedMonth}'s, still owed`,
+        onPress: () => markCarryoverPaid(owed.id, amount),
+      },
+    });
   }
 
   // ---- carryover handlers (bills unpaid when a prior month closed) ----
@@ -197,6 +220,32 @@ export default function BillsScreen() {
   }
   function dismissCarryover(id: string) {
     resolveCarryover.mutate({ id, markPaid: false, settledByMemberId: currentMemberId });
+  }
+  // One tap used to clear a reminder for good, with nothing to undo it, and
+  // the row sat right above this month's bills of the same name. Now a tap
+  // only asks, and the answer spells out which month it's about.
+  function askCarryover(c: BillCarryover) {
+    const month = monthName(c.from_month);
+    setConfirm({
+      title: `${c.name} from ${month}`,
+      message:
+        c.amount != null
+          ? `Still owed: ${fmt(c.amount)}. This is separate from this month's ${c.name}.`
+          : `Still owed from ${month}. This is separate from this month's ${c.name}.`,
+      tone: 'primary',
+      confirmLabel: `I paid ${month}'s`,
+      onConfirm: () => markCarryoverPaid(c.id, c.amount),
+      secondary: {
+        label: "Dismiss, I don't owe it",
+        onPress: () =>
+          setConfirm({
+            title: `Stop tracking ${month}'s ${c.name}?`,
+            message: "It won't be counted as paid. Only do this if you don't owe it anymore.",
+            confirmLabel: 'Dismiss',
+            onConfirm: () => dismissCarryover(c.id),
+          }),
+      },
+    });
   }
 
   // ---- goal handlers ----
@@ -287,7 +336,10 @@ export default function BillsScreen() {
               month's fresh bills below, so the two never get confused. */}
           {(carryovers.data ?? []).length > 0 && (
             <>
-              <SectionHeader title="Unpaid from last month" />
+              <SectionHeader
+                title="Unpaid from last month"
+                caption="Bills a past month closed without. Each is separate from this month's bill of the same name."
+              />
               <ListGroup>
               {(carryovers.data ?? []).map((c) => (
                 <ListRow
@@ -299,32 +351,12 @@ export default function BillsScreen() {
                       color={Palette.terracottaDeep}
                     />
                   }
-                  title={c.name}
-                  subtitle={`Unpaid since ${monthLabel(c.from_month)}`}
+                  title={`${c.name} · ${monthName(c.from_month)}`}
+                  subtitle={`${monthName(c.from_month)}'s bill, still unpaid · tap to settle`}
                   subColor={Palette.terracotta}
                   outline
-                  right={
-                    <View style={styles.right}>
-                      <ThemedText type="label">{c.amount != null ? fmt(c.amount) : '—'}</ThemedText>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Mark ${c.name} paid`}
-                        onPress={() => markCarryoverPaid(c.id, c.amount)}
-                        style={styles.paidBadge}>
-                        <Check size={13} color={Palette.card} strokeWidth={3} />
-                      </Pressable>
-                    </View>
-                  }
-                  footer={
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => dismissCarryover(c.id)}
-                      style={styles.dismissRow}>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        Dismiss without paying
-                      </ThemedText>
-                    </Pressable>
-                  }
+                  onPress={() => askCarryover(c)}
+                  right={<ThemedText type="label">{c.amount != null ? fmt(c.amount) : 'Varies'}</ThemedText>}
                 />
               ))}
               </ListGroup>
@@ -605,7 +637,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dismissRow: { marginTop: Spacing.two },
   goalTrack: {
     height: 8,
     borderRadius: 999,
