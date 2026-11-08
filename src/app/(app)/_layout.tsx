@@ -44,7 +44,8 @@ function RootGate() {
     return <LoadingScreen />;
   }
 
-  if (account.isError) {
+  // A failed background re-check keeps the profile already loaded.
+  if (account.isError && account.data === undefined) {
     return <RetryScreen onRetry={() => account.refetch()} />;
   }
 

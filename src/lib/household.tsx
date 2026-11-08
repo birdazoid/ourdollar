@@ -79,7 +79,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   }, [userId, qc]);
 
   const {
-    data: households = [],
+    data: householdsData,
     isLoading: householdsLoading,
     isError: householdsError,
     refetch: refetchHouseholds,
@@ -97,11 +97,14 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   });
 
   const {
-    data: pendingInvites = [],
+    data: invitesData,
     isLoading: invitesLoading,
     isError: invitesError,
     refetch: refetchInvites,
   } = usePendingInvites(userId);
+
+  const households = useMemo(() => householdsData ?? [], [householdsData]);
+  const pendingInvites = useMemo(() => invitesData ?? [], [invitesData]);
 
   const setActiveHousehold = useCallback(
     (id: string) => {
@@ -121,7 +124,10 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   // otherwise the "create your first household" state can flash for a user who
   // actually has a pending invite waiting.
   const isLoading = !!session && (householdsLoading || invitesLoading);
-  const isError = householdsError || invitesError;
+  // Only an error with nothing to show counts. A background re-check that fails
+  // (the app just woke up, no network yet) keeps the households already known,
+  // instead of swapping the whole app for the retry screen mid-use.
+  const isError = (householdsError && householdsData === undefined) || (invitesError && invitesData === undefined);
   const retry = useCallback(() => {
     refetchHouseholds();
     refetchInvites();
