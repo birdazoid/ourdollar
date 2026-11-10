@@ -1,3 +1,5 @@
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Camera, ChevronDown, ChevronLeft, ChevronUp, KeyRound, Mail, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -57,6 +59,16 @@ function roleLabelFor(m: HouseholdMember, h: Household | null | undefined) {
   if (m.has_account) return 'Member';
   return 'Fun money only';
 }
+
+// Read from the installed app itself, so it's always the build actually on
+// the phone. The web preview has no native app, so it falls back to the
+// version in app.json.
+const APP_VERSION_LABEL = (() => {
+  const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? null;
+  const build = Application.nativeBuildVersion;
+  if (!version) return 'OurDollar';
+  return build ? `OurDollar ${version} (build ${build})` : `OurDollar ${version}`;
+})();
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -584,6 +596,13 @@ export default function ProfileScreen() {
               subtitle="Permanently erase your account & data"
               onPress={askDeleteAccount}
             />
+
+            {/* Which version this is, so a TestFlight build can be told apart
+                from the App Store one, and support questions can be matched
+                to a release. */}
+            <ThemedText type="small" themeColor="textSecondary" style={styles.version}>
+              {APP_VERSION_LABEL}
+            </ThemedText>
           </ScrollView>
         )}
       </SafeAreaView>
@@ -907,6 +926,7 @@ function DashedAdd({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  version: { textAlign: 'center', marginTop: Spacing.four },
   fill: { flex: 1 },
   flex: { flex: 1 },
   onDark: { color: Palette.card },
